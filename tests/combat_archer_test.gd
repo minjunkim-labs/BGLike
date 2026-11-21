@@ -108,6 +108,7 @@ func _test_range_and_damage() -> void:
 	var f: Fixture = _fixture()
 	var archer: CombatUnit = f.units[0]
 	var target: CombatUnit = f.units[3]
+	f.units[2].cell = Vector2i(5, 6)
 	_check(archer.get_attack_range() == 6 and target.get_attack_range() == 8, "아군 궁수 사거리 6, 풋내기 궁수는 8(#616, 약 1.4배)")
 	_check(f.actions.can_target(archer, target, "attack"), "거리 4의 적은 기본 공격 대상")
 	target.cell = Vector2i(9, 4)
@@ -122,6 +123,7 @@ func _test_range_and_damage() -> void:
 	_check(await f.actions.attack(archer, target), "거리 4의 적을 공격")
 	_check(target.hit_points == 14 - 7, "피해 = 솜씨 d20 굴림 7 + 레벨 0 + 기타 가산치 0")
 	var armed: Fixture = _fixture()
+	armed.units[2].cell = Vector2i(5, 6)
 	armed.units[0].weapon = {"stats": {"damage_bonus": 2}}
 	armed.actions.dice = _dice([15, 7], [20, 20])
 	await armed.actions.attack(armed.units[0], armed.units[3])
@@ -191,6 +193,7 @@ func _test_aegisal() -> void:
 	_check(archer.aegisal_left == 4, "다시 쓰면 누적해 4발, 상한 없음")
 	_check("애기살 4발" in CombatActionRules.details(archer, "attack"), "기본 공격 호버에 남은 애기살")
 	# 명중 15, 피해 굴림 3과 9 중 높은 9.
+	f.units[2].cell = Vector2i(5, 6)
 	f.actions.dice = _dice([15, 3, 9], [20, 20, 20])
 	await f.actions.attack(archer, target)
 	_check(target.hit_points == 14 - 9 and archer.aegisal_left == 3 and f.actions.last_damage_rolls == [3, 9],
@@ -210,6 +213,7 @@ func _test_aegisal() -> void:
 	f.actions.dice = _dice([], [])
 	_check(f.actions.attack_prop(archer, rock) and archer.aegisal_left == 0, "바위 공격은 굴림 없이 1발을 씀")
 	var plain: Fixture = _fixture()
+	plain.units[2].cell = Vector2i(5, 6)
 	plain.actions.dice = _dice([15, 7], [20, 20])
 	await plain.actions.attack(plain.units[0], plain.units[3])
 	_check(plain.actions.last_damage_rolls == [7] and plain.units[0].aegisal_left == 0, "애기살이 없으면 한 번 굴림")
@@ -293,6 +297,7 @@ func _test_moving_shot() -> void:
 	archer.begin_turn()
 	_check(not archer.moving_shot_ready and not archer.moving_shot_spent, "자기 턴 시작에 해제")
 	var other: Fixture = _fixture()
+	other.units[2].cell = Vector2i(5, 6)
 	other.actions.dice = _dice([15, 2], [20, 20])
 	await other.actions.attack(other.units[0], other.units[3])
 	_check(other.units[0].moving_shot_ready, "다른 동작 전에는 남음")
@@ -428,11 +433,13 @@ func _test_stealth_targeting() -> void:
 ## 피해를 주는 공격 동작을 쓰면 풀린다. 빗나가도, 빈 칸·상자를 쏘아도 풀린다.
 func _test_stealth_breaks() -> void:
 	var hit: Fixture = _fixture()
+	hit.units[2].cell = Vector2i(5, 6)
 	hit.units[0].stealthed = true
 	hit.actions.dice = _dice([15, 7], [20, 20])
 	await hit.actions.attack(hit.units[0], hit.units[3])
 	_check(not hit.units[0].stealthed, "기본 공격은 은신을 풂")
 	var miss: Fixture = _fixture()
+	miss.units[2].cell = Vector2i(5, 6)
 	miss.units[0].stealthed = true
 	miss.actions.dice = _dice([1], [20])
 	await miss.actions.attack(miss.units[0], miss.units[3])

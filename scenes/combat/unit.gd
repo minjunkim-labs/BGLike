@@ -134,6 +134,11 @@ var oil_throw_left: int = 1
 var firework_arrow_left: int = 1
 ## 효시의 전투마다 남은 횟수(궁수 문서).
 var whistle_left: int = 1
+## 직사 기본 공격에서 엄폐에 막혀 선택할 수 없는 대상인지(#358). 참이면 스프라이트를 회색조로 표시한다.
+var is_cover_blocked: bool = false:
+	set(value):
+		is_cover_blocked = value
+		queue_redraw()
 ## 산만함(효시): 이 유닛의 명중굴림·내성굴림이 불리다. 시전자(궁수) 턴 시작마다 1씩 줄고 0이면 사라진다. 시전자는 쓰러져도 유지한다.
 var distracted_turns: int = 0
 var distracted_source: CombatUnit
@@ -676,7 +681,9 @@ func _draw() -> void:
 	(_silhouette.material as ShaderMaterial).set_shader_parameter("fill_alpha", 0.22 if is_occluded else 0.0)
 	_silhouette.position = Vector2(0, floor_offset_y + body_offset_y) + recoil_offset
 	_sprite.position = _silhouette.position
-	_sprite.modulate.a = 0.5 if stealthed else 1.0
+	var tint: Color = Color(0.55, 0.55, 0.58, 1.0) if is_cover_blocked else Color.WHITE
+	tint.a = 0.5 if stealthed else 1.0
+	_sprite.modulate = tint
 	draw_set_transform(Vector2(0, floor_offset_y))
 	var status_y: float = get_status_label_y()
 	draw_rect(Rect2(-9, status_y + 4, 18, 4), OUTLINE_COLOR)

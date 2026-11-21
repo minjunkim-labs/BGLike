@@ -234,6 +234,20 @@ func get_props() -> Array[CombatGrid.Prop]:
 	return grid.props.duplicate()
 
 
+func cover_for_unit(actor: CombatUnit, target: CombatUnit, action: String = "attack",
+	from_cell: Vector2i = Vector2i(-1, -1)) -> CombatCover.Result:
+	if not CombatCover.is_direct_fire(actor, action):
+		return CombatCover.Result.new()
+	return CombatCover.check_unit(grid, actor, target, from_cell)
+
+
+func cover_for_prop(actor: CombatUnit, prop: CombatGrid.Prop, action: String = "attack",
+	from_cell: Vector2i = Vector2i(-1, -1)) -> CombatCover.Result:
+	if not CombatCover.is_direct_fire(actor, action):
+		return CombatCover.Result.new()
+	return CombatCover.check_prop(grid, actor, prop, from_cell)
+
+
 func can_attack_prop(actor: CombatUnit, prop: CombatGrid.Prop) -> bool:
 	if (not is_instance_valid(actor) or turns == null or actor not in units
 		or not _can_act(actor) or turns.is_turn_finished(actor) or actor.action_left <= 0
@@ -241,7 +255,8 @@ func can_attack_prop(actor: CombatUnit, prop: CombatGrid.Prop) -> bool:
 		or prop == null or prop not in grid.props or prop.hit_points <= 0):
 		return false
 	return (grid.in_range(actor.cell, prop.cell, actor.get_attack_range())
-		and (actor.get_attack_range() > 1 or grid.are_adjacent(actor.cell, prop.cell)))
+		and (actor.get_attack_range() > 1 or grid.are_adjacent(actor.cell, prop.cell))
+		and not cover_for_prop(actor, prop, "attack").blocked)
 
 
 func attack_prop(actor: CombatUnit, prop: CombatGrid.Prop) -> bool:
@@ -1160,10 +1175,11 @@ func rock_landing(roll: RockRoll, target: CombatUnit) -> String:
 
 
 func can_target(actor: CombatUnit, target: CombatUnit, action: String,
-	from_cell: Vector2i = Vector2i(-1, -1)) -> bool:
+	from_cell: Vector2i = Vector2i(-1, -1), check_cover: bool = true) -> bool:
 	if (actor == null or target == null or target.hit_points <= 0
 		or (actor.is_ally == target.is_ally and action != "shove")
-		or not CombatActionRules.belongs_to(actor, action) or not grid.can_target(actor, target, action, from_cell)):
+		or not CombatActionRules.belongs_to(actor, action)
+		or not grid.can_target(actor, target, action, from_cell, check_cover)):
 		return false
 	# 은신 유닛은 적이 지정할 수 없다. 같은 편(플레이어의 밀치기 등)은 막지 않는다.
 	if target.stealthed and actor.is_ally != target.is_ally:
