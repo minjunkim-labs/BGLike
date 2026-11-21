@@ -269,25 +269,25 @@ func _test_enemy_archer_ai() -> void:
 		"AI 기준 1: 현재 칸에서 가려지면 이동 범위 안 사격 가능한 칸으로 이동해 쏨")
 	_free_fixture(f2)
 
-	# 3) 긴 벽을 돌아가느라 여러 턴이 걸려도 매 턴 경로를 따라 진행하며 두 칸을 왕복하지 않는다.
+	# 3) 긴 벽을 돌아가느라 여러 턴이 걸려도 매 턴 경로를 따라 진행하며 순환·왕복 없이 실제 공격한다.
 	var walls: Array[Vector2i] = []
 	for y: int in range(0, 8):
 		walls.append(Vector2i(5, y))
 	var f3: Dictionary = _setup_ai_fixture(Vector2i(7, 1), [Vector2i(2, 1)], [], walls)
 	var archer3: CombatUnit = f3["archer"]
 	var visited: Array[Vector2i] = [archer3.cell]
-	var oscillated: bool = false
+	var revisited: bool = false
 	for _turn: int in range(6):
 		archer3.refill_turn_resources()
 		(f3["turns"] as CombatTurns).current_unit = archer3
 		await ai.play_turn(archer3, f3["actions"])
 		if archer3.action_left == 0:
 			break
-		if visited.size() >= 2 and archer3.cell == visited[visited.size() - 2]:
-			oscillated = true
+		if archer3.cell in visited:
+			revisited = true
 		visited.append(archer3.cell)
-	_check(not oscillated and visited.size() > 1 and (archer3.action_left == 0 or archer3.cell.y > 1),
-		"AI 기준 3·5: 여러 턴이 걸려도 제자리 종료·왕복 없이 사격 가능한 칸 경로로 진행")
+	_check(not revisited and visited.size() > 1 and archer3.action_left == 0,
+		"AI 기준 3·5: 여러 턴이 걸려도 제자리 종료·왕복 없이 사격 가능한 칸 경로로 진행해 공격")
 	_free_fixture(f3)
 
 	# 4) 사격 가능한 칸으로 가는 경로가 없고 이동 가능한 칸도 없으면 제자리 종료 예외 허용.
@@ -325,8 +325,11 @@ func _test_ui_preview_and_selection_block() -> void:
 	battle.call("_update_turn_ui")
 	await process_frame
 	_check(enemy.is_cover_blocked, "직사 엄폐에 막힌 적은 회색 표시(is_cover_blocked)")
-	# 막힌 적 클릭 시 선택·미리보기 없음
-	var enemy_screen: Vector2 = map.get_global_transform_with_canvas() * map.map_to_surface(enemy.cell)
+	# 막힌 적 클릭 시 선택·미리보기 없음 (몸통 적중 좌표로 확인)
+	var enemy_world: Vector2 = enemy.to_global(Vector2(0, enemy.floor_offset_y - 10))
+	var enemy_screen: Vector2 = battle.get_canvas_transform() * enemy_world
+	_check(enemy.contains_body_point(enemy.to_local(enemy_world)),
+		"테스트 클릭 좌표가 적 몸통 안에 적중함")
 	var click: InputEventMouseButton = InputEventMouseButton.new()
 	click.position = enemy_screen
 	click.global_position = enemy_screen
@@ -337,19 +340,28 @@ func _test_ui_preview_and_selection_block() -> void:
 	_check(selection.preview_target == null and archer.action_left == 1,
 		"엄폐에 막힌 적은 좌클릭으로 선택·미리보기 불가")
 	# 호버 시 초록·빨강 선분 + 사유 툴팁 표시
-	battle.call("_hover_cover", enemy_screen,
-		battle.get_canvas_transform().affine_inverse() * enemy_screen, enemy)
+	battle.call("_hover_cover", enemy_screen, enemy_world, enemy)
 	var lines: Array = map.get("_cover_lines")
 	var tip: PanelContainer = hud.get("_cover_tooltip") as PanelContainer
 	var tip_label: Label = hud.get("_cover_tooltip_label") as Label
 	_check(lines.size() == 2 and tip.visible and tip_label.text == "바위에 가려짐",
 		"막힌 대상 호버 시 통과(초록)·차단(빨강) 2구간 선분과 사유 툴팁 표시")
-	# 바위 제거 뒤 즉시 해제
+	# 바위 제거 뒤 즉시 해제 및 같은 좌표 좌클릭 시 미리보기 선택 가능
 	actions.grid.props.clear()
 	battle.call("_update_turn_ui")
 	await process_frame
 	_check(not enemy.is_cover_blocked and (map.get("_cover_lines") as Array).size() == 1 and not tip.visible,
 		"바위가 없어지면 회색·툴팁이 풀리고 초록 단일 선분으로 갱신")
+	battle.call("_unhandled_input", click)
+	await process_frame
+	_check(selection.preview_target == enemy,
+		"바위 제거 뒤 같은 좌표 좌클릭 시 적 대상 미리보기 선택 가능")
+	# 적이 포인터 밖으로 이동하면 저장된 화면 좌표로 다시 판정해 선분·사유를 지움
+	enemy.cell = Vector2i(6, 4)
+	battle.call("_update_turn_ui")
+	await process_frame
+	_check((map.get("_cover_lines") as Array).is_empty() and not tip.visible,
+		"적이 포인터 위치에서 벗어나면 엄폐 선분과 차단 사유가 지워짐")
 	battle.queue_free()
 	await process_frame
 

@@ -666,8 +666,7 @@ func _on_unit_hovered(unit: CombatUnit) -> void:
 	_sync_threat_hover()
 
 
-func _hover_enemy_body(screen_position: Vector2) -> void:
-	var world_position: Vector2 = get_canvas_transform().affine_inverse() * screen_position
+func _hovered_unit_at(world_position: Vector2) -> CombatUnit:
 	var candidates: Array[CombatUnit] = []
 	for unit: CombatUnit in units:
 		if unit.visible and unit.hit_points > 0 and unit.contains_body_point(unit.to_local(world_position)):
@@ -676,8 +675,13 @@ func _hover_enemy_body(screen_position: Vector2) -> void:
 		if a.position.y != b.position.y:
 			return a.position.y > b.position.y
 		return a.get_index() > b.get_index())
-	var found: CombatUnit = candidates[0] if not candidates.is_empty() else actions.grid.unit_at(
+	return candidates[0] if not candidates.is_empty() else actions.grid.unit_at(
 		map.surface_to_map(map.to_local(world_position)))
+
+
+func _hover_enemy_body(screen_position: Vector2) -> void:
+	var world_position: Vector2 = get_canvas_transform().affine_inverse() * screen_position
+	var found: CombatUnit = _hovered_unit_at(world_position)
 	_body_hover_unit = found
 	_sync_threat_hover()
 	_hover_cover(screen_position, world_position, found)
@@ -698,10 +702,15 @@ func _hover_cover(screen_position: Vector2, world_position: Vector2, hovered_uni
 
 
 func _refresh_cover_hover() -> void:
-	if not _direct_fire_active():
+	if not _direct_fire_active() or _cover_hover_screen == Vector2.INF:
+		_cover_hover_unit = null
+		_cover_hover_prop = null
 		map.clear_cover_line()
 		hud.hide_cover_reason()
 		return
+	var world_position: Vector2 = get_canvas_transform().affine_inverse() * _cover_hover_screen
+	_cover_hover_unit = _hovered_unit_at(world_position)
+	_cover_hover_prop = map.prop_at_point(map.to_local(world_position))
 	var actor: CombatUnit = turns.current_unit
 	if (_cover_hover_unit != null and _cover_hover_unit in units and _cover_hover_unit.hit_points > 0
 			and not _cover_hover_unit.is_ally and not _cover_hover_unit.stealthed
