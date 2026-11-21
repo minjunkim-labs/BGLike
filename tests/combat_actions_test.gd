@@ -4074,18 +4074,36 @@ func _test_isometric_surface() -> void:
 	_check(matched == 100, "평면100칸의 마름모 중심을 모두 올바른 논리 칸으로 선택")
 	# #735: 앞 칸의 키 큰 장식(나무·집) 픽셀이 뒤 칸 마름모에 걸쳐도 뒤 칸 클릭을 가로채지 않는다.
 	var scenery_stage: CombatStage = CombatStage.new()
-	scenery_stage.scenery = {Vector2i(5, 5): "tree", Vector2i(2, 2): "cottage"}
+	scenery_stage.scenery = {Vector2i(5, 5): "tree", Vector2i(2, 2): "cottage", Vector2i(6, 2): "ruin_wall"}
 	var scenery_grid: CombatGrid = CombatGrid.new()
 	scenery_grid.blocked_cells = scenery_stage.get_blocked_cells()
+	var crate_prop: CombatGrid.Prop = CombatGrid.Prop.new(Vector2i(7, 2), "crate")
+	var rock_prop: CombatGrid.Prop = CombatGrid.Prop.new(Vector2i(8, 2), "rock")
 	map.build_grid(scenery_grid, load("res://scenes/combat/floor_tiles.tres") as TileSet, scenery_stage)
+	map.show_props([crate_prop, rock_prop])
 	_check(map.surface_to_map(map.map_to_surface(Vector2i(4, 4))) == Vector2i(4, 4),
 		"앞 나무 스프라이트가 뒤 칸 마름모에 걸쳐도 뒤 칸 윗면 클릭은 뒤 칸을 돌려줌")
 	_check(map.surface_to_map(map.map_to_surface(Vector2i(1, 1))) == Vector2i(1, 1),
 		"앞 집 스프라이트가 뒤 칸 마름모에 걸쳐도 뒤 칸 윗면 클릭은 뒤 칸을 돌려줌")
-	_check(CombatMap.art_foot_offset("crate") == 4.0 and CombatMap.art_foot_offset("rock") == 4.0
-		and CombatMap.art_foot_offset("ruin_wall") == 4.0 and CombatMap.art_foot_offset("tree") == 4.0
-		and CombatMap.art_foot_offset("cottage") == 6.0,
-		"그래픽 높이·크기별 타일 기준점 오프셋이 문서 규범과 일치")
+	var half_tile: Vector2 = Vector2(map.tile_set.tile_size) / 2.0
+	var outside_front: int = 0
+	var checked_markers: Array[Node2D] = []
+	checked_markers.append_array(map._blocked_markers)
+	checked_markers.append_array(map._prop_markers)
+	for marker: Node2D in checked_markers:
+		var marker_cell: Vector2i = (marker.get_meta("prop") as CombatGrid.Prop).cell if marker.has_meta("prop") else marker.get_meta("cell") as Vector2i
+		var sprite: Sprite2D = marker.get_node("Sprite") as Sprite2D
+		var image: Image = sprite.texture.get_image()
+		var rel_origin: Vector2 = marker.position + sprite.position - map.map_to_surface(marker_cell)
+		for py: int in range(image.get_height()):
+			for px: int in range(image.get_width()):
+				if image.get_pixel(px, py).a <= 0.0:
+					continue
+				var rel: Vector2 = rel_origin + (Vector2(px, py) + sprite.offset) * sprite.scale
+				if rel.y > half_tile.y - absf(rel.x) * (half_tile.y / half_tile.x):
+					outside_front += 1
+	_check(checked_markers.size() == 5 and outside_front == 0,
+		"배치된 사물·장식 5종의 실제 픽셀이 자기 점유 마름모 앞쪽 변을 넘지 않음")
 	map.free()
 
 
