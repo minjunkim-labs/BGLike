@@ -164,12 +164,11 @@ func _click(point: Vector2, button: MouseButton = MOUSE_BUTTON_LEFT) -> void:
 
 func _prop_point(map: CombatMap, prop: CombatGrid.Prop, units: Array[CombatUnit]) -> Vector2:
 	var center: Vector2 = map.map_to_surface(prop.cell)
-	for y: int in range(-24, 1):
-		for x: int in range(-12, 13):
-			var point: Vector2 = center + Vector2(x, y)
-			if map.prop_at_point(point) == prop and not units.any(func(unit: CombatUnit) -> bool:
-				return unit.hit_points > 0 and unit.contains_body_point(unit.to_local(map.to_global(point)))):
-				return map.get_global_transform_with_canvas() * point
+	for offset: Vector2 in [Vector2.ZERO, Vector2(0, 2), Vector2(0, -2), Vector2(3, 0), Vector2(-3, 0), Vector2(0, 4)]:
+		var point: Vector2 = center + offset
+		if map.prop_at_point(point) == prop and not units.any(func(unit: CombatUnit) -> bool:
+			return unit.hit_points > 0 and map.contains_surface(unit.cell, point)):
+			return map.get_global_transform_with_canvas() * point
 	return Vector2.INF
 
 func _capture(label: String) -> void:

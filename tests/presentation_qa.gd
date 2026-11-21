@@ -186,19 +186,15 @@ func capture(label: String) -> void:
 		for cell: Vector2i in [Vector2i(3, 9), Vector2i(7, 5)]:
 			var point: Vector2 = _cell_point(map, cell)
 			if point != Vector2.INF: row.cells[str(cell)] = [point.x, point.y]
-		# 물체 몸통은 주변 유닛 픽셀에 가리지 않은 점만 입력 후보로 제공한다.
+		# 물체 칸의 윗면 마름모 중 다른 유닛 칸과 겹치지 않는 점을 입력 후보로 제공한다(#735).
 		for prop: CombatGrid.Prop in actions.grid.props:
-			for y: int in range(-24, 1):
-				var found: bool = false
-				for x: int in range(-12, 13):
-					var local: Vector2 = map.map_to_surface(prop.cell) + Vector2(x, y)
-					if map.prop_at_point(local) == prop and not actions.units.any(func(unit: CombatUnit) -> bool:
-						return unit.hit_points > 0 and unit.contains_body_point(unit.to_local(map.to_global(local)))):
-						var point: Vector2 = map.get_global_transform_with_canvas() * local
-						row.cells[prop.kind] = [point.x, point.y]
-						found = true
-						break
-				if found: break
+			for offset: Vector2 in [Vector2.ZERO, Vector2(0, 2), Vector2(0, -2), Vector2(3, 0), Vector2(-3, 0), Vector2(0, 4)]:
+				var local: Vector2 = map.map_to_surface(prop.cell) + offset
+				if map.prop_at_point(local) == prop and not actions.units.any(func(unit: CombatUnit) -> bool:
+					return unit.hit_points > 0 and map.contains_surface(unit.cell, local)):
+					var point: Vector2 = map.get_global_transform_with_canvas() * local
+					row.cells[prop.kind] = [point.x, point.y]
+					break
 	var file: FileAccess = FileAccess.open(directory.path_join("frames.jsonl"), FileAccess.READ_WRITE if FileAccess.file_exists(directory.path_join("frames.jsonl")) else FileAccess.WRITE)
 	file.seek_end()
 	file.store_line(JSON.stringify(row))

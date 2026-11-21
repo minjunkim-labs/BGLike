@@ -4072,6 +4072,38 @@ func _test_isometric_surface() -> void:
 			if map.surface_to_map(map.map_to_surface(target)) == target:
 				matched += 1
 	_check(matched == 100, "평면100칸의 마름모 중심을 모두 올바른 논리 칸으로 선택")
+	# #735: 앞 칸의 키 큰 장식(나무·집) 픽셀이 뒤 칸 마름모에 걸쳐도 뒤 칸 클릭을 가로채지 않는다.
+	var scenery_stage: CombatStage = CombatStage.new()
+	scenery_stage.scenery = {Vector2i(5, 5): "tree", Vector2i(2, 2): "cottage", Vector2i(6, 2): "ruin_wall"}
+	var scenery_grid: CombatGrid = CombatGrid.new()
+	scenery_grid.blocked_cells = scenery_stage.get_blocked_cells()
+	var crate_prop: CombatGrid.Prop = CombatGrid.Prop.new(Vector2i(7, 2), "crate")
+	var rock_prop: CombatGrid.Prop = CombatGrid.Prop.new(Vector2i(8, 2), "rock")
+	map.build_grid(scenery_grid, load("res://scenes/combat/floor_tiles.tres") as TileSet, scenery_stage)
+	map.show_props([crate_prop, rock_prop])
+	_check(map.surface_to_map(map.map_to_surface(Vector2i(4, 4))) == Vector2i(4, 4),
+		"앞 나무 스프라이트가 뒤 칸 마름모에 걸쳐도 뒤 칸 윗면 클릭은 뒤 칸을 돌려줌")
+	_check(map.surface_to_map(map.map_to_surface(Vector2i(1, 1))) == Vector2i(1, 1),
+		"앞 집 스프라이트가 뒤 칸 마름모에 걸쳐도 뒤 칸 윗면 클릭은 뒤 칸을 돌려줌")
+	var half_tile: Vector2 = Vector2(map.tile_set.tile_size) / 2.0
+	var outside_front: int = 0
+	var checked_markers: Array[Node2D] = []
+	checked_markers.append_array(map._blocked_markers)
+	checked_markers.append_array(map._prop_markers)
+	for marker: Node2D in checked_markers:
+		var marker_cell: Vector2i = (marker.get_meta("prop") as CombatGrid.Prop).cell if marker.has_meta("prop") else marker.get_meta("cell") as Vector2i
+		var sprite: Sprite2D = marker.get_node("Sprite") as Sprite2D
+		var image: Image = sprite.texture.get_image()
+		var rel_origin: Vector2 = marker.position + sprite.position - map.map_to_surface(marker_cell)
+		for py: int in range(image.get_height()):
+			for px: int in range(image.get_width()):
+				if image.get_pixel(px, py).a <= 0.0:
+					continue
+				var rel: Vector2 = rel_origin + (Vector2(px, py) + sprite.offset) * sprite.scale
+				if rel.y > half_tile.y - absf(rel.x) * (half_tile.y / half_tile.x):
+					outside_front += 1
+	_check(checked_markers.size() == 5 and outside_front == 0,
+		"배치된 사물·장식 5종의 실제 픽셀이 자기 점유 마름모 앞쪽 변을 넘지 않음")
 	map.free()
 
 
@@ -4099,7 +4131,7 @@ func _test_scene_input() -> void:
 	units[2].cell = Vector2i(2, 6)
 	battle.call("_update_turn_ui")
 	actions.dice = _dice_for([1], ScriptedDice.attack_sides(units[0]))
-	var point: Vector2 = units[2].get_global_transform_with_canvas() * Vector2(0, -10)
+	var point: Vector2 = map.get_global_transform_with_canvas() * map.map_to_surface(units[2].cell)
 	await _click(point)
 	_check(units[0].action_left == 1 and (battle.get("selection") as CombatSelection).preview_target == units[2], "공격 첫 클릭은 피해·자원 소비 없음")
 	await _click(point)
@@ -4142,25 +4174,37 @@ func _test_scene_input() -> void:
 	var overlap_map: TileMapLayer = overlap.get_node("Map") as TileMapLayer
 	ScriptedDice.arrange_turns(overlap_turns, overlap_units, overlap_units)
 	var hidden_cell: Vector2i = overlap_units[0].cell - Vector2i.ONE
-	var hidden_local: Vector2 = overlap_map.map_to_local(hidden_cell) + Vector2(5, 0)
+	var hidden_local: Vector2 = overlap_map.map_to_surface(hidden_cell) + Vector2(5, 0)
 	var hidden_screen: Vector2 = overlap_map.get_global_transform_with_canvas() * hidden_local
-	_check(overlap_units[0].contains_body_point(overlap_units[0].to_local(overlap_map.to_global(hidden_local))),
-		"빈 칸 입력점은 실제 도트 몸통에 가려진다")
+	_check(overlap_map.contains_surface(hidden_cell, hidden_local)
+		and not overlap_map.contains_surface(overlap_units[0].cell, hidden_local),
+		"빈 칸 입력점은 뒤 칸 마름모 안에 있고 앞 유닛 칸 마름모에는 포함되지 않음")
 	await _click(hidden_screen, MOUSE_BUTTON_RIGHT)
-	_check((overlap.get("selection") as CombatSelection).preview_cell == hidden_cell, "이동 모드에서 몸통 뒤 빈 사각 칸 선택")
+	_check((overlap.get("selection") as CombatSelection).preview_cell == hidden_cell, "이동 모드에서 몸통 뒤 빈 마름모 칸 선택")
 	await _click(hidden_screen, MOUSE_BUTTON_RIGHT)
 	_check(overlap_units[0].cell == hidden_cell, "몸통에 가린 빈 칸 이동 실행")
 	overlap_hud.action_selected.emit("attack")
 	overlap_units[2].cell = Vector2i(4, 4)
 	overlap_units[3].cell = Vector2i(5, 5)
 	overlap.call("_update_turn_ui")
-	var overlap_world: Vector2 = overlap_units[2].to_global(Vector2(0, -8))
-	var overlap_point: Vector2 = overlap_units[2].get_global_transform_with_canvas() * Vector2(0, -8)
-	_check(overlap_units[2].contains_body_point(Vector2(0, -8))
-		and overlap_units[3].contains_body_point(overlap_units[3].to_local(overlap_world)),
-		"겹침 입력점은 두 실제 도트 몸통에 모두 포함된다")
-	await _click(overlap_point)
-	_check((overlap.get("selection") as CombatSelection).preview_target == overlap_units[3], "겹친 몸통은 y-sort 앞쪽 유닛 선택")
+	# 평지에서 (5, 5) 유닛의 머리 픽셀이 (4, 4) 마름모에 걸쳐도, (4, 4) 마름모 클릭은 뒤 칸 유닛을 선택한다(#735).
+	var rear_point: Vector2 = overlap_map.get_global_transform_with_canvas() * overlap_map.map_to_surface(overlap_units[2].cell)
+	await _click(rear_point)
+	_check((overlap.get("selection") as CombatSelection).preview_target == overlap_units[2],
+		"앞 유닛 스프라이트가 뒤 칸 마름모에 걸쳐도 뒤 칸 마름모 클릭은 뒤 유닛을 선택")
+	# 높은 앞 칸(높이 2)의 윗면 마름모가 뒤 칸(높이 0)과 겹치면 y-sort 앞쪽 유닛을 선택한다.
+	var overlap_actions: CombatActions = overlap.get("actions") as CombatActions
+	overlap_actions.grid.heights[Vector2i(5, 5)] = 2
+	overlap_map.build_grid(overlap_actions.grid, overlap.stages[0].tile_set, overlap.stages[0])
+	(overlap.get("selection") as CombatSelection).clear_preview()
+	overlap.call("_update_turn_ui")
+	var shared_local: Vector2 = overlap_map.map_to_surface(overlap_units[2].cell)
+	_check(overlap_map.contains_surface(overlap_units[2].cell, shared_local)
+		and overlap_map.contains_surface(overlap_units[3].cell, shared_local),
+		"높이 2 앞 칸과 평지 뒤 칸의 윗면 마름모가 같은 화면 좌표를 공유")
+	await _click(overlap_map.get_global_transform_with_canvas() * shared_local)
+	_check((overlap.get("selection") as CombatSelection).preview_target == overlap_units[3],
+		"겹친 윗면 마름모는 y-sort 앞쪽 유닛 선택")
 	overlap.queue_free()
 	await process_frame
 
@@ -4177,16 +4221,17 @@ func _test_scene_ally_shove() -> void:
 	var turns: CombatTurns = battle.get("turns") as CombatTurns
 	var actions: CombatActions = battle.get("actions") as CombatActions
 	var hud: CombatTurnHud = battle.get_node("UI/TurnHud") as CombatTurnHud
+	var map: CombatMap = battle.get_node("Map") as CombatMap
 	ScriptedDice.arrange_turns(turns, units, units)
 	units[1].cell = Vector2i(2, 4)
 	battle.call("_update_turn_ui")
 	actions.dice = _dice_for([], [])
 	hud.action_selected.emit("shove")
-	var point: Vector2 = units[1].get_global_transform_with_canvas() * Vector2(0, -10)
+	var point: Vector2 = map.get_global_transform_with_canvas() * map.map_to_surface(units[1].cell)
 	await _click(point)
 	_check((battle.get("selection") as CombatSelection).preview_target == units[1]
 		and units[0].bonus_action_left == 1 and turns.current_unit == units[0],
-		"실제 아군 몸통 첫 클릭은 조작 유닛을 바꾸지 않고 밀치기 미리보기")
+		"실제 아군 칸 첫 클릭은 조작 유닛을 바꾸지 않고 밀치기 미리보기")
 	_check("밀려날 칸: 3, 4 · 밀칠 확률 100.0%" in hud.preview_label.text, "아군 밀치기도 같은 착지 칸과 판정 없는 확률 안내")
 	actions.grid.pits.append(Vector2i(3, 4))
 	battle.call("_update_turn_ui")
@@ -4196,12 +4241,12 @@ func _test_scene_ally_shove() -> void:
 	await _click(point)
 	_check(units[1].cell == Vector2i(3, 4) and units[0].bonus_action_left == 0
 		and units[1].movement_left == 8 and turns.current_unit == units[0],
-		"실제 아군 몸통 두 번째 클릭은 무판정 밀치기를 실행")
-	point = units[1].get_global_transform_with_canvas() * Vector2(0, -10)
+		"실제 아군 칸 두 번째 클릭은 무판정 밀치기를 실행")
+	point = map.get_global_transform_with_canvas() * map.map_to_surface(units[1].cell)
 	await _click(point)
 	_check((battle.get("selection") as CombatSelection).preview_target == null
 		and units[0].action_left == 1 and units[1].hit_points == 9,
-		"기본 공격에서 아군 몸통 클릭은 계속 공격을 취소")
+		"기본 공격에서 아군 칸 클릭은 계속 공격을 취소")
 	battle.queue_free()
 	await process_frame
 
@@ -4224,12 +4269,11 @@ func _test_isometric_unit_occlusion() -> void:
 	ScriptedDice.arrange_turns(turns, units, units)
 	turns.select_unit(units[1])
 	battle.call("_update_turn_ui")
-	var point: Vector2 = map.get_global_transform_with_canvas() * (
-		map.map_to_surface(units[2].cell) + Vector2(0, -10))
+	var point: Vector2 = map.get_global_transform_with_canvas() * map.map_to_surface(units[2].cell)
 	await _click(point)
 	_check((battle.get("selection") as CombatSelection).preview_target == units[2]
 		and units[1].action_left == 1 and units[2].hit_points == 12,
-		"높은 지형에 몸통이 가려져도 사거리 안 적의 윤곽을 눌러 공격 미리보기")
+		"높은 지형에 몸통이 가려져도 사거리 안 적의 칸 마름모를 눌러 공격 미리보기")
 	(battle.get("actions") as CombatActions).dice = _dice_for([1], ScriptedDice.attack_sides(units[1]))
 	await _click(point)
 	_check(units[1].action_left == 0 and units[2].hit_points == 12,
@@ -4287,12 +4331,16 @@ func _test_terrain_hidden_unit_outline() -> void:
 		ScriptedDice.arrange_turns(battle.get("turns") as CombatTurns, [archer, spider], [archer, spider])
 		battle.call("_update_turn_ui")
 		await process_frame
+		var sprite: AnimatedSprite2D = spider.get("_sprite") as AnimatedSprite2D
+		var frame_image: Image = sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame).get_image()
 		var body: Array[Vector2] = []
 		var hidden: Array[Vector2] = []
 		for y: int in range(-40, 8):
 			for x: int in range(-24, 25):
 				var point: Vector2 = Vector2(x, y)
-				if spider.contains_body_point(point):
+				var pixel: Vector2i = Vector2i(((point - Vector2(0, spider.floor_offset_y + spider.body_offset_y))
+					/ sprite.scale - sprite.offset).floor())
+				if Rect2i(Vector2i.ZERO, frame_image.get_size()).has_point(pixel) and frame_image.get_pixelv(pixel).a > 0.0:
 					body.append(point)
 					if map.occludes(spider.cell, map.to_local(spider.to_global(point))):
 						hidden.append(point)
@@ -4310,48 +4358,46 @@ func _test_terrain_hidden_unit_outline() -> void:
 			battle.queue_free()
 			await process_frame
 			continue
-		var click: Vector2 = spider.get_global_transform_with_canvas() * hidden[hidden.size() / 2]
+		var click: Vector2 = map.get_global_transform_with_canvas() * map.map_to_surface(spider.cell)
 		await _click(click)
 		_check(selection.preview_target == spider and selection.preview_prop == null and archer.action_left == 1,
-			"%s에 가린 윤곽 첫 좌클릭은 공격 미리보기" % kind)
+			"%s에 가린 유닛 칸 마름모 첫 좌클릭은 공격 미리보기" % kind)
 		actions.dice = _dice_for([1], ScriptedDice.attack_sides(archer))
 		await _click(click)
 		var placed: Array[CombatGrid.Prop] = actions.get_props()
 		_check(archer.action_left == 0 and (placed.is_empty() or (placed[0].cell == front and placed[0].hit_points == 6)),
-			"%s에 가린 윤곽 두 번째 좌클릭은 유닛 공격이며 사물은 그대로" % kind)
+			"%s에 가린 유닛 칸 마름모 두 번째 좌클릭은 유닛 공격이며 사물은 그대로" % kind)
 		if kind == "rock":
-			await _check_rock_around_hidden_unit(battle, placed[0], hidden)
+			await _check_rock_around_hidden_unit(battle, placed[0])
 		battle.queue_free()
 		await process_frame
 
 
-func _check_rock_around_hidden_unit(battle: Node2D, rock: CombatGrid.Prop, hidden: Array[Vector2]) -> void:
+func _check_rock_around_hidden_unit(battle: Node2D, rock: CombatGrid.Prop) -> void:
 	var units: Array[CombatUnit] = battle.get("units")
 	var map: CombatMap = battle.get_node("Map") as CombatMap
 	var actions: CombatActions = battle.get("actions") as CombatActions
 	var selection: CombatSelection = battle.get("selection") as CombatSelection
 	var spider: CombatUnit = units[2]
-	var outside: Vector2 = Vector2.INF
-	for y: int in range(-48, 8):
-		for x: int in range(-24, 25):
-			var point: Vector2 = map.map_to_surface(rock.cell) + Vector2(x, y)
-			if (outside == Vector2.INF and map.prop_at_point(point) == rock
-				and not spider.contains_body_point(spider.to_local(map.to_global(point)))):
-				outside = point
+	# 바위 칸(6, 4) 높이 1의 윗면 마름모 중 뒤 유닛 칸(5, 3)과 겹치지 않는 아래 절반을 누르면 바위를 선택한다.
+	var rock_only: Vector2 = map.map_to_surface(rock.cell) + Vector2(0, 4)
+	_check(map.prop_at_point(rock_only) == rock and not map.contains_surface(spider.cell, rock_only),
+		"바위 칸 마름모의 앞쪽 영역은 뒤 유닛 칸과 겹치지 않음")
 	selection.clear_preview()
-	await _click(map.get_global_transform_with_canvas() * outside)
-	_check(outside != Vector2.INF and selection.preview_prop == rock,
-		"가린 유닛 몸통 밖의 바위 픽셀은 계속 바위를 선택")
+	await _click(map.get_global_transform_with_canvas() * rock_only)
+	_check(selection.preview_prop == rock, "가린 유닛 칸 밖의 바위 마름모는 계속 바위를 선택")
+	# 두 칸 마름모가 겹치는 지점에서는 동작이 없는 가린 아군보다 앞 바위를 우선한다.
 	var warrior: CombatUnit = units[0]
 	spider.cell = Vector2i(9, 9)
 	warrior.cell = Vector2i(5, 3)
 	selection.clear_preview()
 	battle.call("_update_turn_ui")
-	var body: Vector2 = hidden[hidden.size() / 2]
-	_check(warrior.is_occluded and not spider.is_occluded and warrior.contains_body_point(body),
-		"바위 뒤로 옮긴 아군도 윤곽을 표시하고 클릭 지점은 아군 몸통")
-	await _click(warrior.get_global_transform_with_canvas() * body)
-	_check(selection.preview_prop == rock, "동작이 없는 가린 아군 몸통보다 앞 바위 선택을 우선")
+	var shared: Vector2 = map.map_to_surface(warrior.cell) + Vector2(0, 4)
+	_check(warrior.is_occluded and not spider.is_occluded
+		and map.contains_surface(warrior.cell, shared) and map.prop_at_point(shared) == rock,
+		"바위 뒤로 옮긴 아군도 윤곽을 표시하고 겹침 지점은 두 칸 마름모에 모두 포함됨")
+	await _click(map.get_global_transform_with_canvas() * shared)
+	_check(selection.preview_prop == rock, "동작이 없는 가린 아군 칸보다 앞 바위 선택을 우선")
 	actions.grid.props.erase(rock)
 	battle.call("_update_turn_ui")
 	_check(not warrior.is_occluded, "바위가 사라진 같은 화면 갱신에서 윤곽을 해제")
@@ -4787,7 +4833,8 @@ func _test_pit_scene_victory() -> void:
 			actions.dice = reward_dice
 	actions.logged.connect(use_reward_dice)
 	hud.action_selected.emit("shove")
-	var point: Vector2 = units[2].get_global_transform_with_canvas() * Vector2(0, -10)
+	var map: CombatMap = battle.get_node("Map") as CombatMap
+	var point: Vector2 = map.get_global_transform_with_canvas() * map.map_to_surface(units[2].cell)
 	await _click(point)
 	await _click(point)
 	_check(actions.is_victory() and units[2].hit_points == 0 and not units[2].visible
@@ -4824,7 +4871,8 @@ func _test_scene_bow_bash() -> void:
 	var before_miss: int = units[3].hit_points
 	# 힘 d6 1은 절대실패라 빗나간다.
 	actions.dice = _dice_for([1], [6])
-	var point: Vector2 = units[3].get_global_transform_with_canvas() * Vector2(0, -10)
+	var map: CombatMap = battle.get_node("Map") as CombatMap
+	var point: Vector2 = map.get_global_transform_with_canvas() * map.map_to_surface(units[3].cell)
 	await _click(point)
 	_check(units[1].bonus_action_left == 1 and units[1].action_left == 1, "활 후려치기 미리보기는 자원 유지")
 	await _click(point)
