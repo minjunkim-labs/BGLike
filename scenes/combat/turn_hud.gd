@@ -67,6 +67,8 @@ var _titles: Array[Label] = []
 var _log_lines: Array[String] = []
 # 기본 툴팁 창 대신 같은 HUD의 최상단에 설명을 그린다.
 var _tooltip: HoverTooltip = HoverTooltip.new()
+var _cover_tooltip: PanelContainer
+var _cover_tooltip_label: Label
 var reaction_dialog: ConfirmationDialog = ConfirmationDialog.new()
 ## 칸을 화면 방향 글자(↖ ↗ ↙ ↘)로 바꾸는 함수. battle이 맵 투영으로 정한다. 없으면 좌표를 보인다.
 var reflex_label: Callable
@@ -128,6 +130,17 @@ func _ready() -> void:
 		return target.get_meta(&"tooltip_bbcode") as String if target.has_meta(&"tooltip_bbcode") \
 			else HoverTooltip.headed(target.tooltip_text)
 	add_child(_tooltip)
+	_cover_tooltip = PanelContainer.new()
+	_cover_tooltip.name = "CoverTooltip"
+	_cover_tooltip.theme_type_variation = &"HudPanel"
+	_cover_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cover_tooltip.visible = false
+	_cover_tooltip.z_index = 20
+	_cover_tooltip_label = Label.new()
+	_cover_tooltip_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cover_tooltip_label.add_theme_color_override("font_color", Color("ff8a80"))
+	_cover_tooltip.add_child(_cover_tooltip_label)
+	add_child(_cover_tooltip)
 	end_button.pressed.connect(func() -> void: end_turn_requested.emit())
 	stand_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	stand_button.offset_left = end_button.offset_left
@@ -520,6 +533,26 @@ func show_target_note(text: String) -> void:
 
 func show_move_mode(showing_move: bool) -> void:
 	preview_label.visible = not showing_move
+
+
+func show_cover_reason(reason: String, screen_position: Vector2 = Vector2.INF) -> void:
+	if _cover_tooltip == null or reason.is_empty():
+		hide_cover_reason()
+		return
+	_cover_tooltip_label.text = reason
+	_cover_tooltip.reset_size()
+	var tip_size: Vector2 = _cover_tooltip.get_combined_minimum_size()
+	var view_size: Vector2 = get_viewport_rect().size
+	var pos: Vector2 = screen_position + Vector2(10, -tip_size.y - 6) if screen_position != Vector2.INF else Vector2(8, 8)
+	pos.x = clampf(pos.x, 4.0, maxf(4.0, view_size.x - tip_size.x - 4.0))
+	pos.y = clampf(pos.y, 4.0, maxf(4.0, view_size.y - tip_size.y - 4.0))
+	_cover_tooltip.position = pos
+	_cover_tooltip.visible = true
+
+
+func hide_cover_reason() -> void:
+	if _cover_tooltip != null:
+		_cover_tooltip.visible = false
 
 
 func refresh(turns: CombatTurns, has_available_action: bool) -> void:

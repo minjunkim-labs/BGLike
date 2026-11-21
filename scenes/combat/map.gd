@@ -15,6 +15,8 @@ var _prop_markers: Array[Node2D] = []
 var _loot_markers: Array[Node2D] = []
 var _unit_markers: Array[Node2D] = []
 var _height_edges: Array[Node2D] = []
+## 직사 호버 선분 표시(#358). 통과 구간은 초록, 막히는 지점부터는 빨강이다.
+var _cover_lines: Array[Line2D] = []
 ## 행동 유닛 발밑 칸 표시(#623). 하나를 계속 쓰고 숨기기만 해, 나타남 Tween이 갱신마다 끊기지 않게 한다.
 var _turn_tile: Polygon2D
 var _turn_tile_tween: Tween
@@ -57,6 +59,7 @@ func build_grid(combat_grid: CombatGrid, floors: TileSet, stage: CombatStage = n
 	show_grounds([])
 	show_floor_loot({})
 	show_props([])
+	clear_cover_line()
 	for marker: Node2D in _blocked_markers + _height_edges:
 		marker.free()
 	_blocked_markers.clear()
@@ -534,7 +537,43 @@ func _art_contains(marker: Node2D, point: Vector2) -> bool:
 	return Rect2i(Vector2i.ZERO, image.get_size()).has_point(pixel) and image.get_pixelv(pixel).a > 0.0
 
 
-func show_props(props: Array[CombatGrid.Prop], preview: CombatGrid.Prop = null) -> void:
+func clear_cover_line() -> void:
+	for line: Line2D in _cover_lines:
+		line.free()
+	_cover_lines.clear()
+
+
+## 직사 대상 호버 선분(#358): 통과 구간은 초록, 막히는 지점(hit_t)부터는 빨강으로 그린다.
+func show_cover_line(origin_cell: Vector2i, target_cell: Vector2i, result: CombatCover.Result) -> void:
+	clear_cover_line()
+	if result == null or origin_cell == Vector2i(-1, -1) or target_cell == Vector2i(-1, -1):
+		return
+	var start: Vector2 = map_to_surface(origin_cell)
+	var end: Vector2 = map_to_surface(target_cell)
+	var clear_color: Color = Color(0.32, 0.85, 0.45, 0.9)
+	var blocked_color: Color = Color(0.95, 0.32, 0.28, 0.95)
+	if not result.blocked:
+		_add_cover_segment(start, end, clear_color, "CoverLineClear")
+		return
+	var split: Vector2 = start.lerp(end, clampf(result.hit_t, 0.0, 1.0))
+	if result.hit_t > 0.0:
+		_add_cover_segment(start, split, clear_color, "CoverLineClear")
+	_add_cover_segment(split, end, blocked_color, "CoverLineBlocked")
+
+
+func _add_cover_segment(from_point: Vector2, to_point: Vector2, color: Color, line_name: String) -> void:
+	var line: Line2D = Line2D.new()
+	line.name = line_name
+	line.z_index = 4
+	line.width = 1.5
+	line.default_color = color
+	line.points = PackedVector2Array([from_point, to_point])
+	add_child(line)
+	_cover_lines.append(line)
+
+
+func show_props(props: Array[CombatGrid.Prop], preview: CombatGrid.Prop = null,
+		blocked_props: Array[CombatGrid.Prop] = []) -> void:
 	for marker: Node2D in _prop_markers:
 		marker.free()
 	_prop_markers.clear()
@@ -542,6 +581,8 @@ func show_props(props: Array[CombatGrid.Prop], preview: CombatGrid.Prop = null) 
 		var marker: Node2D = _art_marker(prop.cell, prop.kind, 4.0)
 		marker.set_meta("prop", prop)
 		var sprite: Sprite2D = marker.get_node("Sprite") as Sprite2D
+		if prop in blocked_props:
+			sprite.modulate = Color(0.55, 0.55, 0.58, 1.0)
 		if prop == preview:
 			var outline: Sprite2D = sprite.duplicate() as Sprite2D
 			outline.name = "Outline"

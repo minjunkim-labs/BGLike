@@ -284,6 +284,7 @@ func _build_stage() -> CombatStage:
 	actions.grid.pits = stage.pits.duplicate()
 	actions.grid.blocked_cells = stage.get_blocked_cells()
 	actions.grid.trees = stage.tree_cells()
+	actions.grid.scenery_kinds = stage.scenery_cell_kinds()
 	actions.grid.water_cells = stage.water_cells.duplicate()
 	map.build_grid(actions.grid, stage.tile_set, stage)
 	var enemies: Node = stage.enemies.instantiate()
@@ -655,6 +656,9 @@ var threat_visible: bool = false
 var _threat_unit: CombatUnit
 var _body_hover_unit: CombatUnit
 var _portrait_hover_unit: CombatUnit
+var _cover_hover_screen: Vector2 = Vector2.INF
+var _cover_hover_unit: CombatUnit
+var _cover_hover_prop: CombatGrid.Prop
 
 
 func _on_unit_hovered(unit: CombatUnit) -> void:
@@ -676,6 +680,50 @@ func _hover_enemy_body(screen_position: Vector2) -> void:
 		map.surface_to_map(map.to_local(world_position)))
 	_body_hover_unit = found
 	_sync_threat_hover()
+	_hover_cover(screen_position, world_position, found)
+
+
+func _direct_fire_active() -> bool:
+	var actor: CombatUnit = turns.current_unit
+	return (not waiting_for_start and not preparation.visible and not actions.is_over()
+		and actor != null and actor.is_ally and selection.selected_action == "attack"
+		and CombatCover.is_direct_fire(actor, "attack"))
+
+
+func _hover_cover(screen_position: Vector2, world_position: Vector2, hovered_unit: CombatUnit) -> void:
+	_cover_hover_screen = screen_position
+	_cover_hover_unit = hovered_unit
+	_cover_hover_prop = map.prop_at_point(map.to_local(world_position))
+	_refresh_cover_hover()
+
+
+func _refresh_cover_hover() -> void:
+	if not _direct_fire_active():
+		map.clear_cover_line()
+		hud.hide_cover_reason()
+		return
+	var actor: CombatUnit = turns.current_unit
+	if (_cover_hover_unit != null and _cover_hover_unit in units and _cover_hover_unit.hit_points > 0
+			and not _cover_hover_unit.is_ally and not _cover_hover_unit.stealthed
+			and actions.grid.in_range(actor.cell, _cover_hover_unit.cell, actor.get_attack_range())):
+		var res: CombatCover.Result = actions.cover_for_unit(actor, _cover_hover_unit, "attack")
+		map.show_cover_line(actor.cell, _cover_hover_unit.cell, res)
+		if res.blocked:
+			hud.show_cover_reason(res.reason, _cover_hover_screen)
+		else:
+			hud.hide_cover_reason()
+		return
+	if (_cover_hover_prop != null and _cover_hover_prop in actions.grid.props and _cover_hover_prop.hit_points > 0
+			and actions.grid.in_range(actor.cell, _cover_hover_prop.cell, actor.get_attack_range())):
+		var res: CombatCover.Result = actions.cover_for_prop(actor, _cover_hover_prop, "attack")
+		map.show_cover_line(actor.cell, _cover_hover_prop.cell, res)
+		if res.blocked:
+			hud.show_cover_reason(res.reason, _cover_hover_screen)
+		else:
+			hud.hide_cover_reason()
+		return
+	map.clear_cover_line()
+	hud.hide_cover_reason()
 
 
 func _sync_threat_hover() -> void:
@@ -862,6 +910,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if prop != null and not unit_first and (candidates.is_empty()
 			or map.map_to_local(prop.cell).y >= candidates[0].position.y):
 		get_viewport().set_input_as_handled()
+		# 직사 기본 공격이 엄폐에 막힌 사물은 선택할 수 없다(미리보기도 없음, #358).
+		if selection.selected_action == "attack" and actions.cover_for_prop(actor, prop, "attack").blocked:
+			selection.clear_preview()
+			_update_turn_ui()
+			return
 		if selection.select_prop(prop, selection.selected_action == "attack" and actions.can_attack_prop(actor, prop)):
 			selection.begin_execution()
 			var generation: int = map.revision
@@ -888,6 +941,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		var unit: CombatUnit = candidates[0]
 		get_viewport().set_input_as_handled()
 		if unit.is_ally and selection.selected_action != "shove":
+			selection.clear_preview()
+		elif selection.selected_action == "attack" and actions.cover_for_unit(actor, unit, "attack").blocked:
+			# 직사 기본 공격이 엄폐에 막힌 대상은 선택할 수 없다(미리보기도 없음, #358).
 			selection.clear_preview()
 		elif selection.select_target(unit, actions.can_target(actor, unit, selection.selected_action)):
 			await _execute_target(unit)
@@ -1203,7 +1259,15 @@ func _update_turn_ui() -> void:
 	map.show_grounds(actions.get_grounds())
 	map.show_trees(actions.grid.trees)
 	map.show_floor_loot(actions.floor_loot.drops)
-	map.show_props(actions.get_props(), selection.preview_prop)
+	var direct_fire: bool = _direct_fire_active()
+	var blocked_props: Array[CombatGrid.Prop] = []
+	if direct_fire:
+		var actor_for_cover: CombatUnit = turns.current_unit
+		for prop_item: CombatGrid.Prop in actions.get_props():
+			if (actions.grid.in_range(actor_for_cover.cell, prop_item.cell, actor_for_cover.get_attack_range())
+					and actions.cover_for_prop(actor_for_cover, prop_item, "attack").blocked):
+				blocked_props.append(prop_item)
+	map.show_props(actions.get_props(), selection.preview_prop, blocked_props)
 	_refresh_threat()
 	_refresh_turn_tile()
 	_refresh_camera_follow()
@@ -1212,6 +1276,10 @@ func _update_turn_ui() -> void:
 	for unit: CombatUnit in units:
 		unit.is_occluded = map.occludes(unit.cell,
 			map.to_local(unit.to_global(Vector2(0, unit.floor_offset_y - 10))))
+		unit.is_cover_blocked = (direct_fire and not unit.is_ally and unit.hit_points > 0 and not unit.stealthed
+			and actions.grid.in_range(turns.current_unit.cell, unit.cell, turns.current_unit.get_attack_range())
+			and actions.cover_for_unit(turns.current_unit, unit, "attack").blocked)
+	_refresh_cover_hover()
 	if selection.preview_target != null:
 		# 고른 동작의 명중 능력치·근접 여부를 따른다(활 후려치기는 힘 d6, 원거리 불리 없음).
 		var preview: CombatChecks.AttackPreview = actions.grid.attack_preview(
@@ -1400,6 +1468,7 @@ func _arrow_note(actor: CombatUnit, action: String, cell: Vector2i) -> String:
 func _attack_targets_from(cell: Vector2i) -> Array[CombatUnit]:
 	var targets: Array[CombatUnit] = []
 	for unit: CombatUnit in units:
-		if actions.can_target(turns.current_unit, unit, "attack", cell):
+		# 이동 후 공격 가능 칸(초록)은 이번 범위에서 엄폐를 반영하지 않는다(#358).
+		if actions.can_target(turns.current_unit, unit, "attack", cell, false):
 			targets.append(unit)
 	return targets
