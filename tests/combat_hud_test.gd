@@ -1091,7 +1091,7 @@ func _test_archer_moving_shot_input() -> void:
 	battle.call("_update_turn_ui")
 	await process_frame
 	(buttons["bow_bash"] as Button).pressed.emit()
-	await _click(target.get_global_transform_with_canvas() * Vector2(0, -10))
+	await _click(target.get_global_transform_with_canvas() * Vector2(0, target.floor_offset_y))
 	var bash: CombatChecks.AttackPreview = actions.grid.attack_preview(archer, target, "bow_bash")
 	_check(selection.selected_action == "bow_bash" and selection.preview_target == target and archer.bonus_action_left == 1
 		and actions.grid.attack_preview(archer, target).mode == CombatChecks.RollMode.DISADVANTAGE
@@ -1102,7 +1102,7 @@ func _test_archer_moving_shot_input() -> void:
 	battle.call("_update_turn_ui")
 	await process_frame
 	actions.dice = ScriptedDice.new([15, 2], [20, 20])
-	var point: Vector2 = target.get_global_transform_with_canvas() * Vector2(0, -10)
+	var point: Vector2 = target.get_global_transform_with_canvas() * Vector2(0, target.floor_offset_y)
 	await _click(point)
 	await _click(point)
 	_check(archer.action_left == 0 and archer.moving_shot_ready and selection.selected_action == "moving_shot",
@@ -1815,7 +1815,7 @@ func _test_guidance() -> void:
 		and (battle.get("selection") as CombatSelection).selected_action == "attack",
 		"실제 이동 후 행동과 공격 버튼 유지")
 	_check((battle.get("movement_cells") as Array).is_empty(), "이동 선택을 해제하면 범위 표시 제거")
-	var point: Vector2 = units[2].get_global_transform_with_canvas() * Vector2(0, -10)
+	var point: Vector2 = units[2].get_global_transform_with_canvas() * Vector2(0, units[2].floor_offset_y)
 	await _click(point)
 	_check((battle.get("selection") as CombatSelection).preview_target == units[2] and units[0].action_left == 1,
 		"이동 후 적 클릭으로 공격 미리보기")
@@ -2160,7 +2160,7 @@ func _test_mouse_controls_and_inspection() -> void:
 		"같은 칸 두 번째 우클릭은 이동력만 소비")
 	units[0].cell = Vector2i(4, 4)
 	battle.call("_update_turn_ui")
-	var enemy_point: Vector2 = units[2].get_global_transform_with_canvas() * Vector2(0, -10)
+	var enemy_point: Vector2 = units[2].get_global_transform_with_canvas() * Vector2(0, units[2].floor_offset_y)
 	await _click(enemy_point)
 	_check((battle.get("selection") as CombatSelection).preview_target == units[2] and units[0].action_left == 1
 		and hud.unit_label.text == units[2].get_display_name(), "필드 적 첫 좌클릭은 공격 미리보기와 적 정보")
@@ -2274,10 +2274,10 @@ func _test_threat_range_input() -> void:
 		"T는 선택 동작과 현재 턴을 바꾸지 않음")
 	await _key(KEY_T)
 	_check(not battle.threat_visible and battle.map._threat_overlays.is_empty(), "T를 다시 누르면 꺼짐")
-	await _hover_point(units[2].get_global_transform_with_canvas() * Vector2(0, -10))
+	await _hover_point(units[2].get_global_transform_with_canvas() * Vector2(0, units[2].floor_offset_y))
 	var only_first: Dictionary[Vector2, bool] = _expected_threat([units[2]])
 	_check(not battle.threat_visible and _threat_marks() == only_first and only_first.size() < both.size(),
-		"꺼진 상태에서도 적 몸통에 마우스를 올리면 그 적의 범위만 보임")
+		"꺼진 상태에서도 적 칸에 마우스를 올리면 그 적의 범위만 보임")
 	await _key(KEY_T)
 	_check(_threat_marks() == only_first, "켠 채로 적에 올리면 그 적의 범위만 보임")
 	await _hover_point(Vector2(-4000, -4000))
@@ -2772,7 +2772,7 @@ func _test_transparent_order_input() -> void:
 		battle.call("_update_turn_ui")
 		await process_frame
 		await process_frame
-		var enemy_point: Vector2 = units[2].get_global_transform_with_canvas() * Vector2(0, -10)
+		var enemy_point: Vector2 = units[2].get_global_transform_with_canvas() * Vector2(0, units[2].floor_offset_y)
 		await _click(enemy_point)
 		_check((battle.get("selection") as CombatSelection).preview_target == units[2]
 			and units[0].action_left == 1, "상단 유닛 몸통 클릭은 공격 미리보기: %s" % window_size)
@@ -2840,23 +2840,23 @@ func _test_camera() -> void:
 		await _click(cell_point.call(destination), MOUSE_BUTTON_RIGHT)
 		_check(selection.preview_cell == destination and units[0].cell == Vector2i(4, 4),
 			"확대·이동 뒤 우클릭은 포인터 아래 칸의 이동 미리보기: %s" % window_size)
-		var enemy_point: Vector2 = units[2].get_global_transform_with_canvas() * Vector2(0, -10)
+		var enemy_point: Vector2 = units[2].get_global_transform_with_canvas() * Vector2(0, units[2].floor_offset_y)
 		await _click(enemy_point)
 		_check(selection.preview_target == units[2] and units[2].is_previewed,
-			"확대·이동 뒤 적 몸통 좌클릭은 공격 미리보기: %s" % window_size)
+			"확대·이동 뒤 적 칸 좌클릭은 공격 미리보기: %s" % window_size)
 		var saved_props: Array[CombatGrid.Prop] = actions.grid.props.duplicate()
 		actions.grid.props.clear()
 		var crate: CombatGrid.Prop = actions.create_prop(Vector2i(3, 5), "crate")
 		battle.call("_on_action_selected", "attack")
-		await _click(map.get_global_transform_with_canvas() * (map.map_to_surface(crate.cell) + Vector2(0, -8)))
+		await _click(map.get_global_transform_with_canvas() * map.map_to_surface(crate.cell))
 		_check(selection.preview_prop == crate and crate.hit_points == 6,
-			"확대·이동 뒤 상자 몸통 좌클릭은 상자 미리보기: %s" % window_size)
+			"확대·이동 뒤 상자 칸 좌클릭은 상자 미리보기: %s" % window_size)
 		actions.grid.props.clear()
 		var rock: CombatGrid.Prop = actions.create_prop(Vector2i(3, 5), "rock")
 		battle.call("_update_turn_ui")
-		await _click(map.get_global_transform_with_canvas() * (map.map_to_surface(rock.cell) + Vector2(0, -8)))
+		await _click(map.get_global_transform_with_canvas() * map.map_to_surface(rock.cell))
 		_check(selection.preview_prop == rock and rock.cell == Vector2i(3, 5),
-			"확대·이동 뒤 바위 몸통 좌클릭은 바위 미리보기: %s" % window_size)
+			"확대·이동 뒤 바위 칸 좌클릭은 바위 미리보기: %s" % window_size)
 		_check(["OrderScroll", "UnitDetails", "CombatLog", "Skills", "EndTurn"].map(
 			func(path: String) -> Rect2: return (hud.get_node(path) as Control).get_global_rect()) == hud_rects,
 			"확대·이동해도 HUD는 같은 화면 자리: %s" % window_size)
@@ -2866,7 +2866,8 @@ func _test_camera() -> void:
 		units[2].show_feedback("-3", hud.feedback_obstacles())
 		var popup: Label = units[2].get_parent().get_child(-1) as Label
 		var popup_rect: Rect2 = popup.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, popup.size)
-		_check(popup_rect.size.y >= 2.0 * popup.size.y - 1.0 and popup_rect.get_center().distance_to(enemy_point) <= 64.0,
+		var popup_anchor: Vector2 = units[2].get_global_transform_with_canvas() * Vector2(0, units[2].floor_offset_y - 10)
+		_check(popup_rect.size.y >= 2.0 * popup.size.y - 1.0 and popup_rect.get_center().distance_to(popup_anchor) <= 64.0,
 			"피해 팝업은 확대한 맵의 대상 위에 2배로 뜸: %s" % window_size)
 		popup.free()
 		var before: Vector2 = cell_point.call(Vector2i(5, 4))
@@ -2963,24 +2964,18 @@ func _test_zoomed_occlusion() -> void:
 	battle.call("_update_turn_ui")
 	camera.reset()
 	await process_frame
-	var hidden: Vector2 = Vector2.INF
-	for y: int in range(-40, 8):
-		for x: int in range(-24, 25):
-			var point: Vector2 = Vector2(x, y)
-			var local: Vector2 = map.to_local(enemy.to_global(point))
-			if (hidden == Vector2.INF and enemy.contains_body_point(point) and map.occludes(enemy.cell, local)
-					and map.prop_at_point(local) == rock):
-				hidden = point
+	var hidden_local: Vector2 = map.map_to_surface(enemy.cell) + Vector2(0, 4)
 	var silhouette: Sprite2D = enemy.get("_silhouette") as Sprite2D
 	var sprite: AnimatedSprite2D = enemy.get("_sprite") as AnimatedSprite2D
-	_check(enemy.is_occluded and silhouette.visible and hidden != Vector2.INF,
-		"확대 검사 fixture: 바위 뒤 적은 윤곽 표시, 바위 그림이 가린 몸통 점이 있음")
-	var anchor: Vector2 = enemy.get_global_transform_with_canvas() * hidden
+	_check(enemy.is_occluded and silhouette.visible
+		and map.contains_surface(enemy.cell, hidden_local) and map.prop_at_point(hidden_local) == rock,
+		"확대 검사 fixture: 바위 뒤 적은 윤곽 표시, 바위 칸과 겹치는 적 칸 마름모 지점이 있음")
+	var anchor: Vector2 = map.get_global_transform_with_canvas() * hidden_local
 	await _wheel(anchor, MOUSE_BUTTON_WHEEL_UP)
 	await _drag(anchor, Vector2(-37, 21))
 	battle.call("_update_turn_ui")
 	await process_frame
-	var body: Vector2 = enemy.get_global_transform_with_canvas() * hidden
+	var body: Vector2 = map.get_global_transform_with_canvas() * hidden_local
 	_check(camera.zoom == Vector2(2, 2) and enemy.is_occluded and silhouette.visible
 		and silhouette.get_global_transform_with_canvas().is_equal_approx(sprite.get_global_transform_with_canvas())
 		and silhouette.get_global_transform_with_canvas().get_scale().is_equal_approx(sprite.scale * 2.0),
@@ -2989,7 +2984,7 @@ func _test_zoomed_occlusion() -> void:
 		"HP 막대를 그리는 유닛 캔버스도 맵과 함께 2배")
 	await _click(body)
 	_check(selection.preview_target == enemy and selection.preview_prop == null,
-		"2배 확대·이동 뒤 가린 윤곽 좌클릭은 바위가 아닌 유닛의 공격 미리보기")
+		"2배 확대·이동 뒤 가린 유닛 칸 좌클릭은 바위가 아닌 유닛의 공격 미리보기")
 	selection.clear_preview()
 	actions.grid.props.assign(saved_props)
 	actions.grid.heights = saved_heights
@@ -3949,24 +3944,14 @@ func _test_sweep_input() -> void:
 		and overlays.size() == 4, "휩쓸기를 고르면 안내와 고를 수 있는 인접 칸을 보임")
 	_check(overlays.all(func(overlay: Polygon2D) -> bool: return overlay.color == (overlays[0] as Polygon2D).color),
 		"고를 수 있는 인접 칸은 기본 공격 대상과 관계없이 같은 색")
-	await _click(units[2].get_global_transform_with_canvas() * Vector2(0, -10))
+	await _click(units[2].get_global_transform_with_canvas() * Vector2(0, units[2].floor_offset_y))
 	_check(selection.preview_cell == units[2].cell and units[2].is_previewed and units[3].is_previewed
-		and actor.action_left == 1, "적 몸통을 눌러도 그 칸을 정면으로 미리보기")
-	# 전사 자신의 몸통이 인접 칸 바닥을 가려도 격자 위치로 그 칸을 고른다.
-	var covered: Vector2 = Vector2.INF
-	var covered_cell: Vector2i = Vector2i(-1, -1)
-	for y: int in range(-40, 1):
-		for x: int in range(-16, 17):
-			var local: Vector2 = Vector2(x, y)
-			var floor_cell: Vector2i = map.surface_to_map(map.to_local(actor.to_global(local)))
-			if (covered == Vector2.INF and actor.contains_body_point(local)
-					and CombatGrid.distance(actor.cell, floor_cell) == 1):
-				covered = actor.get_global_transform_with_canvas() * local
-				covered_cell = floor_cell
-	_check(covered != Vector2.INF, "입력 fixture: 전사 몸통이 덮은 인접 칸 바닥이 있음")
-	if covered != Vector2.INF:
-		await _click(covered)
-		_check(selection.preview_cell == covered_cell, "자기 몸통이 가린 인접 칸도 정면으로 미리보기")
+		and actor.action_left == 1, "적 칸을 눌러도 그 칸을 정면으로 미리보기")
+	# 전사 자신의 스프라이트가 인접 칸 바닥에 걸쳐도 마름모 칸 위치로 그 칸을 고른다(#735).
+	var covered_cell: Vector2i = actor.cell - Vector2i(1, 0)
+	var covered: Vector2 = map.get_global_transform_with_canvas() * map.map_to_surface(covered_cell)
+	await _click(covered)
+	_check(selection.preview_cell == covered_cell, "자기 스프라이트가 걸친 인접 칸도 마름모 클릭으로 정면 미리보기")
 	# 빈 칸 (4, 5)를 정면으로 두면 왼쪽 옆 (5, 4)의 적만 맞고 앞오른쪽 (3, 5)의 아군은 맞지 않는다.
 	var facing: Vector2i = Vector2i(4, 5)
 	var point: Vector2 = map.get_global_transform_with_canvas() * map.map_to_surface(facing)

@@ -662,18 +662,25 @@ func _on_unit_hovered(unit: CombatUnit) -> void:
 	_sync_threat_hover()
 
 
-func _hover_enemy_body(screen_position: Vector2) -> void:
-	var world_position: Vector2 = get_canvas_transform().affine_inverse() * screen_position
-	var candidates: Array[CombatUnit] = []
+## 칸 윗면 마름모(`contains_surface`) 안에 local_point가 들어가는 살아 있는 유닛을 화면 앞쪽부터 돌려준다(#735).
+func _units_at_point(local_point: Vector2, visible_only: bool = false) -> Array[CombatUnit]:
+	var found: Array[CombatUnit] = []
 	for unit: CombatUnit in units:
-		if unit.visible and unit.hit_points > 0 and unit.contains_body_point(unit.to_local(world_position)):
-			candidates.append(unit)
-	candidates.sort_custom(func(a: CombatUnit, b: CombatUnit) -> bool:
+		if unit.hit_points > 0 and (not visible_only or unit.visible) and map.contains_surface(unit.cell, local_point):
+			found.append(unit)
+	found.sort_custom(func(a: CombatUnit, b: CombatUnit) -> bool:
 		if a.position.y != b.position.y:
 			return a.position.y > b.position.y
 		return a.get_index() > b.get_index())
+	return found
+
+
+func _hover_enemy_body(screen_position: Vector2) -> void:
+	var world_position: Vector2 = get_canvas_transform().affine_inverse() * screen_position
+	var local_point: Vector2 = map.to_local(world_position)
+	var candidates: Array[CombatUnit] = _units_at_point(local_point, true)
 	var found: CombatUnit = candidates[0] if not candidates.is_empty() else actions.grid.unit_at(
-		map.surface_to_map(map.to_local(world_position)))
+		map.surface_to_map(local_point))
 	_body_hover_unit = found
 	_sync_threat_hover()
 
@@ -800,40 +807,32 @@ func _unhandled_input(event: InputEvent) -> void:
 	if actions.busy or actions.is_over():
 		return
 	var world_position: Vector2 = get_canvas_transform().affine_inverse() * event.position
-	var cell: Vector2i = map.surface_to_map(map.to_local(world_position))
+	var local_point: Vector2 = map.to_local(world_position)
+	var cell: Vector2i = map.surface_to_map(local_point)
 	if waiting_for_start:
-		for unit: CombatUnit in units:
-			if unit.visible and unit.hit_points > 0 and unit.contains_body_point(unit.to_local(world_position)):
-				hud.show_unit(unit)
-				get_viewport().set_input_as_handled()
-				break
+		var shown: Array[CombatUnit] = _units_at_point(local_point, true)
+		if not shown.is_empty():
+			hud.show_unit(shown[0])
+			get_viewport().set_input_as_handled()
 		return
 	var actor: CombatUnit = turns.current_unit
 	if actor == null or not actor.is_ally:
 		return
 	selection.begin_field_input(event.button_index == MOUSE_BUTTON_LEFT)
-	# 우클릭은 몸통에 가려진 칸도 격자 위치로 이동 판정한다.
+	# 우클릭은 격자 칸의 윗면 마름모로 이동 판정한다.
 	if event.button_index == MOUSE_BUTTON_RIGHT:
 		get_viewport().set_input_as_handled()
 		await _select_move_cell(cell)
 		return
-	var candidates: Array[CombatUnit] = []
-	for unit: CombatUnit in units:
-		if unit.hit_points > 0 and unit.contains_body_point(unit.to_local(world_position)):
-			candidates.append(unit)
-	candidates.sort_custom(func(a: CombatUnit, b: CombatUnit) -> bool:
-		if a.position.y != b.position.y:
-			return a.position.y > b.position.y
-		return a.get_index() > b.get_index()
-	)
-	var prop: CombatGrid.Prop = map.prop_at_point(map.to_local(world_position))
+	var candidates: Array[CombatUnit] = _units_at_point(local_point)
+	var prop: CombatGrid.Prop = map.prop_at_point(local_point)
 	if selection.selected_action in CombatActionRules.OIL_ACTIONS:
 		get_viewport().set_input_as_handled()
 		_select_aim_cell(cell)
 		return
 	if selection.selected_action in AIM_ACTIONS:
 		get_viewport().set_input_as_handled()
-		# 유닛 몸통이나 사물을 눌러도 그 칸을 고른다.
+		# 유닛 칸이나 사물 칸을 눌러도 그 칸을 고른다.
 		var aimed_cell: Vector2i = cell
 		if not candidates.is_empty():
 			aimed_cell = candidates[0].cell
@@ -856,7 +855,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			selection.finish_execution()
 		_update_turn_ui()
 		return
-	# 윤곽이 보이는 가린 유닛은 몸통 클릭이 동작할 때만 앞 사물보다 우선한다.
+	# 윤곽이 보이는 가린 유닛은 동작할 수 있을 때만 앞 사물보다 우선한다.
 	var unit_first: bool = not candidates.is_empty() and candidates[0].is_occluded and (
 		not candidates[0].is_ally or selection.selected_action == "shove")
 	if prop != null and not unit_first and (candidates.is_empty()

@@ -1097,7 +1097,7 @@ func _test_scene_spin() -> void:
 
 
 func _click_unit(unit: CombatUnit) -> void:
-	await _click_point(unit.get_global_transform_with_canvas() * Vector2(0, -10))
+	await _click_point(unit.get_global_transform_with_canvas() * Vector2(0, unit.floor_offset_y))
 
 
 func _click_point(point: Vector2) -> void:

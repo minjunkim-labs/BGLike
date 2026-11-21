@@ -653,15 +653,6 @@ func play_attack() -> void:
 	_update_animation()
 
 
-func contains_body_point(point: Vector2) -> bool:
-	var pixel: Vector2i = Vector2i(((point - Vector2(0, floor_offset_y + body_offset_y))
-		/ _sprite.scale - _sprite.offset).floor())
-	if not Rect2i(Vector2i.ZERO, Vector2i(64, 64)).has_point(pixel):
-		return false
-	var texture: Texture2D = _sprite.sprite_frames.get_frame_texture(_sprite.animation, _sprite.frame)
-	return texture.get_image().get_pixelv(pixel).a > 0.0
-
-
 func face_toward(destination: Vector2) -> void:
 	if absf(destination.x - position.x) > 0.5:
 		facing_left = destination.x < position.x
