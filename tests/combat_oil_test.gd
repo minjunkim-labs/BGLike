@@ -57,19 +57,19 @@ func _dice(values: Array[int], sides: Array[int]) -> ScriptedDice:
 
 func _oil_cells(f: Fixture) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
-	for ground: CombatActions.Ground in f.actions.get_grounds():
+	for ground: CombatGrounds.Ground in f.actions.get_grounds():
 		if ground.kind == "oil":
 			cells.append(ground.cell)
 	return cells
 
 
 func _grounds_of(f: Fixture, kind: String) -> int:
-	return f.actions.get_grounds().filter(func(ground: CombatActions.Ground) -> bool: return ground.kind == kind).size()
+	return f.actions.get_grounds().filter(func(ground: CombatGrounds.Ground) -> bool: return ground.kind == kind).size()
 
 
 ## 한 칸짜리 기름 장판을 직접 둔다. 십자 모양 없이 칸 하나만 필요한 검사에 쓴다.
 func _single_oil(f: Fixture, cell: Vector2i, source: CombatUnit) -> void:
-	f.actions._grounds.append(CombatActions.Ground.new(source, cell, "oil"))
+	f.actions.grounds.add(source, cell, "oil")
 
 
 func _run() -> void:
@@ -99,24 +99,24 @@ func _run() -> void:
 	quit(0 if _failures == 0 else 1)
 
 
-## 반응표, 이어진 기름 칸, 십자 모양, 일어서기 비용 (CombatOil 순수 규칙).
+## 반응표, 이어진 기름 칸, 십자 모양(CombatGrounds)과 일어서기 비용(CombatActionRules).
 func _test_pure_rules() -> void:
-	_check(CombatOil.reaction("fire", "oil") == "ignite", "화염은 기름을 점화")
-	_check(CombatOil.reaction("water", "oil") == "remove" and CombatOil.reaction("water", "burn") == "remove",
+	_check(CombatGrounds.reaction("fire", "oil") == "ignite", "화염은 기름을 점화")
+	_check(CombatGrounds.reaction("water", "oil") == "remove" and CombatGrounds.reaction("water", "burn") == "remove",
 		"물은 기름과 불 장판을 지움")
-	_check(CombatOil.reaction("fire", "burn") == "" and CombatOil.reaction("none", "oil") == ""
-		and CombatOil.reaction("water", "poison") == "", "그 밖의 조합은 반응 없음")
-	_check(CombatOil.standing_cost(6) == 3 and CombatOil.standing_cost(3) == 2 and CombatOil.standing_cost(5) == 3,
+	_check(CombatGrounds.reaction("fire", "burn") == "" and CombatGrounds.reaction("none", "oil") == ""
+		and CombatGrounds.reaction("water", "poison") == "", "그 밖의 조합은 반응 없음")
+	_check(CombatActionRules.standing_cost(6) == 3 and CombatActionRules.standing_cost(3) == 2 and CombatActionRules.standing_cost(5) == 3,
 		"일어서기 비용은 최대 이동력의 절반을 올림")
-	var cross: Array[Vector2i] = CombatOil.cross_cells(Vector2i(4, 4))
+	var cross: Array[Vector2i] = CombatGrounds.cross_cells(Vector2i(4, 4))
 	_check(cross.size() == 5 and Vector2i(4, 4) in cross and Vector2i(3, 4) in cross and Vector2i(5, 4) in cross
 		and Vector2i(4, 3) in cross and Vector2i(4, 5) in cross and not (Vector2i(3, 3) in cross),
 		"십자 모양은 중심과 상하좌우 5칸")
 	var oil: Array[Vector2i] = [Vector2i(4, 4), Vector2i(4, 5), Vector2i(5, 5), Vector2i(7, 7)]
-	var group: Array[Vector2i] = CombatOil.connected(Vector2i(4, 4), oil)
+	var group: Array[Vector2i] = CombatGrounds.connected(Vector2i(4, 4), oil)
 	_check(group.size() == 3 and Vector2i(7, 7) not in group and Vector2i(5, 5) in group,
 		"점화 범위는 상하좌우로 이어진 기름 칸 전체")
-	_check(CombatOil.connected(Vector2i(9, 9), oil).is_empty(), "기름이 아닌 칸은 이어진 범위가 없음")
+	_check(CombatGrounds.connected(Vector2i(9, 9), oil).is_empty(), "기름이 아닌 칸은 이어진 범위가 없음")
 
 
 ## 생성, 갱신(같은 칸은 하나, 기간만 3), 물·막힌 칸 거부, 높이 차 밖 칸 제외.
@@ -124,7 +124,7 @@ func _test_create_oil() -> void:
 	var f: Fixture = _fixture()
 	var archer: CombatUnit = f.units[0]
 	_check(f.actions.create_oil(archer, Vector2i(4, 4)), "기름병 던지기 장판 생성")
-	_check(_grounds_of(f, "oil") == 5 and f.actions.get_grounds().all(func(ground: CombatActions.Ground) -> bool:
+	_check(_grounds_of(f, "oil") == 5 and f.actions.get_grounds().all(func(ground: CombatGrounds.Ground) -> bool:
 		return ground.kind != "oil" or (ground.turns_left == 3 and ground.source == archer)),
 		"십자 5칸에 3턴 기름, 시전자는 궁수")
 	_check(f.units[0].status_effects.is_empty() and archer.fallen == false,
@@ -187,7 +187,7 @@ func _test_ignite() -> void:
 		"물 칸의 기름도 이어진 기름과 함께 점화")
 	_check(not w.actions.create_ground(w.units[0], Vector2i(4, 5), "burn") and _grounds_of(w, "burn") == 0,
 		"물 칸에는 불 장판이 생기지 않음")
-	_check(f.actions.get_grounds().filter(func(ground: CombatActions.Ground) -> bool: return ground.kind == "burn").size() == 1,
+	_check(f.actions.get_grounds().filter(func(ground: CombatGrounds.Ground) -> bool: return ground.kind == "burn").size() == 1,
 		"점화는 다른 칸의 불 장판을 건드리지 않음")
 	# 불 장판이 기름 칸에 닿으면 점화하고 그 칸에 불 장판을 새로 두지 않는다.
 	var h: Fixture = _fixture()
@@ -265,7 +265,7 @@ func _test_entering_slip() -> void:
 
 ## 걷기 미리보기 안내: 이번 걷기에서 미끌거림을 굴리게 되면 실제 DC를 한 줄로 보인다.
 func _test_slip_note() -> void:
-	var expected: String = "미끌거림: 솜씨 내성 DC %d" % CombatOil.SLIP_DC
+	var expected: String = "미끌거림: 솜씨 내성 DC %d" % CombatGrounds.SLIP_DC
 	var f: Fixture = _fixture()
 	var archer: CombatUnit = f.units[0]
 	var path: Array[Vector2i] = [Vector2i(3, 3), Vector2i(3, 2)]
@@ -290,10 +290,10 @@ func _test_forced_entry_slip() -> void:
 	var archer: CombatUnit = f.units[0]
 	_single_oil(f, Vector2i(3, 4), archer)
 	f.actions.dice = _dice([], [])
-	f.actions._apply_grounds(archer, false)
+	f.actions.grounds.apply_to_unit(archer, false)
 	_check(not archer.fallen and not archer.oil_slipped, "가만히 서 있는 것은 굴리지 않음")
 	f.actions.dice = _dice([1], [20])
-	f.actions._apply_grounds(archer, true)
+	f.actions.grounds.apply_to_unit(archer, true)
 	_check(archer.fallen and archer.oil_slipped, "강제 이동으로 기름 칸에 들어가면 진입 굴림 실패 시 넘어짐")
 
 
@@ -341,7 +341,7 @@ func _test_prone_has_available_action() -> void:
 	var f: Fixture = _fixture()
 	var archer: CombatUnit = f.units[0]
 	archer.fallen = true
-	var cost: int = CombatOil.standing_cost(archer.get_movement())
+	var cost: int = CombatActionRules.standing_cost(archer.get_movement())
 	archer.movement_left = cost
 	_check(f.actions.has_available_action(archer) and f.actions.can_stand_up(archer),
 		"넘어진 궁수는 이동력이 비용과 같으면 할 수 있는 동작이 있다")
@@ -379,7 +379,7 @@ func _test_oil_clock() -> void:
 	f.actions.create_oil(archer, Vector2i(4, 4))
 	# 살아 있는 시전자의 턴 시작 감소는 기름을 한 번만 줄인다(비-안개 루프에서 또 줄이지 않음).
 	f.actions._decrease_durations(archer)
-	_check(f.actions.get_grounds().all(func(ground: CombatActions.Ground) -> bool:
+	_check(f.actions.get_grounds().all(func(ground: CombatGrounds.Ground) -> bool:
 		return ground.kind != "oil" or ground.turns_left == 2), "살아 있는 시전자의 턴 시작 감소는 기름을 한 번만 줄임")
 	f.actions._damage(archer, archer.hit_points)
 	_check(_grounds_of(f, "oil") == 5, "시전자가 쓰러져도 기름은 남음")

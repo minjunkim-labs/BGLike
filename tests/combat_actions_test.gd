@@ -3092,9 +3092,9 @@ func _test_status_signals() -> void:
 	var fog_applied: Array = []
 	fog.actions.status_applied.connect(func(unit: CombatUnit, kind: String) -> void: fog_applied.append([unit, kind]))
 	var walker: CombatUnit = fog.units[0]
-	fog.actions._grounds.append(CombatActions.Ground.new(fog.units[3], walker.cell, "fog", 6))
+	fog.actions.grounds.add(fog.units[3], walker.cell, "fog", 6)
 	fog.actions.dice = _dice_for([1], [walker.get_ability_sides(CombatUnit.Ability.HEALTH)])
-	fog.actions._apply_fog(walker, true)
+	fog.actions.grounds.apply_fog(walker, true)
 	_check(walker.get_status_count("poison") == 1 and fog_applied == [[walker, "poison"]], "독안개 내성 실패는 status_applied(poison) 한 번")
 	# 넘어짐: 기름 칸에서 솜씨 내성 실패.
 	var h: Fixture = _fixture()
@@ -3103,7 +3103,7 @@ func _test_status_signals() -> void:
 	var slipper: CombatUnit = h.units[0]
 	_check(h.actions.create_oil(h.units[1], slipper.cell), "기름 장판을 깐다")
 	h.actions.dice = _dice_for([1], [slipper.get_ability_sides(CombatUnit.Ability.FINESSE)])
-	h.actions._apply_grounds(slipper, true)
+	h.actions.grounds.apply_to_unit(slipper, true)
 	_check(slipper.fallen and h_applied == [[slipper, "fallen"]], "미끌거림 실패는 status_applied(fallen) 한 번: %s" % [h_applied])
 	# 점화: 이어진 기름 칸 목록으로 한 번. 기름이 없으면 없다.
 	var i: Fixture = _fixture()
@@ -3319,7 +3319,7 @@ func _test_ground_walk_entry() -> void:
 
 
 func _fog_count(f: Fixture) -> int:
-	return f.actions.get_grounds().filter(func(ground: CombatActions.Ground) -> bool: return ground.kind == "fog").size()
+	return f.actions.get_grounds().filter(func(ground: CombatGrounds.Ground) -> bool: return ground.kind == "fog").size()
 
 
 func _fog_rolls(f: Fixture) -> int:
@@ -3335,11 +3335,11 @@ func _test_fog_cast() -> void:
 	f.actions.dice = _dice_for([1, 8, 1], [12, 8, 4])
 	_check(f.actions.cast_fog(caster, Vector2i(4, 4)), "독안개 시전")
 	_check(not f.actions.cast_fog(caster, Vector2i(4, 4)) and _fog_count(f) == 5, "행동이 없으면 시전할 수 없음")
-	_check(_fog_count(f) == 5 and f.actions.get_grounds().all(func(ground: CombatActions.Ground) -> bool:
+	_check(_fog_count(f) == 5 and f.actions.get_grounds().all(func(ground: CombatGrounds.Ground) -> bool:
 		return ground.dc == dc and ground.turns_left == 4 and ground.source == caster), "칸마다 기록 하나, 시전 DC와 지속 4를 기록")
 	_check(f.units[0].get_status_count("poison") == 1 and f.units[1].get_status_count("poison") == 0
 		and f.units[2].get_status_count("poison") == 1, "시전 즉시 영역 안 유닛이 굴리고 실패하면 독 +1")
-	_check(f.units[0].status_effects[0].turns_left == 0 and f.units[0].status_effects[0].dc == CombatActions.Ground.POISON_DC
+	_check(f.units[0].status_effects[0].turns_left == 0 and f.units[0].status_effects[0].dc == CombatGrounds.Ground.POISON_DC
 		and "기간 없음" in f.units[0].get_periodic_status_text(), "독안개 중첩은 기간이 없고 제거 DC는 고정 4, 상태 줄에 기간 없음")
 	_check(_fog_rolls(f) == 3, "시전 즉시 굴림 3번")
 	# 같은 칸에 다시 시전하면 기록이 겹치고, 새 시전의 즉시 굴림은 칸 단위로 한 번이다.
@@ -3347,7 +3347,7 @@ func _test_fog_cast() -> void:
 	caster.action_left = 1
 	_check(f.actions.cast_fog(caster, Vector2i(4, 4)) and _fog_count(f) == 10 and _fog_rolls(f) == 6
 		and f.units[0].get_status_count("poison") == 1, "겹친 시전도 칸당 굴림 한 번")
-	_check(f.actions.get_grounds().all(func(ground: CombatActions.Ground) -> bool:
+	_check(f.actions.get_grounds().all(func(ground: CombatGrounds.Ground) -> bool:
 		return ground.cell not in [Vector2i(4, 4), Vector2i(5, 4)] or f.units[0] in ground.entered or f.units[2] in ground.entered),
 		"굴린 유닛은 그 칸의 모든 기록에 진입이 남음")
 	# 진입은 칸의 기록 전체에 한 번만 소비한다. 아직 들어선 적 없는 유닛은 한 번 굴리고 다시 굴리지 않는다.
@@ -3355,12 +3355,12 @@ func _test_fog_cast() -> void:
 	walker.cell = Vector2i(4, 5)
 	var before: int = _fog_rolls(f)
 	f.actions.dice = _dice_for([4], [4])
-	f.actions._apply_fog(walker, true)
-	f.actions._apply_fog(walker, true)
+	f.actions.grounds.apply_fog(walker, true)
+	f.actions.grounds.apply_fog(walker, true)
 	_check(_fog_rolls(f) == before + 1 and walker.get_status_count("poison") == 0, "같은 칸 진입은 기록이 겹쳐도 한 번만 굴림")
 	# 턴 시작은 진입 기록과 무관하게 매번 굴린다.
 	f.actions.dice = _dice_for([4], [4])
-	f.actions._apply_fog(walker, false)
+	f.actions.grounds.apply_fog(walker, false)
 	_check(_fog_rolls(f) == before + 2, "그 위에서 턴을 시작하면 다시 굴림")
 	# 저장·복원 왕복
 	var state: Dictionary = f.actions.save_state()
@@ -4636,7 +4636,7 @@ func _test_jump_slip_note() -> void:
 	actions.dice = _dice_for([], [])
 	var button: Button = (hud.get("_actions") as Dictionary)["jump"] as Button
 	var point: Vector2 = map.get_global_transform_with_canvas() * map.map_to_surface(destination)
-	var note: String = "미끌거림: 솜씨 내성 DC %d" % CombatOil.SLIP_DC
+	var note: String = "미끌거림: 솜씨 내성 DC %d" % CombatGrounds.SLIP_DC
 	var cases: Array = [
 		["기름이 없으면", [], false, false],
 		["착지 칸이 기름이면", [destination], false, true],
@@ -4644,9 +4644,9 @@ func _test_jump_slip_note() -> void:
 		["넘어가는 중간 칸만 기름이면", [Vector2i(1, 5)], false, false],
 		["이번 턴에 이미 굴렸으면", [destination], true, false]]
 	for entry: Array in cases:
-		actions._grounds.clear()
+		actions.grounds.clear()
 		for cell: Vector2i in entry[1]:
-			actions._grounds.append(CombatActions.Ground.new(jumper, cell, "oil"))
+			actions.grounds.add(jumper, cell, "oil")
 		jumper.oil_slipped = entry[2]
 		button.pressed.emit()
 		await _click(point, MOUSE_BUTTON_RIGHT)

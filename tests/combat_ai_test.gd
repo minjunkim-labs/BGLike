@@ -207,8 +207,8 @@ func _test_poison_immunity() -> void:
 	actor.kind = CombatUnit.Kind.SPIDERLING
 	_check(actor.is_poison_immune() and not f.units[3].is_poison_immune() and not f.units[0].is_poison_immune(),
 		"새끼·엄마 거미만 독 면역 속성을 가짐")
-	f.actions._grounds.clear()
-	f.actions._grounds.append(CombatActions.Ground.new(f.units[0], Vector2i(2, 0), "fog", 6))
+	f.actions.grounds.clear()
+	f.actions.grounds.add(f.units[0], Vector2i(2, 0), "fog", 6)
 	actor.cell = Vector2i.ZERO
 	actor.movement_left = 6
 	walked.clear()
@@ -216,7 +216,7 @@ func _test_poison_immunity() -> void:
 	await f.actions.move_to(actor, Vector2i(4, 0))
 	_check(walked.size() == 4 and Vector2i(2, 0) in walked, "독 면역은 독안개 칸도 비용 0으로 보고 곧게 지나감")
 	actor.cell = Vector2i(2, 0)
-	f.actions._apply_fog(actor, true)
+	f.actions.grounds.apply_fog(actor, true)
 	f.actions._on_turn_started(actor)
 	_check(actor.get_status_count("poison") == 0 and not f.logs.any(func(line: String) -> bool: return "독" in line),
 		"독 면역은 독안개에 들어서거나 그 위에서 턴을 시작해도 내성굴림·독·로그가 없음")
@@ -671,9 +671,7 @@ func _test_fog_spider_aim() -> void:
 	var overlap: Fixture = _fog_fixture(Vector2i(0, 2), Vector2i(6, 4), Vector2i(9, 9))
 	var spider: CombatUnit = overlap.units[2]
 	for cell: Vector2i in [Vector2i(5, 5), Vector2i(4, 5), Vector2i(6, 5), Vector2i(5, 4), Vector2i(5, 6)]:
-		var old: CombatActions.Ground = CombatActions.Ground.new(spider, cell, "fog", 6)
-		old.turns_left = 2
-		overlap.actions._grounds.append(old)
+		overlap.actions.grounds.add(spider, cell, "fog", 6).turns_left = 2
 	await ai.play_turn(spider, overlap.actions)
 	_check(overlap.actions.fog_cast_count(spider) == 2 and "6, 3" in _fog_logs(overlap)[0]
 		and spider.cell in [Vector2i(1, 2), Vector2i(0, 3)] and spider.movement_left == 5,
@@ -683,9 +681,7 @@ func _test_fog_spider_aim() -> void:
 	spider = forced.units[2]
 	forced.actions.grid.map_size = Vector2i(6, 6)
 	for cell: Vector2i in [Vector2i(3, 4), Vector2i(4, 3), Vector2i(3, 3), Vector2i(2, 4)]:
-		var old: CombatActions.Ground = CombatActions.Ground.new(spider, cell, "fog", 6)
-		old.turns_left = 2
-		forced.actions._grounds.append(old)
+		forced.actions.grounds.add(spider, cell, "fog", 6).turns_left = 2
 	forced.units[1].cell = Vector2i(5, 5)
 	await ai.play_turn(spider, forced.actions)
 	_check(forced.actions.fog_cast_count(spider) == 2 and _fog_logs(forced).size() == 1, "겹침이 있어도 시전")
@@ -701,9 +697,7 @@ func _test_fog_spider_aim() -> void:
 	spider = covered.units[2]
 	for center: Vector2i in [Vector2i(5, 4), Vector2i(8, 8)]:
 		for cell: Vector2i in [center] + CombatGrid.neighbors(center):
-			var old: CombatActions.Ground = CombatActions.Ground.new(spider, cell, "fog", 6)
-			old.turns_left = 3
-			covered.actions._grounds.append(old)
+			covered.actions.grounds.add(spider, cell, "fog", 6).turns_left = 3
 	await ai.play_turn(spider, covered.actions)
 	_check("2, 4" in _fog_logs(covered)[0] and spider.cell == Vector2i(0, 4),
 		"모든 아군이 장판 위면 경로 위 장판 없는 칸 중 겹침이 가장 적은(같으면 가장 먼) 칸에 시전")
@@ -712,9 +706,7 @@ func _test_fog_spider_aim() -> void:
 	var path_overlap: Fixture = _fog_fixture(Vector2i(0, 0), Vector2i(6, 0), Vector2i(9, 9))
 	spider = path_overlap.units[2]
 	for cell: Vector2i in [Vector2i(6, 0), Vector2i(5, 0), Vector2i(7, 0), Vector2i(6, 1), Vector2i(9, 9), Vector2i(8, 9), Vector2i(9, 8)]:
-		var old: CombatActions.Ground = CombatActions.Ground.new(spider, cell, "fog", 6)
-		old.turns_left = 3
-		path_overlap.actions._grounds.append(old)
+		path_overlap.actions.grounds.add(spider, cell, "fog", 6).turns_left = 3
 	await ai.play_turn(spider, path_overlap.actions)
 	_check("3, 0" in _fog_logs(path_overlap)[0], "경로 위 시전 칸도 자기 장판과 겹침이 적은 칸을 먼저 고름")
 
@@ -728,9 +720,7 @@ func _test_fog_spider_fallbacks() -> void:
 	var held: Fixture = _fog_fixture(Vector2i(4, 4), Vector2i(5, 4), Vector2i(8, 8))
 	spider = held.units[2]
 	for turns_left: int in [2, 3]:
-		var old: CombatActions.Ground = CombatActions.Ground.new(spider, Vector2i(5 + turns_left, 8), "fog", 6)
-		old.turns_left = turns_left
-		held.actions._grounds.append(old)
+		held.actions.grounds.add(spider, Vector2i(5 + turns_left, 8), "fog", 6).turns_left = turns_left
 	held.actions.dice = ScriptedDice.new([4, 1], ScriptedDice.attack_sides(spider) + ScriptedDice.damage_sides(spider))
 	await ai.play_turn(spider, held.actions)
 	_check(held.actions.fog_cast_count(spider) == 2 and _fog_logs(held).is_empty() and held.units[0].hit_points < 12
@@ -741,9 +731,7 @@ func _test_fog_spider_fallbacks() -> void:
 	for y: int in range(9):
 		detour.actions.grid.blocked_cells.append(Vector2i(1, y))
 	for turns_left: int in [2, 3]:
-		var old: CombatActions.Ground = CombatActions.Ground.new(spider, Vector2i(9, turns_left), "fog", 6)
-		old.turns_left = turns_left
-		detour.actions._grounds.append(old)
+		detour.actions.grounds.add(spider, Vector2i(9, turns_left), "fog", 6).turns_left = turns_left
 	await ai.play_turn(spider, detour.actions)
 	_check(spider.cell.x == 0 and spider.cell.y > 2, "유지 중에는 벽 너머 전사가 아니라 걸어서 가까운 궁수 쪽으로 접근")
 	# 벽 때문에 이번 턴의 모든 이동이 맨해튼 거리를 늘려도 걷는 경로를 따라 나아간다.
@@ -753,9 +741,7 @@ func _test_fog_spider_fallbacks() -> void:
 	for y: int in range(9):
 		wall.actions.grid.blocked_cells.append(Vector2i(1, y))
 	for turns_left: int in [2, 3]:
-		var old: CombatActions.Ground = CombatActions.Ground.new(spider, Vector2i(9, turns_left), "fog", 6)
-		old.turns_left = turns_left
-		wall.actions._grounds.append(old)
+		wall.actions.grounds.add(spider, Vector2i(9, turns_left), "fog", 6).turns_left = turns_left
 	await ai.play_turn(spider, wall.actions)
 	_check(spider.cell.y > 2 and spider.cell.x == 0, "벽 너머 아군에게는 걷는 경로를 따라 이동")
 	# 높이 차가 2인 이웃은 걸어서 인접하지 않으므로 접근 칸 선택에서 가까운 칸으로 세지 않는다.

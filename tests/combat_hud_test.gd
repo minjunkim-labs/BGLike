@@ -1117,20 +1117,20 @@ func _test_archer_moving_shot_input() -> void:
 	# 기름병 던지기: 버튼을 고르고 칸을 한 번 누르면 십자 범위를 보이고, 같은 칸을 다시 누르면 던진다(#500 2a).
 	var oil_cells: Array[Vector2i] = []
 	oil_cells.assign(actions.aim_cells(archer, "oil_throw").filter(func(cell: Vector2i) -> bool:
-		return cell != archer.cell and actions._oil_site_ok(cell, cell)))
+		return cell != archer.cell and actions.grounds.oil_site_ok(cell, cell)))
 	_check(not oil_cells.is_empty(), "기름병 검사 전제: 던질 수 있는 칸이 있음")
 	if not oil_cells.is_empty():
 		battle.call("_on_action_selected", "oil_throw")
 		var oil_selection: CombatSelection = battle.get("selection") as CombatSelection
 		_check(oil_selection.selected_action == "oil_throw", "기름병 던지기 버튼은 칸 조준 모드로 들어감")
 		battle.call("_select_aim_cell", oil_cells[0])
-		_check(actions.get_grounds().all(func(ground: CombatActions.Ground) -> bool: return ground.kind != "oil")
+		_check(actions.get_grounds().all(func(ground: CombatGrounds.Ground) -> bool: return ground.kind != "oil")
 			and oil_selection.preview_cell == oil_cells[0], "첫 클릭은 칸만 고르고 던지지 않음")
 		battle.call("_select_aim_cell", oil_cells[0])
-		_check(actions.get_grounds().any(func(ground: CombatActions.Ground) -> bool:
+		_check(actions.get_grounds().any(func(ground: CombatGrounds.Ground) -> bool:
 			return ground.kind == "oil" and ground.cell == oil_cells[0]) and archer.oil_throw_left == 0,
 			"같은 칸을 다시 누르면 그 칸에 기름을 던짐")
-		actions._grounds.assign(actions._grounds.filter(func(ground: CombatActions.Ground) -> bool: return ground.kind != "oil"))
+		actions.grounds.remove_kind("oil")
 		archer.oil_throw_left = 1
 		archer.bonus_action_left = 1
 		battle.call("_update_turn_ui")
@@ -1154,7 +1154,7 @@ func _test_archer_moving_shot_input() -> void:
 	_check(not potion_button.is_visible_in_tree() and bottle_button.is_visible_in_tree(), "회복 물약이 없으면 그 버튼만 숨김")
 	var bottle_cells: Array[Vector2i] = []
 	bottle_cells.assign(actions.aim_cells(archer, "oil_bottle").filter(func(cell: Vector2i) -> bool:
-		return cell != archer.cell and actions._oil_site_ok(cell, cell)))
+		return cell != archer.cell and actions.grounds.oil_site_ok(cell, cell)))
 	_check(not bottle_cells.is_empty(), "기름병 검사 전제: 던질 수 있는 칸이 있음")
 	if not bottle_cells.is_empty():
 		battle.call("_on_action_selected", "oil_bottle")
@@ -1163,10 +1163,10 @@ func _test_archer_moving_shot_input() -> void:
 		battle.call("_select_aim_cell", bottle_cells[0])
 		_check(archer.potions == ["oil_bottle"] and bottle_selection.preview_cell == bottle_cells[0], "첫 클릭은 칸만 고름")
 		battle.call("_select_aim_cell", bottle_cells[0])
-		_check(actions.get_grounds().any(func(ground: CombatActions.Ground) -> bool:
+		_check(actions.get_grounds().any(func(ground: CombatGrounds.Ground) -> bool:
 			return ground.kind == "oil" and ground.cell == bottle_cells[0]) and archer.potions.is_empty() and archer.oil_throw_left == 1
 			and not bottle_button.is_visible_in_tree(), "같은 칸을 다시 누르면 던지고 마지막 기름병이면 버튼이 사라짐")
-		actions._grounds.assign(actions._grounds.filter(func(ground: CombatActions.Ground) -> bool: return ground.kind != "oil"))
+		actions.grounds.remove_kind("oil")
 		archer.bonus_action_left = 1
 		battle.call("_update_turn_ui")
 	# 장난스러운 화살·폭죽 화살(#500 2b): 첫 클릭은 칸만 고르고 같은 칸을 다시 누르면 쏜다.
@@ -1230,27 +1230,27 @@ func _test_archer_moving_shot_input() -> void:
 	var map: CombatMap = battle.get_node("Map") as CombatMap
 	var leap: Vector2 = map.get_global_transform_with_canvas() * map.map_to_local(Vector2i(5, 4))
 	# 도약 미리보기의 미끌거림 안내(#600): 기름 칸에 착지하면 보이고, 기름이 없으면 보이지 않는다.
-	var slip_note: String = "미끌거림: 솜씨 내성 DC %d" % CombatOil.SLIP_DC
+	var slip_note: String = "미끌거림: 솜씨 내성 DC %d" % CombatGrounds.SLIP_DC
 	var dry: Vector2 = map.get_global_transform_with_canvas() * map.map_to_local(Vector2i(4, 3))
 	await _click(dry, MOUSE_BUTTON_RIGHT)
 	_check(selection.preview_cell == Vector2i(4, 3) and slip_note not in hud.preview_label.text,
 		"기름이 없는 도약 미리보기에는 미끌거림 안내가 없음: " + hud.preview_label.text)
-	actions._grounds.append(CombatActions.Ground.new(archer, Vector2i(5, 4), "oil"))
+	actions.grounds.add(archer, Vector2i(5, 4), "oil")
 	await _click(leap, MOUSE_BUTTON_RIGHT)
 	_check(archer.cell == Vector2i(4, 4) and selection.preview_cell == Vector2i(5, 4), "첫 우클릭은 착지 칸 미리보기")
 	_check(slip_note in hud.preview_label.text, "기름 칸으로 도약하는 미리보기에 미끌거림 안내: " + hud.preview_label.text)
-	actions._grounds.clear()
+	actions.grounds.clear()
 	await _click(leap, MOUSE_BUTTON_RIGHT)
 	_check(archer.cell == Vector2i(5, 4) and archer.movement_left == archer.get_movement() and not archer.moving_shot_ready
 		and selection.selected_action == "attack" and not (dots["moving_shot"] as Label).visible,
 		"같은 칸 두 번째 우클릭으로 이동력 없이 도약하고 선택을 되돌림")
 	# 걷기 미리보기의 미끌거림 안내는 그대로다(#600 회귀).
-	actions._grounds.append(CombatActions.Ground.new(archer, Vector2i(5, 5), "oil"))
+	actions.grounds.add(archer, Vector2i(5, 5), "oil")
 	var walk: Vector2 = map.get_global_transform_with_canvas() * map.map_to_local(Vector2i(5, 6))
 	await _click(walk, MOUSE_BUTTON_RIGHT)
 	_check(selection.selected_action == "move" and not selection.preview_path.is_empty() and slip_note in hud.preview_label.text,
 		"걷기 미리보기는 기름 칸 경로에 미끌거림 안내: " + hud.preview_label.text)
-	actions._grounds.clear()
+	actions.grounds.clear()
 	selection.clear_preview()
 	# 뒤 검사가 쓰는 처음 배치로 되돌린다.
 	units[0].cell = Vector2i(4, 9)
@@ -1300,7 +1300,7 @@ func _test_log_and_status() -> void:
 	var standing: CombatUnit = actions.turns.current_unit
 	_check(standing != null and standing.is_ally, "일어나기 검사 전제: 지금 턴은 아군")
 	standing.fallen = true
-	var stand_cost: int = CombatOil.standing_cost(standing.get_movement())
+	var stand_cost: int = CombatActionRules.standing_cost(standing.get_movement())
 	standing.movement_left = stand_cost
 	battle.call("_update_turn_ui")
 	_check(hud.stand_button.visible and not hud.stand_button.disabled

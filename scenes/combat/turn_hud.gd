@@ -337,7 +337,7 @@ func refresh_actions(actions: CombatActions, selected: String, last_ally: Combat
 	_refresh_passives(shown)
 	stand_button.visible = ally_turn and actor.fallen and not locked
 	if stand_button.visible:
-		var cost: int = CombatOil.standing_cost(actor.get_movement())
+		var cost: int = CombatActionRules.standing_cost(actor.get_movement())
 		stand_button.text = tr("일어나기 · 이동력 %d") % cost
 		stand_button.disabled = actor.movement_left < cost
 	for index: int in range(_containers.size()):

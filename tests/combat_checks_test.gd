@@ -848,7 +848,7 @@ func _test_water_actions() -> void:
 	for cell: Vector2i in area:
 		actions.create_ground(barbarian, cell, "burn")
 	var burn_cells: Array[Vector2i] = []
-	for ground: CombatActions.Ground in actions.get_grounds():
+	for ground: CombatGrounds.Ground in actions.get_grounds():
 		if ground.kind == "burn":
 			burn_cells.append(ground.cell)
 	_check(center in area and Vector2i(7, 6) in area and Vector2i(6, 5) in area
