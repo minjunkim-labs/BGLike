@@ -100,8 +100,36 @@ static func colorize(text: String) -> String:
 	return _BAD.sub(result, "$1[color=#%s]$2[/color]" % BAD_COLOR.to_html(false), true)
 
 
+## 동작의 조준·입력 방식. 선택 상태와 미리보기 라우팅의 단일 기준이다.
+enum TargetMode {
+	TARGET_UNIT,
+	AIM_CELL,
+	FACING,
+	SELF,
+	MOVE
+}
+
 ## 대상 없이 바로 쓰는 동작.
 const SELF_TARGET: Array[String] = ["holy_veil", "battle_cry", "second_wind", "aegisal", "disengage", "potion", "stealth"]
+## 칸을 조준하는 동작. 한 번 눌러 칸(과 범위)을 보고, 같은 칸을 다시 누르면 실행한다.
+const AIM_ACTIONS: Array[String] = ["oil_throw", "oil_bottle", "trick_arrow", "firework_arrow"]
+## 인접한 칸을 눌러 방향(정면)을 고르는 동작. 휩쓸기는 정면 반달, 효시는 세 줄 띠다.
+const FACING_ACTIONS: Array[String] = ["sweep", "whistle"]
+## 우클릭으로 목적지나 착지 칸을 고르는 이동 계열 동작.
+const MOVE_ACTIONS: Array[String] = ["move", "jump", "moving_shot"]
+
+
+## 동작 이름에 대응하는 조준 방식을 돌려준다.
+static func target_mode(action: String) -> TargetMode:
+	if action in MOVE_ACTIONS:
+		return TargetMode.MOVE
+	if action in SELF_TARGET:
+		return TargetMode.SELF
+	if action in AIM_ACTIONS:
+		return TargetMode.AIM_CELL
+	if action in FACING_ACTIONS:
+		return TargetMode.FACING
+	return TargetMode.TARGET_UNIT
 ## 쓰면 은신이 풀리는 피해를 주는 공격 동작 (궁수 문서 「은신」). 이동·기름병 던지기·효시·애기살 급조는 풀지 않는다.
 const STEALTH_BREAKERS: Array[String] = ["attack", "trick_arrow", "firework_arrow", "bow_bash"]
 ## 칸 조준 동작의 사거리와 반경 (skill-types.md 5-2). 최소 사거리는 기본 0, 기름병 던지기는 1(궁수 문서). 곡사·기준점(목표 칸)은 기본값이라 필드가 없다.
