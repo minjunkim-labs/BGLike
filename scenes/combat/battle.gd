@@ -1281,6 +1281,8 @@ func _update_turn_ui() -> void:
 	var attack_cells: Array[Vector2i] = []
 	var origin: Vector2i = turns.current_unit.cell if turns.current_unit != null else Vector2i.ZERO
 	var path: Array[Vector2i] = selection.preview_path
+	var warning_cells: Array[Vector2i] = []
+	var move_oa_reactors: Array[CombatUnit] = []
 	if actions.pending_kind == "reflex" and actions.pending_reactor != null:
 		# 반사신경 확인 창이 열린 동안에는 회피할 후보 칸만 이동 칸처럼 보인다.
 		movement_cells.assign(actions.pending_cells)
@@ -1290,7 +1292,17 @@ func _update_turn_ui() -> void:
 		for cell: Vector2i in movement_cells:
 			if selection.selected_action in FACING_ACTIONS or not _attack_targets_from(cell).is_empty():
 				attack_cells.append(cell)
-	map.show_movement(movement_cells, attack_cells, path, origin)
+		if turns.current_unit != null and turns.current_unit.is_ally and not path.is_empty():
+			if selection.selected_action == "move":
+				move_oa_reactors = actions.move_reactors(turns.current_unit, path)
+				if not move_oa_reactors.is_empty():
+					warning_cells = actions.move_opportunity_cells(turns.current_unit, path)
+					if path[-1] not in warning_cells:
+						warning_cells.append(path[-1])
+			elif selection.selected_action == "jump":
+				if not actions.jump_reactors(turns.current_unit, selection.preview_cell).is_empty():
+					warning_cells.append(selection.preview_cell)
+	map.show_movement(movement_cells, attack_cells, path, origin, warning_cells)
 	map.show_grounds(actions.get_grounds())
 	map.show_trees(actions.grid.trees)
 	map.show_floor_loot(actions.floor_loot.drops)
@@ -1394,10 +1406,12 @@ func _update_turn_ui() -> void:
 	hud.get_node("Skills").visible = not waiting_for_start
 	hud.get_node("EndTurn").visible = not waiting_for_start
 	hud.show_move_mode(showing_move)
-	# 걷기·무빙샷 도약 미리보기는 안내를 숨기지만, 도착 칸이 물이면 서기 전에 물 칸 화상 규칙을, 기름 칸이면 미끌거림 안내를 보인다(#503, #600).
+	# 걷기·무빙샷 도약 미리보기는 안내를 숨기지만, 도착 칸이 물이면 서기 전에 물 칸 화상 규칙을, 기름 칸이면 미끌거림 안내를,
+	# 걷기 경로에 기회 공격이 걸리면 사전 경고를 보인다(#503, #600, #733).
 	if selection.selected_action != "jump" and not selection.preview_path.is_empty():
 		var notes: Array[String] = []
-		for note: String in [actions.water_note(selection.preview_cell),
+		for note: String in [actions.opportunity_note(move_oa_reactors),
+				actions.water_note(selection.preview_cell),
 				actions.slip_note(turns.current_unit, selection.preview_path),
 				actions.pickup_note(turns.current_unit, selection.preview_path)]:
 			if not note.is_empty():
@@ -1411,10 +1425,10 @@ func _update_turn_ui() -> void:
 		if not selection.preview_path.is_empty():
 			var actor: CombatUnit = turns.current_unit
 			var cell: Vector2i = selection.preview_cell
-			var reactors: int = actions.jump_reactors(actor, cell).size()
+			var jump_oa: Array[CombatUnit] = actions.jump_reactors(actor, cell)
 			var fall: int = actions.fall_damage(actor, cell)
 			note = tr("점프 · 이동 %d · 보조 행동1\n%s · %s") % [actions.jump_cells(actor).get(cell, 0),
-				tr_n("기회 공격 %d명", "기회 공격 %d명", reactors) % reactors if reactors > 0 else tr("기회 공격 없음"),
+				actions.opportunity_note(jump_oa) if not jump_oa.is_empty() else tr("기회 공격 없음"),
 				tr("낙하 피해 %d") % fall if fall > 0 else tr("낙하 없음")]
 			var water: String = actions.water_note(cell)
 			if not water.is_empty():

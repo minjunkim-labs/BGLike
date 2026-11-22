@@ -60,7 +60,7 @@
 
 ### 이동 경로의 기회 공격 사전 경고 아이콘 (#733)
 
-**기획 결정됨(2026-11-21), 구현 예정([#762](https://github.com/minjunkim-labs/BGLike/issues/762)).** [#733](https://github.com/minjunkim-labs/BGLike/issues/733)에서 아군이 이동 경로를 고를 때 적의 기회 공격을 유발하는지 미리 알려 주는 사전 경고 규칙을 다음과 같이 확정했다(발더스 게이트 3 방식):
+**구현됨([#762](https://github.com/minjunkim-labs/BGLike/issues/762), 직접 플레이 확인 전).** [#733](https://github.com/minjunkim-labs/BGLike/issues/733)에서 아군이 이동 경로를 고를 때 적의 기회 공격을 유발하는지 미리 알려 주는 사전 경고 규칙을 다음과 같이 확정했다(발더스 게이트 3 방식):
 
 - **표시 시점**: 아군 유닛의 걷기 이동 경로를 미리보기(첫 우클릭으로 경로 선택 대기 중)하거나 점프 착지 칸을 미리볼 때, 그 이동이 반응(`reaction_left > 0`)이 남아 있고 반응 가능한(기절·넘어짐·전투 불능이 아닌) 적 근접 유닛의 기회 공격(`CombatActions.move_to`의 이탈 판정 / `jump_reactors`)을 하나 이상 유발하는 경우. 아군에게 `기회 공격 면제`(`disengaged`)나 `은신`(`stealthed`)이 있으면 표시하지 않는다.
 - **표시 위치와 아이콘**:

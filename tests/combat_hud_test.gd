@@ -56,6 +56,7 @@ func _run() -> void:
 	_test_movement_overlay()
 	await _test_turn_tile_map()
 	_test_threat_overlay()
+	_test_opportunity_attack_warning()
 	await _test_floor_loot_ui()
 	_test_height_edges()
 	_test_unit_art()
@@ -246,6 +247,131 @@ func _test_movement_overlay() -> void:
 	map.show_movement([], [], [], Vector2i.ZERO)
 	_check(map._overlays.is_empty(), "이동 표시를 닫으면 면·윤곽·경로를 함께 제거")
 	map.free()
+
+
+## #762: 이동 경로의 기회 공격 사전 경고 아이콘 및 안내 문구(#733).
+func _test_opportunity_attack_warning() -> void:
+	var map: CombatMap = battle.get_node("Map") as CombatMap
+	var selection: CombatSelection = battle.get("selection") as CombatSelection
+	var ally: CombatUnit = units[0]
+	var enemy: CombatUnit = units[2]
+	var ranged_enemy: CombatUnit = units[3]
+	var saved_cells: Array[Vector2i] = []
+	for unit: CombatUnit in units:
+		saved_cells.append(unit.cell)
+	var saved_threat: bool = battle.get("threat_visible") as bool
+	# 맵 단독 검사: warning_cells 표시와 갱신/초기화 정리.
+	var test_grid: CombatGrid = CombatGrid.new()
+	test_grid.map_size = Vector2i(4, 3)
+	var test_map: CombatMap = CombatMap.new()
+	root.add_child(test_map)
+	test_map.build_grid(test_grid, load("res://scenes/combat/floor_tiles.tres") as TileSet)
+	test_map.show_movement([Vector2i(1, 0), Vector2i(2, 0)], [], [Vector2i(1, 0), Vector2i(2, 0)],
+		Vector2i.ZERO, [Vector2i.ZERO, Vector2i(2, 0)])
+	_check(test_map.opportunity_warning_cells() == [Vector2i.ZERO, Vector2i(2, 0)],
+		"경고 칸 목록이 이탈 칸과 도착 칸에 표시됨: " + str(test_map.opportunity_warning_cells()))
+	test_map.show_movement([Vector2i(1, 0)], [], [], Vector2i.ZERO)
+	_check(test_map.opportunity_warning_cells().is_empty(), "show_movement 갱신 시 이전 경고 아이콘이 정리됨")
+	test_map.show_movement([], [], [], Vector2i.ZERO)
+	_check(test_map._overlays.is_empty(), "show_movement 초기화 시 경고 아이콘 포함 오버레이 전체 정리")
+	test_map.free()
+
+	# CombatActions 순수 조회 검사: 실제 move_to와 동일한 유발 조건.
+	ally.cell = Vector2i(4, 9)
+	units[1].cell = Vector2i(0, 9)
+	enemy.cell = Vector2i(4, 8)
+	ranged_enemy.cell = Vector2i(3, 8)
+	ally.disengaged = false
+	ally.stealthed = false
+	enemy.reaction_left = 1
+	enemy.is_stunned = false
+	enemy.fallen = false
+	ranged_enemy.reaction_left = 1
+	var walk_path: Array[Vector2i] = [Vector2i(3, 9), Vector2i(2, 9)]
+	var reactors: Array[CombatUnit] = actions.move_reactors(ally, walk_path)
+	var depart_cells: Array[Vector2i] = actions.move_opportunity_cells(ally, walk_path)
+	_check(reactors == [enemy] and depart_cells == [Vector2i(4, 9)],
+		"인접 근접 적을 벗어나면 반응 적과 이탈 칸 반환 (원거리 적은 제외): " + str(reactors) + " " + str(depart_cells))
+	_check(actions.opportunity_note(reactors) == "기회 공격 1명",
+		"기회 공격 안내 문구는 기존 점프 표기와 일관: " + actions.opportunity_note(reactors))
+	# 같은 적의 반응은 경로 중 한 번만 소모된다(다시 인접했다 벗어나도 중복 계산하지 않음).
+	var loop_path: Array[Vector2i] = [Vector2i(3, 9), Vector2i(4, 9), Vector2i(5, 9)]
+	_check(actions.move_reactors(ally, loop_path) == [enemy]
+		and actions.move_opportunity_cells(ally, loop_path) == [Vector2i(4, 9)],
+		"한 경로에서 같은 적의 반응이 소모되면 중복 계산하지 않음")
+	# 중간 칸을 지나며 인접했다 벗어나는 경로는 중간 이탈 칸을 기록한다.
+	ally.cell = Vector2i(2, 9)
+	var pass_path: Array[Vector2i] = [Vector2i(3, 9), Vector2i(4, 9), Vector2i(5, 9)]
+	_check(actions.move_reactors(ally, pass_path) == [enemy]
+		and actions.move_opportunity_cells(ally, pass_path) == [Vector2i(4, 9)],
+		"경로 중간 이탈 칸을 정확히 계산")
+	# 괴력의 사내(전사)가 반응하면 이동 정지 안내를 함께 표시한다.
+	_check(actions.opportunity_note([ally]) == "기회 공격 1명 · 이동 정지",
+		"이동 정지 패시브 보유 반응자는 안내에 이동 정지 포함: " + actions.opportunity_note([ally]))
+	# 면제·은신·반응 소진·기절·넘어짐·전투 불능이면 포함하지 않는다.
+	ally.cell = Vector2i(4, 9)
+	ally.disengaged = true
+	_check(actions.move_reactors(ally, walk_path).is_empty(), "기회 공격 면제 시 반응 없음")
+	ally.disengaged = false
+	ally.stealthed = true
+	_check(actions.move_reactors(ally, walk_path).is_empty(), "은신 시 반응 없음")
+	ally.stealthed = false
+	enemy.reaction_left = 0
+	_check(actions.move_reactors(ally, walk_path).is_empty(), "적 반응 소진 시 반응 없음")
+	enemy.reaction_left = 1
+	enemy.is_stunned = true
+	_check(actions.move_reactors(ally, walk_path).is_empty(), "적 기절 시 반응 없음")
+	enemy.is_stunned = false
+	enemy.fallen = true
+	_check(actions.move_reactors(ally, walk_path).is_empty(), "적 넘어짐 시 반응 없음")
+	enemy.fallen = false
+	var saved_enemy_hp: int = enemy.hit_points
+	enemy.hit_points = 0
+	_check(actions.move_reactors(ally, walk_path).is_empty(), "적 전투 불능 시 반응 없음")
+	enemy.hit_points = saved_enemy_hp
+
+	# 전투 화면 통합: 적 위협 범위(T)가 꺼져 있어도 걷기·점프 미리보기에서 경고 아이콘과 안내가 표시된다.
+	battle.set("threat_visible", false)
+	selection.reset()
+	selection.select_move(Vector2i(2, 9), walk_path)
+	battle.call("_update_turn_ui")
+	_check(map.opportunity_warning_cells() == [Vector2i(4, 9), Vector2i(2, 9)],
+		"걷기 미리보기에서 이탈 칸과 최종 도착 칸 위에 경고 아이콘 표시: " + str(map.opportunity_warning_cells()))
+	_check(hud.preview_label.visible and "기회 공격 1명" in hud.preview_label.text,
+		"걷기 미리보기 우측 안내에 기회 공격 N명 표시: " + hud.preview_label.text)
+	# 면제 상태면 아이콘과 문구 모두 표시하지 않는다.
+	ally.disengaged = true
+	battle.call("_update_turn_ui")
+	_check(map.opportunity_warning_cells().is_empty() and "기회 공격" not in hud.preview_label.text,
+		"면제 상태에서는 경고 아이콘과 안내 문구를 표시하지 않음")
+	ally.disengaged = false
+	# 점프 미리보기: 출발 칸 이탈로 기회 공격 유발 시 착지 칸 위에 경고 아이콘 표시.
+	selection.reset()
+	selection.selected_action = "jump"
+	selection.select_move(Vector2i(2, 9), [Vector2i(3, 9), Vector2i(2, 9)])
+	battle.call("_update_turn_ui")
+	_check(map.opportunity_warning_cells() == [Vector2i(2, 9)] and "기회 공격 1명" in hud.preview_label.text,
+		"점프 미리보기에서 기회 공격 유발 시 착지 칸에 경고 아이콘과 안내 표시: " + str(map.opportunity_warning_cells()))
+	enemy.reaction_left = 0
+	battle.call("_update_turn_ui")
+	_check(map.opportunity_warning_cells().is_empty() and "기회 공격 없음" in hud.preview_label.text,
+		"적 반응이 없으면 점프 경고 아이콘을 표시하지 않음")
+	enemy.reaction_left = 1
+	# 무빙샷 도약 미리보기는 기회 공격을 유발하지 않으므로 경고 아이콘과 안내 없음.
+	selection.reset()
+	selection.selected_action = "moving_shot"
+	selection.select_move(Vector2i(3, 9), [Vector2i(3, 9)])
+	battle.call("_update_turn_ui")
+	_check(map.opportunity_warning_cells().is_empty() and "기회 공격" not in hud.preview_label.text,
+		"무빙샷 도약 미리보기에는 기회 공격 경고 없음")
+	# 미리보기 취소 시 경고 아이콘 정리.
+	selection.reset()
+	battle.call("_update_turn_ui")
+	_check(map.opportunity_warning_cells().is_empty(), "미리보기 해제 시 경고 아이콘 정리")
+	for index: int in range(units.size()):
+		units[index].cell = saved_cells[index]
+	battle.set("threat_visible", saved_threat)
+	battle.call("_update_turn_ui")
 
 
 ## #623: 행동 유닛 발밑 칸 표시(#516 1절). 맵 함수 단독 검사.
