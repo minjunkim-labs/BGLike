@@ -35,7 +35,10 @@ class Ground extends RefCounted:
 var _entries: Array[Ground] = []
 ## 이번 전투에서 탄 나무 칸. 전투를 다시 열면 비고 저장에 들어간다.
 var burned_trees: Array[Vector2i] = []
-var _host: Object
+var _host_ref: WeakRef
+var _host: Object:
+	get:
+		return _host_ref.get_ref() if _host_ref != null else null
 
 
 static func reaction(attribute: String, ground_kind: String) -> String:
@@ -68,7 +71,7 @@ static func connected(start: Vector2i, oil_cells: Array[Vector2i]) -> Array[Vect
 
 
 func bind(host: Object) -> void:
-	_host = host
+	_host_ref = weakref(host) if host != null else null
 
 
 func clear() -> void:

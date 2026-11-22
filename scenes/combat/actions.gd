@@ -650,7 +650,6 @@ func apply_status(source: CombatUnit, target: CombatUnit, kind: String,
 	return true
 
 
-## 칸의 기름 장판. 칸마다 하나이므로 없으면 null이다.
 func oil_sites(center: Vector2i) -> Array[Vector2i]:
 	return grounds.oil_sites(center)
 
