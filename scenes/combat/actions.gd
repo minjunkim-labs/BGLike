@@ -1178,6 +1178,58 @@ func jump_reactors(actor: CombatUnit, destination: Vector2i) -> Array[CombatUnit
 	return reactors
 
 
+## 걷기 이동 경로를 따라 한 칸씩 이동할 때 기회 공격을 유발하는 적 목록(#733).
+## 실제 move_to와 같은 조건을 따르며, 경로 중 반응이 소모된 적은 중복 계산하지 않는다.
+func move_reactors(actor: CombatUnit, path: Array[Vector2i]) -> Array[CombatUnit]:
+	var reactors: Array[CombatUnit] = []
+	var cells: Array[Vector2i] = []
+	_collect_move_opportunity(actor, path, reactors, cells)
+	return reactors
+
+
+## 걷기 이동 경로에서 기회 공격이 유발되는 이탈 칸 목록(#733). 중복 없이 경로 순서를 유지한다.
+func move_opportunity_cells(actor: CombatUnit, path: Array[Vector2i]) -> Array[Vector2i]:
+	var reactors: Array[CombatUnit] = []
+	var cells: Array[Vector2i] = []
+	_collect_move_opportunity(actor, path, reactors, cells)
+	return cells
+
+
+func _collect_move_opportunity(actor: CombatUnit, path: Array[Vector2i],
+		reactors: Array[CombatUnit], cells: Array[Vector2i]) -> void:
+	if actor == null or path.is_empty() or actor.disengaged or actor.stealthed:
+		return
+	var remaining: Dictionary[CombatUnit, int] = {}
+	for reactor: CombatUnit in units:
+		if (_can_react(reactor) and reactor.is_ally != actor.is_ally
+			and CombatActionRules.belongs_to(reactor, "opportunity") and reactor.reaction_left > 0):
+			remaining[reactor] = reactor.reaction_left
+	if remaining.is_empty():
+		return
+	var current: Vector2i = actor.cell
+	for step: Vector2i in path:
+		for reactor: CombatUnit in units:
+			var left: int = remaining.get(reactor, 0)
+			if left > 0 and grid.leaves_reach(reactor, current, step):
+				remaining[reactor] = left - 1
+				if reactor not in reactors:
+					reactors.append(reactor)
+				if current not in cells:
+					cells.append(current)
+		current = step
+
+
+## 기회 공격을 유발하는 반응자 목록의 안내 문구(#733). 반응자가 없으면 빈 문자열이다.
+func opportunity_note(reactors: Array[CombatUnit]) -> String:
+	if reactors.is_empty():
+		return ""
+	var count: int = reactors.size()
+	var text: String = tr_n("기회 공격 %d명", "기회 공격 %d명", count) % count
+	if reactors.any(func(reactor: CombatUnit) -> bool: return CombatActionRules.belongs_to(reactor, "brawn")):
+		text += " · " + tr("이동 정지")
+	return text
+
+
 func fall_damage(actor: CombatUnit, destination: Vector2i) -> int:
 	return _fall_damage_from(actor, actor.cell, destination)
 

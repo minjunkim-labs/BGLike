@@ -44,6 +44,10 @@ const CORNER_LENGTH: float = 0.25
 const MOVE_OVERLAY_COLOR: Color = Color(0.22, 0.56, 0.92, 0.1)
 const ACTION_RANGE_COLOR: Color = Color(0.92, 0.34, 0.3, 0.12)
 const REACH_OUTLINE_COLOR: Color = Color(0.92, 0.34, 0.3, 0.85)
+## 이동 경로의 기회 공격 사전 경고 아이콘 색(#733).
+const OPPORTUNITY_WARNING_BG: Color = Color(0.16, 0.06, 0.05, 0.92)
+const OPPORTUNITY_WARNING_BORDER: Color = Color("ff5a36")
+const OPPORTUNITY_WARNING_MARK: Color = Color("ffd29d")
 ## 그래픽 높이·크기별 타일 윗면 중심 기준 발 오프셋(논리 px, #735).
 ## 아래 끝이 점유 마름모 앞쪽 변을 넘지 않게 잡아 뒤 요소가 앞 요소를 덮지 않게 한다.
 const ART_FOOT_OFFSETS: Dictionary[String, float] = {
@@ -290,11 +294,12 @@ func _contains_sides(cell: Vector2i, point: Vector2) -> bool:
 
 
 func show_movement(cells: Array[Vector2i], reach_cells: Array[Vector2i],
-		path: Array[Vector2i], origin: Vector2i, action_cells: Array[Vector2i] = []) -> void:
+		path: Array[Vector2i], origin: Vector2i, warning_cells: Array[Vector2i] = [],
+		action_cells: Array[Vector2i] = []) -> void:
 	for overlay: Node2D in _overlays:
 		overlay.free()
 	_overlays.clear()
-	if cells.is_empty() and reach_cells.is_empty() and action_cells.is_empty() and path.is_empty():
+	if cells.is_empty() and reach_cells.is_empty() and action_cells.is_empty() and path.is_empty() and warning_cells.is_empty():
 		return
 	var half: Vector2 = Vector2(tile_set.tile_size) / 2.0
 	var move_edge: Color = Color(MOVE_OVERLAY_COLOR.r, MOVE_OVERLAY_COLOR.g, MOVE_OVERLAY_COLOR.b, 0.75)
@@ -324,6 +329,35 @@ func show_movement(cells: Array[Vector2i], reach_cells: Array[Vector2i],
 		marker.draw.connect(func() -> void: marker.draw_circle(center, 3.0, Color("f4cf69"), false))
 		add_child(marker)
 		_overlays.append(marker)
+	var warned: Array[Vector2i] = []
+	for cell: Vector2i in warning_cells:
+		if cell in warned:
+			continue
+		warned.append(cell)
+		var warning: Node2D = Node2D.new()
+		warning.name = "OpportunityWarning"
+		warning.position = map_to_local(cell)
+		warning.z_index = 3
+		warning.set_meta("opportunity_warning", true)
+		warning.set_meta("cell", cell)
+		var center: Vector2 = map_to_surface(cell) - warning.position + Vector2(0, -6.0)
+		warning.draw.connect(func() -> void:
+			var badge: Rect2 = Rect2(center + Vector2(-4.0, -5.0), Vector2(8.0, 10.0))
+			warning.draw_rect(badge, OPPORTUNITY_WARNING_BG)
+			warning.draw_rect(badge, OPPORTUNITY_WARNING_BORDER, false, 1.0)
+			warning.draw_rect(Rect2(center + Vector2(-1.0, -3.0), Vector2(2.0, 4.0)), OPPORTUNITY_WARNING_MARK)
+			warning.draw_rect(Rect2(center + Vector2(-1.0, 2.0), Vector2(2.0, 2.0)), OPPORTUNITY_WARNING_MARK))
+		add_child(warning)
+		_overlays.append(warning)
+
+
+## 현재 표시 중인 기회 공격 사전 경고 아이콘의 칸 목록(#733).
+func opportunity_warning_cells() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for overlay: Node2D in _overlays:
+		if overlay.get_meta("opportunity_warning", false):
+			cells.append(overlay.get_meta("cell") as Vector2i)
+	return cells
 
 
 func _add_tile_overlay(cell: Vector2i, half: Vector2, fill_color: Color,
