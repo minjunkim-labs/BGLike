@@ -398,8 +398,8 @@ func attack_preview(attacker: CombatUnit, target: CombatUnit, action: String = "
 		preview.blocked_reason = tr("기절하여 공격 불가")
 	# 기회 공격·휩쓸기·십자 베기·반격은 기본 공격과 같은 사거리 판정을 쓴다.
 	preview.in_range = can_target(attacker, target,
-		action if action in CombatActionRules.MELEE_ACTIONS or action == "trick_arrow" else "attack")
-	var ranged: bool = attacker.is_ranged_attack() and action not in CombatActionRules.MELEE_ACTIONS
+		action if CombatActionRules.is_melee_action(action) or action == "trick_arrow" else "attack")
+	var ranged: bool = attacker.is_ranged_attack() and not CombatActionRules.is_melee_action(action)
 	var advantages: int = 0
 	var disadvantages: int = 0
 	if target.is_stunned:

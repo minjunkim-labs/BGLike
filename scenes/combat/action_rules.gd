@@ -100,35 +100,112 @@ static func colorize(text: String) -> String:
 	return _BAD.sub(result, "$1[color=#%s]$2[/color]" % BAD_COLOR.to_html(false), true)
 
 
-## 대상 없이 바로 쓰는 동작.
-const SELF_TARGET: Array[String] = ["holy_veil", "battle_cry", "second_wind", "aegisal", "disengage", "potion", "stealth"]
-## 쓰면 은신이 풀리는 피해를 주는 공격 동작 (궁수 문서 「은신」). 이동·기름병 던지기·효시·애기살 급조는 풀지 않는다.
-const STEALTH_BREAKERS: Array[String] = ["attack", "trick_arrow", "firework_arrow", "bow_bash"]
-## 칸 조준 동작의 사거리와 반경 (skill-types.md 5-2). 최소 사거리는 기본 0, 기름병 던지기는 1(궁수 문서). 곡사·기준점(목표 칸)은 기본값이라 필드가 없다.
-## 화염 속성 동작. 나무 칸을 목표로 고를 수 있고 닿으면 나무가 탄다(환경요소 5장).
-const FIRE_ACTIONS: Array[String] = ["trick_arrow", "firework_arrow"]
-const AIM_RANGES: Dictionary[String, int] = {"fog": 6, "trick_arrow": 6, "firework_arrow": 6}
+## 동작의 조준 방식. 선택·미리보기·실행 분기가 이 하나의 분류를 따른다.
+enum TargetMode { UNIT, SELF, AIM_CELL, FACING, MOVE }
+
+## 동작별 조준·사거리·속성 규칙 표. 지정하지 않은 키는 기본값을 쓴다.
+## target 기본은 UNIT, aim_range 기본은 -1(칸 조준 아님), aim_min_range 기본은 0, aim_radius 기본은 -1(단일 칸)이다.
+const SPECS: Dictionary[String, Dictionary] = {
+	"attack": {"allows_prop": true, "stealth_breaker": true},
+	"shove": {"allows_ally": true},
+	"bow_bash": {"melee": true, "stealth_breaker": true},
+	"holy_veil": {"target": TargetMode.SELF},
+	"battle_cry": {"target": TargetMode.SELF},
+	"second_wind": {"target": TargetMode.SELF},
+	"aegisal": {"target": TargetMode.SELF},
+	"disengage": {"target": TargetMode.SELF},
+	"potion": {"target": TargetMode.SELF},
+	"stealth": {"target": TargetMode.SELF},
+	"sweep": {"target": TargetMode.FACING},
+	"whistle": {"target": TargetMode.FACING},
+	"move": {"target": TargetMode.MOVE},
+	"jump": {"target": TargetMode.MOVE},
+	"moving_shot": {"target": TargetMode.MOVE},
+	"fog": {"target": TargetMode.AIM_CELL, "aim_range": 6, "aim_radius": 1},
+	"oil_throw": {"target": TargetMode.AIM_CELL, "aim_by_strength": true, "aim_min_range": 1, "aim_radius": 1, "oil": true},
+	"oil_bottle": {"target": TargetMode.AIM_CELL, "aim_by_strength": true, "aim_min_range": 1, "aim_radius": 1, "oil": true},
+	"trick_arrow": {
+		"target": TargetMode.AIM_CELL, "aim_range": 6, "aim_min_range": 1, "aim_snaps_entity": true,
+		"fire": true, "stealth_breaker": true
+	},
+	"firework_arrow": {
+		"target": TargetMode.AIM_CELL, "aim_range": 6, "aim_radius": 1, "aim_snaps_entity": true,
+		"fire": true, "stealth_breaker": true
+	}
+}
 ## 만능팔의 사거리 (몬스터 문서). 인접한 대상은 끌어올 필요가 없어 최소 2다.
 const PULL_MIN_RANGE: int = 2
 const PULL_RANGE: int = 4
-const AIM_MIN_RANGES: Dictionary[String, int] = {"oil_throw": 1, "oil_bottle": 1, "trick_arrow": 1}
-const AIM_RADII: Dictionary[String, int] = {"fog": 1, "oil_throw": 1, "oil_bottle": 1, "firework_arrow": 1}
-## 사거리가 시전자의 힘 주사위 면 수 × 0.7 반올림인 칸 조준 동작 (궁수 문서, 기름병 던지기. #616에서 ÷ 2의 1.4배로 바꿈).
-const AIM_BY_STRENGTH: Array[String] = ["oil_throw", "oil_bottle"]
-## 기름 장판을 까는 동작. 기름병 던지기(스킬)와 기름병 아이템은 칸 규칙이 같다(#576).
-const OIL_ACTIONS: Array[String] = ["oil_throw", "oil_bottle"]
+
+
+static func _spec(action: String) -> Dictionary:
+	return SPECS.get(action, {})
+
+
+static func target_mode(action: String) -> TargetMode:
+	return int(_spec(action).get("target", TargetMode.UNIT)) as TargetMode
+
+
+static func is_self_target(action: String) -> bool:
+	return target_mode(action) == TargetMode.SELF
+
+
+static func is_aim_action(action: String) -> bool:
+	return target_mode(action) == TargetMode.AIM_CELL
+
+
+static func is_facing_action(action: String) -> bool:
+	return target_mode(action) == TargetMode.FACING
+
+
+static func is_move_action(action: String) -> bool:
+	return target_mode(action) == TargetMode.MOVE
+
+
+static func aim_snaps_entity(action: String) -> bool:
+	return bool(_spec(action).get("aim_snaps_entity", false))
+
+
+static func allows_ally_target(action: String) -> bool:
+	return bool(_spec(action).get("allows_ally", false))
+
+
+static func allows_prop_target(action: String) -> bool:
+	return bool(_spec(action).get("allows_prop", false))
+
+
+static func is_oil_action(action: String) -> bool:
+	return bool(_spec(action).get("oil", false))
+
+
+static func is_fire_action(action: String) -> bool:
+	return bool(_spec(action).get("fire", false))
+
+
+static func is_melee_action(action: String) -> bool:
+	return bool(_spec(action).get("melee", false))
+
+
+static func breaks_stealth(action: String) -> bool:
+	return bool(_spec(action).get("stealth_breaker", false))
 
 
 ## 칸 조준 동작의 최소 사거리. 정하지 않은 동작은 0이다.
 static func aim_min_range(action: String) -> int:
-	return AIM_MIN_RANGES.get(action, 0)
+	return int(_spec(action).get("aim_min_range", 0))
+
+
+## 칸 조준 동작의 반경. 단일 칸이거나 칸 조준이 아니면 -1이다.
+static func aim_radius(action: String) -> int:
+	return int(_spec(action).get("aim_radius", -1))
 
 
 ## 칸 조준 동작의 사거리. 칸 조준이 아니면 -1이다.
 static func aim_range(actor: CombatUnit, action: String) -> int:
-	if action in AIM_BY_STRENGTH:
+	var spec: Dictionary = _spec(action)
+	if bool(spec.get("aim_by_strength", false)):
 		return (actor.get_ability_sides(CombatUnit.Ability.STRENGTH) * 7 + 5) / 10
-	return AIM_RANGES.get(action, -1)
+	return int(spec.get("aim_range", -1))
 
 
 ## 아군 직업의 고유 동작과 패시브(팔랑크스, 괴력의 사내). 몬스터의 동작은 정의의 actions가 정한다.
@@ -171,8 +248,6 @@ static var DAMAGE_ABILITIES: Dictionary[String, CombatUnit.Ability] = {
 }
 ## 명중 능력치를 공격 능력치와 다르게 지정한 동작. 활 후려치기는 힘 d6이다 (궁수 문서).
 const HIT_ABILITIES: Dictionary[String, CombatUnit.Ability] = {"bow_bash": CombatUnit.Ability.STRENGTH}
-## 원거리 요인(옆에 적 불리, 고지대 유리)을 받지 않는 근접 동작. 원거리 공격자가 써도 근접이다.
-const MELEE_ACTIONS: Array[String] = ["bow_bash"]
 ## 내성굴림 동작의 시전 능력치(DC)와 대상의 내성 능력치 (4-3, 8장). 기존 동작은 현행(힘)을 유지한다.
 const CAST_ABILITIES: Dictionary[String, CombatUnit.Ability] = {
 	"spin": CombatUnit.Ability.STRENGTH, "shove": CombatUnit.Ability.STRENGTH, "pull": CombatUnit.Ability.STRENGTH,

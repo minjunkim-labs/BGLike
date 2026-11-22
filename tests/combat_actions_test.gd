@@ -1465,7 +1465,7 @@ func _test_tile_aim() -> void:
 	var actor: CombatUnit = f.units[3]
 	grid.map_size = Vector2i(12, 9)
 	actor.cell = Vector2i(5, 4)
-	_check(CombatActionRules.AIM_RANGES["fog"] == 6 and CombatActionRules.AIM_RADII["fog"] == 1, "독안개 칸 조준은 사거리 6·반경 1")
+	_check(CombatActionRules.aim_range(actor, "fog") == 6 and CombatActionRules.aim_radius("fog") == 1, "독안개 칸 조준은 사거리 6·반경 1")
 	_check(f.actions.can_aim(actor, "fog", actor.cell) and f.actions.can_aim(actor, "fog", Vector2i(11, 4))
 		and not f.actions.can_aim(actor, "fog", Vector2i(11, 5)), "사거리 0(자기 칸)과 6은 고르고 7은 못 고름")
 	_check(f.actions.aim_cells(actor, "fog").size() == 76, "맨해튼 거리 0~6의 칸은 맵 안 76칸(12×9)")

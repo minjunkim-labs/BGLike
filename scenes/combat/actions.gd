@@ -749,7 +749,7 @@ func create_oil(source: CombatUnit, center: Vector2i) -> bool:
 
 ## 기름병 던지기(궁수 스킬, 보조 행동, 전투마다 1)와 기름병 아이템(물약 칸 1개, #576). 목표 칸 십자 5칸에 기름을 깐다.
 func throw_oil(caster: CombatUnit, cell: Vector2i, action: String = "oil_throw") -> bool:
-	if (action not in CombatActionRules.OIL_ACTIONS or not _can_act(caster) or not CombatActionRules.has_uses(caster, action)
+	if (not CombatActionRules.is_oil_action(action) or not _can_act(caster) or not CombatActionRules.has_uses(caster, action)
 		or caster.bonus_action_left <= 0 or not can_aim(caster, action, cell)):
 		return false
 	caster.spend_resource(CombatUnit.TurnResource.BONUS_ACTION)
@@ -1190,8 +1190,8 @@ func aim_cells(actor: CombatUnit, action: String, from_cell: Vector2i = Vector2i
 		return []
 	var cells: Array[Vector2i] = grid.aim_cells(actor.cell if from_cell == Vector2i(-1, -1) else from_cell,
 		CombatActionRules.aim_range(actor, action), CombatActionRules.aim_min_range(action),
-		action in CombatActionRules.FIRE_ACTIONS)
-	if action in CombatActionRules.OIL_ACTIONS:
+		CombatActionRules.is_fire_action(action))
+	if CombatActionRules.is_oil_action(action):
 		# 깔릴 칸이 하나도 없는 목표는 고를 수 없다(자원만 쓰고 효과 없는 던지기를 막는다).
 		cells = cells.filter(func(cell: Vector2i) -> bool: return not oil_sites(cell).is_empty())
 	return cells
@@ -1203,11 +1203,12 @@ func can_aim(actor: CombatUnit, action: String, cell: Vector2i, from_cell: Vecto
 
 ## 목표 칸 기준 영역: 반경 안에서 목표 칸 바닥과 높이 차 1 이하인 고를 수 있는 칸. 목표 칸이 유효하지 않으면 비어 있다.
 func aim_area(actor: CombatUnit, action: String, cell: Vector2i) -> Array[Vector2i]:
-	if actor == null or action not in CombatActionRules.AIM_RADII:
+	var radius: int = CombatActionRules.aim_radius(action)
+	if actor == null or radius < 0:
 		return []
-	if action in CombatActionRules.OIL_ACTIONS:
+	if CombatActionRules.is_oil_action(action):
 		return oil_sites(cell)
-	return grid.area_cells(cell, CombatActionRules.AIM_RADII[action], false, action in CombatActionRules.FIRE_ACTIONS)
+	return grid.area_cells(cell, radius, false, CombatActionRules.is_fire_action(action))
 
 
 ## 휩쓸기의 대상: facing을 정면으로 둔 반달 5칸의 살아 있는 적을 시계방향 순서로 준다. 아군은 맞지 않는다.
@@ -1631,7 +1632,7 @@ func spawn_spiderling(actor: CombatUnit) -> bool:
 
 
 func use_self(actor: CombatUnit, action: String) -> bool:
-	if not can_use(actor, action) or action not in CombatActionRules.SELF_TARGET:
+	if not can_use(actor, action) or not CombatActionRules.is_self_target(action):
 		return false
 	actor.moving_shot_ready = false
 	actor.spend_resource(CombatActionRules.resource_of(action))

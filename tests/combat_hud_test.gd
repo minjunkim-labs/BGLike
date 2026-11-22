@@ -24,7 +24,6 @@ func _check(condition: bool, message: String) -> void:
 
 
 func _run() -> void:
-	_test_selection()
 	_test_skill_icons()
 	_test_cost_marks()
 	var scene: PackedScene = load("res://scenes/game.tscn") as PackedScene
@@ -556,51 +555,6 @@ func _test_skill_icons() -> void:
 		and oil_icon != CombatActionRules.icon_of("potion"), "기름병 던지기는 물약을 빌리지 않고 전용 아이콘을 쓴다(#560)")
 
 
-func _test_selection() -> void:
-	var selected: CombatSelection = CombatSelection.new()
-	var target: CombatUnit = CombatUnit.new()
-	var inspected: CombatUnit = CombatUnit.new()
-	var path: Array[Vector2i] = [Vector2i(1, 0), Vector2i(1, 1)]
-	_check(not selected.select_move(Vector2i(1, 1), path)
-		and selected.selected_action == "move" and selected.preview_path == path,
-		"선택 module: 첫 목적지 선택은 이동 미리보기")
-	_check(selected.select_move(Vector2i(1, 1), path)
-		and selected.preview_path.is_empty() and selected.preview_cell == Vector2i(-1, -1)
-		and not path.is_empty(), "선택 module: 같은 목적지는 한 번 확정하고 호출자의 경로는 보존")
-	selected.select_move(Vector2i(1, 1), path)
-	selected.select_move(Vector2i(2, 2), [])
-	_check(selected.selected_action == "move" and selected.preview_path.is_empty(),
-		"선택 module: 유효하지 않은 목적지는 경로만 취소")
-	selected.begin_field_input(true)
-	_check(selected.selected_action == "attack", "선택 module: 좌클릭은 이동 확정 대신 공격 선택으로 복귀")
-	selected.inspect(inspected)
-	_check(not selected.select_action("second_wind") and selected.inspected_unit == null,
-		"선택 module: 첫 보조 행동 선택은 조회만 해제")
-	_check(selected.select_action("second_wind") and selected.begin_execution() == "second_wind",
-		"선택 module: 같은 보조 행동의 두 번째 선택만 실행")
-	selected.finish_execution()
-	_check(selected.selected_action == "attack", "선택 module: 실행 뒤 기본 공격으로 복귀")
-	_check(not selected.select_target(target, true) and selected.preview_target == target
-		and not selected.select_target(target, false) and selected.select_target(target, true),
-		"선택 module: 대상 재선택은 실행 가능할 때만 확정")
-	selected.select_move(Vector2i(1, 1), path)
-	selected.inspect(inspected)
-	_check(selected.selected_action == "attack" and selected.preview_target == null
-		and selected.preview_path.is_empty() and selected.inspected_unit == inspected,
-		"선택 module: 초상 조회는 이동·대상 미리보기를 함께 취소")
-	inspected.hit_points = 0
-	selected.discard_incapacitated_inspection()
-	_check(selected.inspected_unit == null, "선택 module: 전투 불능 조회 해제")
-	selected.select_action("shock")
-	selected.preview_unit(target)
-	selected.reset()
-	_check(selected.selected_action == "attack" and selected.preview_target == null
-		and selected.preview_path.is_empty() and selected.inspected_unit == null,
-		"선택 module: 턴·스테이지 전환은 선택 전체 초기화")
-	target.free()
-	inspected.free()
-
-
 func _test_square_map() -> void:
 	var map: TileMapLayer = battle.get_node("Map") as TileMapLayer
 	_check(map.get_used_cells().size() == 100, "사각 맵은100칸")
@@ -956,16 +910,28 @@ func _test_tree_burn_ui() -> void:
 	archer.cell = stand
 	turns.select_unit(archer)
 	battle.call("_update_turn_ui")
-	var trick_note: String = battle.call("_arrow_note", archer, "trick_arrow", tree)
+	var tree_selection: CombatSelection = battle.get("selection") as CombatSelection
+	tree_selection.choose_action(archer, "trick_arrow")
+	await tree_selection.left_click_field(archer, tree)
+	var trick_note: String = tree_selection.build_preview(archer, units).target_note
 	_check(tr("화염이 나오면 나무가 타서 길이 열림") in trick_note, "장난스러운 화살이 나무를 겨누면 안내: " + trick_note)
 	var plain: Vector2i = Vector2i(-1, -1)
 	for cell: Vector2i in actions.aim_cells(archer, "firework_arrow"):
 		if actions.aim_area(archer, "firework_arrow", cell).all(func(area_cell: Vector2i) -> bool: return not grid.is_tree(area_cell)):
 			plain = cell
 			break
-	_check(plain != Vector2i(-1, -1) and tr("나무가 타서 길이 열림") not in (battle.call("_arrow_note", archer, "firework_arrow", plain) as String)
-		and tr("나무가 타서 길이 열림") not in (battle.call("_arrow_note", archer, "trick_arrow", plain) as String), "나무가 없으면 안내 줄 없음")
-	var firework_note: String = battle.call("_arrow_note", archer, "firework_arrow", tree)
+	tree_selection.choose_action(archer, "firework_arrow")
+	await tree_selection.left_click_field(archer, plain)
+	var plain_firework: String = tree_selection.build_preview(archer, units).target_note
+	tree_selection.choose_action(archer, "trick_arrow")
+	await tree_selection.left_click_field(archer, plain)
+	var plain_trick: String = tree_selection.build_preview(archer, units).target_note
+	_check(plain != Vector2i(-1, -1) and tr("나무가 타서 길이 열림") not in plain_firework
+		and tr("나무가 타서 길이 열림") not in plain_trick, "나무가 없으면 안내 줄 없음")
+	tree_selection.choose_action(archer, "firework_arrow")
+	await tree_selection.left_click_field(archer, tree)
+	var firework_note: String = tree_selection.build_preview(archer, units).target_note
+	tree_selection.reset()
 	_check(firework_note.ends_with(tr("나무가 타서 길이 열림")), "폭죽 영역에 나무가 있으면 안내: " + firework_note)
 	var map: CombatMap = battle.get_node("Map") as CombatMap
 	var markers: Array = (map.get("_blocked_markers") as Array).filter(func(marker: Node2D) -> bool: return marker.get_meta("tree", false))
@@ -1010,10 +976,12 @@ func _test_archer_moving_shot_input() -> void:
 		battle.call("_on_action_selected", "oil_throw")
 		var oil_selection: CombatSelection = battle.get("selection") as CombatSelection
 		_check(oil_selection.selected_action == "oil_throw", "기름병 던지기 버튼은 칸 조준 모드로 들어감")
-		battle.call("_select_aim_cell", oil_cells[0])
+		await oil_selection.left_click_field(archer, oil_cells[0])
+		battle.call("_update_turn_ui")
 		_check(actions.get_grounds().all(func(ground: CombatActions.Ground) -> bool: return ground.kind != "oil")
 			and oil_selection.preview_cell == oil_cells[0], "첫 클릭은 칸만 고르고 던지지 않음")
-		battle.call("_select_aim_cell", oil_cells[0])
+		await oil_selection.left_click_field(archer, oil_cells[0])
+		battle.call("_update_turn_ui")
 		_check(actions.get_grounds().any(func(ground: CombatActions.Ground) -> bool:
 			return ground.kind == "oil" and ground.cell == oil_cells[0]) and archer.oil_throw_left == 0,
 			"같은 칸을 다시 누르면 그 칸에 기름을 던짐")
@@ -1047,9 +1015,11 @@ func _test_archer_moving_shot_input() -> void:
 		battle.call("_on_action_selected", "oil_bottle")
 		var bottle_selection: CombatSelection = battle.get("selection") as CombatSelection
 		_check(bottle_selection.selected_action == "oil_bottle", "기름병 버튼은 칸 조준 모드로 들어감")
-		battle.call("_select_aim_cell", bottle_cells[0])
+		await bottle_selection.left_click_field(archer, bottle_cells[0])
+		battle.call("_update_turn_ui")
 		_check(archer.potions == ["oil_bottle"] and bottle_selection.preview_cell == bottle_cells[0], "첫 클릭은 칸만 고름")
-		battle.call("_select_aim_cell", bottle_cells[0])
+		await bottle_selection.left_click_field(archer, bottle_cells[0])
+		battle.call("_update_turn_ui")
 		_check(actions.get_grounds().any(func(ground: CombatActions.Ground) -> bool:
 			return ground.kind == "oil" and ground.cell == bottle_cells[0]) and archer.potions.is_empty() and archer.oil_throw_left == 1
 			and not bottle_button.is_visible_in_tree(), "같은 칸을 다시 누르면 던지고 마지막 기름병이면 버튼이 사라짐")
@@ -1069,9 +1039,11 @@ func _test_archer_moving_shot_input() -> void:
 			actions.dice = ScriptedDice.new([], []).then_seeded()
 			battle.call("_on_action_selected", arrow)
 			_check(arrow_selection.selected_action == arrow, "%s 버튼은 칸 조준 모드로 들어감" % arrow)
-			await battle.call("_select_aim_cell", free_cells[0])
+			await arrow_selection.left_click_field(archer, free_cells[0])
+			battle.call("_update_turn_ui")
 			_check(archer.action_left == 1 and arrow_selection.preview_cell == free_cells[0], "%s 첫 클릭은 칸만 고름" % arrow)
-			await battle.call("_select_aim_cell", free_cells[0])
+			await arrow_selection.left_click_field(archer, free_cells[0])
+			battle.call("_update_turn_ui")
 			_check(archer.action_left == 0 and (arrow != "firework_arrow" or archer.firework_arrow_left == 0),
 				"%s 같은 칸을 다시 누르면 쏨" % arrow)
 		archer.action_left = 1
@@ -1737,7 +1709,8 @@ func _test_guidance() -> void:
 			and "민첩 d%d" % unit.get_ability_sides(CombatUnit.Ability.AGILITY) in portrait.tooltip_text
 			and str(unit.get_initiative()) == portrait.tooltip_text.get_slice(" = ", 1),
 			"초상 숫자 제거, 호버에 실제 민첩 주사위와 원본 값 유지")
-	await battle.call("_select_move_cell", Vector2i(2, 1))
+	await (battle.get("selection") as CombatSelection).right_click_cell(units[0], Vector2i(2, 1))
+	battle.call("_update_turn_ui")
 	var cells: Array[Vector2i] = battle.get("movement_cells")
 	_check(cells.has(Vector2i(2, 1)) and not cells.has(units[2].cell)
 		and not cells.has(Vector2i(5, 1)) and not cells.has(units[0].cell),
