@@ -67,9 +67,11 @@ def untranslated(source):
 
 
 def game_files(root):
-    listed = subprocess.run(["git", "ls-files", "-z", "--", "*.gd", "*.tscn"], cwd=root, check=True,
-                            capture_output=True, text=True).stdout.split("\0")
-    return [name for name in listed if name and not name.startswith("tests/")]
+    root = Path(root)
+    listed = subprocess.run(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.gd", "*.tscn"],
+        cwd=root, check=True, capture_output=True, text=True).stdout.split("\0")
+    return sorted({name for name in listed if name and not name.startswith("tests/") and (root / name).is_file()})
 
 
 def check(root):

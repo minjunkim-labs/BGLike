@@ -58,14 +58,57 @@ class GodotCheckTests(unittest.TestCase):
                     self.assertIn(line, result.stdout)
                     self.assertIn("Godot script error during:", result.stderr)
 
+    def test_multiple_selected_scripts_run_together_after_common_setup(self):
+        result, calls = self.run_check(
+            selected=("tests/combat_ai_test.gd", "tests/save_test.gd", "tests/combat_ai_test.gd"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertCountEqual(
+            [call for call in calls if "--script" in call],
+            [
+                "--headless --path . --script tests/combat_ai_test.gd",
+                "--headless --path . --script tests/save_test.gd",
+            ],
+        )
+        self.assertEqual(sum(1 for call in calls if "--import" in call), 1)
+        self.assertEqual(sum(1 for call in calls if "--quit-after" in call), 1)
+
     def test_invalid_selection_is_rejected_before_running_godot(self):
         for selected in [("tests/missing_test.gd",), ("../tests/combat_ai_test.gd",),
                          ("--version",), ("tests/combat_ai_test.gd tests/save_test.gd",),
-                         ("tests/combat_ai_test.gd", "tests/save_test.gd")]:
+                         ("tests/combat_ai_test.gd", "tests/missing_test.gd")]:
             with self.subTest(selected=selected):
                 result, calls = self.run_check(selected=selected)
                 self.assertEqual(result.returncode, 2)
                 self.assertEqual(calls, [])
+
+    def test_macos_app_fallback_used_when_cache_missing(self):
+        if os.uname().sysname != "Darwin":
+            self.skipTest("macOS fallback only applies on Darwin")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            binary = root / "Godot"
+            log = root / "calls"
+            binary.write_text(FAKE_GODOT)
+            binary.chmod(0o755)
+            env = {k: v for k, v in os.environ.items() if k != "GODOT"}
+            env.update(
+                GODOT_DIR=str(root / "empty-cache"),
+                GODOT_MACOS_APP_BINARY=str(binary),
+                CALL_LOG=str(log),
+                BROKEN="no-such-step",
+                ERROR_LINE="",
+                BROKEN_EXIT="0",
+            )
+            result = subprocess.run(
+                ["bash", "scripts/check_godot.sh", "tests/title_test.gd"],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            calls = log.read_text().splitlines()
+            self.assertIn("--headless --path . --script tests/title_test.gd", calls)
 
     def test_selected_script_keeps_common_setup_error_gate(self):
         for step in ("--import", "--quit-after"):
@@ -79,28 +122,15 @@ class GodotCheckTests(unittest.TestCase):
     def test_clean_output_passes_every_step(self):
         result, calls = self.run_check()
         self.assertEqual(result.returncode, 0, result.stderr)
-        # --version, --import, --quit-after, the eighteen combat tests (save in two halves),
-        # and save, title, pause, continue, ui_theme, music.
-        self.assertEqual(len(calls), 28)
+        test_files = sorted(path.relative_to(ROOT).as_posix() for path in (ROOT / "tests").glob("*_test.gd"))
+        # --version, --import, --quit-after, every tests/*_test.gd (combat_save_test.gd in two halves).
+        self.assertEqual(len(calls), 3 + len(test_files) + 1)
         for share in ("0/2", "1/2"):
             self.assertIn(f"--headless --path . --script tests/combat_save_test.gd -- {share}", calls)
-        self.assertTrue(any("title_test.gd" in call for call in calls))
-        self.assertTrue(any("combat_capture_test.gd" in call for call in calls))
-        self.assertTrue(any("combat_feedback_test.gd" in call for call in calls))
-        self.assertTrue(any("combat_save_test.gd" in call for call in calls))
-        self.assertTrue(any("combat_preparation_save_test.gd" in call for call in calls))
-        self.assertTrue(any("combat_staging_test.gd" in call for call in calls))
-        self.assertTrue(any("combat_dice_roll_test.gd" in call for call in calls))
-        self.assertTrue(any("combat_oil_test.gd" in call for call in calls))
-        self.assertTrue(any("combat_warrior_test.gd" in call for call in calls))
-        self.assertTrue(any("combat_archer_test.gd" in call for call in calls))
-        self.assertTrue(any("combat_sound_test.gd" in call for call in calls))
-        self.assertTrue(any("combat_cover_test.gd" in call for call in calls))
-        self.assertTrue(any("save_test.gd" in call for call in calls))
-        self.assertTrue(any("pause_test.gd" in call for call in calls))
-        self.assertTrue(any("continue_test.gd" in call for call in calls))
-        self.assertTrue(any("ui_theme_test.gd" in call for call in calls))
-        self.assertTrue(any("music_test.gd" in call for call in calls))
+        for test_file in test_files:
+            if test_file == "tests/combat_save_test.gd":
+                continue
+            self.assertIn(f"--headless --path . --script {test_file}", calls)
         self.assertIn("Fixture: 1 checks, 0 failures", result.stdout)
 
     def test_script_error_fails_each_step(self):

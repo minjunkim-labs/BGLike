@@ -28,7 +28,7 @@ Standards와 Spec은 작성자와 분리한 각각의 컨텍스트에서 수행�
 
 리뷰어는 작성자가 같은 head SHA에서 통과시킨 검사를 다시 실행하지 않습니다. 작성자의 명령·결과·로그를 근거로 재사용합니다. 근거가 없거나 부족하면 그 이유를 기록합니다. 실행 권한이 없는 리뷰어는 그 검사를 미확인으로 기록합니다. 그리고 작성자에게 근거를 요청합니다. [읽기 전용 Claude 리뷰의 사전 승인](../process/workflow.md#읽기-전용-claude-리뷰의-사전-승인)에는 검사 실행 권한이 없습니다.
 
-실행 권한이 있는 리뷰어가 검사나 변이(mutation) 검사를 직접 실행하면 `git worktree add --detach <path> <head_sha>`로 만든 리뷰어 전용 worktree에서 실행합니다. 작성자나 다른 리뷰어의 worktree에서 실행하지 않습니다. 설치된 Godot은 `GODOT`에 실행 파일 경로를 지정해 재사용합니다. stash·branch·tag는 모든 worktree가 공유하므로 만들지 않습니다. 변이는 `git status`로 확인합니다. 변이는 `git restore`로 되돌립니다. 끝나면 `git worktree remove --force <path>`로 그 worktree를 삭제합니다. 수정·커밋하는 리뷰어는 [지적 처리](#지적-처리와-최종-검증) 1·3단계를 따릅니다.
+실행 권한이 있는 리뷰어가 검사나 변이(mutation) 검사를 직접 실행하면 `git worktree add --detach <path> <head_sha>`로 만든 리뷰어 전용 worktree에서 실행합니다. 작성자나 다른 리뷰어의 worktree에서 실행하지 않습니다. 이미 다른 worktree가 PR 브랜치를 쓰고 있을 때 충돌을 피하려면 `gh pr checkout` 대신 `git fetch origin pull/<PR>/head` 뒤 `FETCH_HEAD`가 전달받은 `<head_sha>`와 일치하는지 확인하고 `git checkout --detach <head_sha>`를 씁니다(다르면 검사를 중단하고 새 head의 입력 SHA와 근거를 갱신합니다). 수정 커밋을 올릴 때는 PR의 head 저장소 remote를 확인해 `git push <head_remote> HEAD:<작업 브랜치>`를 씁니다(fork PR은 직접 checkout·push하지 않습니다). 설치된 Godot은 `GODOT`에 실행 파일 경로를 지정해 재사용합니다. stash·branch·tag는 모든 worktree가 공유하므로 만들지 않습니다. 변이는 `git status`로 확인합니다. 변이는 `git restore`로 되돌립니다. 끝나면 `git worktree remove --force <path>`로 그 worktree를 삭제합니다. 수정·커밋하는 리뷰어는 [지적 처리](#지적-처리와-최종-검증) 1·3단계를 따릅니다.
 
 ## 스킬 위임 (matt-skills)
 

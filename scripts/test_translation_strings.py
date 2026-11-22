@@ -58,6 +58,20 @@ class RepositoryTests(unittest.TestCase):
             subprocess.run(["git", "add", "."], cwd=root, check=True)
             self.assertEqual(check(root), ["new.tscn: project.godot의 템플릿 생성 대상(translations_pot_files)에 없음"])
 
+    def test_untracked_game_file_is_checked_before_staging(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "project.godot").write_text(
+                'locale/translations_pot_files=PackedStringArray("res://listed.gd")\n', encoding="utf-8")
+            (root / "listed.gd").write_text('var a := tr("가")\n', encoding="utf-8")
+            subprocess.run(["git", "add", "project.godot", "listed.gd"], cwd=root, check=True)
+            (root / "draft.gd").write_text('var b := "미번역"\n', encoding="utf-8")
+            self.assertEqual(check(root), [
+                "draft.gd: project.godot의 템플릿 생성 대상(translations_pot_files)에 없음",
+                'draft.gd:1: "미번역"',
+            ])
+
     def test_repository_screen_text_is_translatable(self):
         self.assertEqual(check(ROOT), [])
 
