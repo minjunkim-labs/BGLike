@@ -2276,9 +2276,12 @@ func _test_height_adjacency() -> void:
 	archer.cell = Vector2i(0, 0)
 	target.cell = Vector2i(6, 0)
 	ranged.actions.grid.heights = {Vector2i(2, 0): 20, target.cell: 10}
+	_check(not ranged.actions.can_target(archer, target, "attack"),
+		"더 높은 중간 바닥은 직사 원거리 공격을 막음(#358)")
+	ranged.actions.grid.heights = {target.cell: 10}
 	_check(ranged.actions.can_target(archer, target, "attack")
 		and ranged.actions.grid.attack_preview(archer, target).in_range,
-		"높은 대상과 더 높은 중간 바닥이 있어도 평면 거리6 원거리 공격 허용(#528, #616)")
+		"중간 장애물이 없으면 높은 대상도 평면 거리6 원거리 공격 허용(#528, #616)")
 	target.cell = Vector2i(7, 0)
 	_check(not ranged.actions.can_target(archer, target, "attack")
 		and not ranged.actions.grid.attack_preview(archer, target).in_range,
@@ -2786,6 +2789,7 @@ func _test_archer_balance() -> void:
 			var actor: CombatUnit = f.units[actor_index]
 			var target: CombatUnit = f.units[3 if actor_index == 1 else 1]
 			if actor_index == 1:
+				f.units[2].cell = Vector2i(5, 6)
 				f.turns.select_unit(actor)
 			else:
 				_enemy_archer(f)

@@ -25,6 +25,8 @@ var blocked_cells: Array[Vector2i] = []
 var water_cells: Array[Vector2i] = []
 ## 서 있는 나무 칸. blocked_cells의 부분집합이고, 화염이 닿으면 둘 다에서 빠진다(환경요소 5장).
 var trees: Array[Vector2i] = []
+## 장식 칸의 종류(tree, ruin_wall, cottage). 비어 있으면 blocked_cells는 기본 벽(높이 3)으로 본다(#358).
+var scenery_kinds: Dictionary[Vector2i, String] = {}
 
 
 class Routes extends RefCounted:
@@ -91,6 +93,7 @@ func burn_tree(cell: Vector2i) -> bool:
 		return false
 	trees.erase(cell)
 	blocked_cells.erase(cell)
+	scenery_kinds.erase(cell)
 	return true
 
 
@@ -214,14 +217,16 @@ static func in_range(origin: Vector2i, target: Vector2i, maximum: int, minimum: 
 
 
 func can_target(actor: CombatUnit, target: CombatUnit, action: String,
-	from_cell: Vector2i = Vector2i(-1, -1)) -> bool:
+	from_cell: Vector2i = Vector2i(-1, -1), check_cover: bool = true) -> bool:
 	if actor == null or target == null:
 		return false
 	var origin: Vector2i = actor.cell if from_cell == Vector2i(-1, -1) else from_cell
 	match action:
 		"attack":
 			return (in_range(origin, target.cell, actor.get_attack_range())
-				and (actor.get_attack_range() > 1 or are_adjacent(origin, target.cell)))
+				and (actor.get_attack_range() > 1 or are_adjacent(origin, target.cell))
+				and (not check_cover or not CombatCover.is_direct_fire(actor, action)
+					or not CombatCover.check_unit(self, actor, target, origin).blocked))
 		"trick_arrow":
 			# 칸 조준 곡사 1~6. 같은 편도 겨눌 수 있어서 can_aim과 같은 거리만 본다.
 			return in_range(origin, target.cell, CombatActionRules.aim_range(actor, action), CombatActionRules.aim_min_range(action))

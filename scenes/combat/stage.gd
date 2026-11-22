@@ -40,3 +40,15 @@ func get_blocked_cells() -> Array[Vector2i]:
 				if not result.has(cell):
 					result.append(cell)
 	return result
+
+
+## 장식이 점유하는 모든 칸의 종류(tree, ruin_wall, cottage)를 돌려준다(#358 엄폐 높이 판정).
+func scenery_cell_kinds() -> Dictionary[Vector2i, String]:
+	var kinds: Dictionary[Vector2i, String] = {}
+	for anchor: Vector2i in scenery:
+		var id: String = scenery[anchor]
+		var size: Vector2i = SCENERY_SIZE[id]
+		for y: int in range(size.y):
+			for x: int in range(size.x):
+				kinds[anchor + Vector2i(x, y)] = id
+	return kinds

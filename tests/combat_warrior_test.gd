@@ -418,6 +418,7 @@ func _test_battle_cry() -> void:
 		and archer.battle_cry_source == warrior and f.units[2].battle_cry_bonus == 0,
 		"의지 d8을 한 번 굴려 살아 있는 모든 아군(자신 포함)에게 같은 값, 2턴")
 	_check(archer.get_hit_bonus() == 5 and archer.get_attack_bonus() == 0, "명중 가산에만 더하고 DC용 공격 가산은 그대로")
+	f.units[2].cell = Vector2i(5, 6)
 	var preview: CombatChecks.AttackPreview = f.actions.grid.attack_preview(archer, f.units[3])
 	_check(is_equal_approx(preview.chance, CombatChecks.hit_chance(20, 5, f.units[3].get_armor_class(), preview.mode)),
 		"명중률 미리보기에 전투의 함성 반영")

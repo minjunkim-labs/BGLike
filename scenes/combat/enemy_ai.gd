@@ -261,7 +261,7 @@ func _archer_turn(actor: CombatUnit, actions: CombatActions, pause: Callable) ->
 		return
 	var target: CombatUnit = _attack_target(actor, actions)
 	if target == null:
-		var destination: Vector2i = approach_cell(actor, actions)
+		var destination: Vector2i = _direct_fire_move_cell(actor, actions)
 		if destination != actor.cell:
 			await _move_to(actor, actions, destination)
 			await _pause(pause)
@@ -317,6 +317,93 @@ func _attack_target(actor: CombatUnit, actions: CombatActions) -> CombatUnit:
 		if actions.can_target(actor, target, "attack"):
 			return target
 	return null
+
+
+## 직사 원거리 적(풋내기 궁수)의 엄폐 고려 이동 칸 선택(#358).
+## 1) 이번 턴 이동 범위 안에 선분이 통하는 칸이 있는 대상을 가까운 순으로 골라 가장 짧은 이동 칸을 택한다.
+## 2) 없으면 전체 맵에서 선분이 통하는 가장 가까운 걷기 경로 칸을 향해 이번 턴 이동력만큼 전진한다(왕복 방지).
+## 3) 사격 가능한 칸으로 가는 경로 자체가 없으면 가장 가까운 대상과의 거리를 줄이는 칸으로 이동한다.
+func _direct_fire_move_cell(actor: CombatUnit, actions: CombatActions) -> Vector2i:
+	var targets: Array[CombatUnit] = _targets(actor, actions)
+	if targets.is_empty():
+		return approach_cell(actor, actions)
+	var by_distance: Array[CombatUnit] = targets.duplicate()
+	by_distance.sort_custom(func(a: CombatUnit, b: CombatUnit) -> bool:
+		var da: int = CombatGrid.distance(actor.cell, a.cell)
+		var db: int = CombatGrid.distance(actor.cell, b.cell)
+		if da != db:
+			return da < db
+		if a.hit_points != b.hit_points:
+			return a.hit_points < b.hit_points
+		return actions.units.find(a) < actions.units.find(b))
+	var reachable: Dictionary[Vector2i, int] = _movement_cells(actor, actions)
+	# 1) 이번 턴 이동 범위 안에서 선분이 통하는 칸이 있는 가장 가까운 대상 우선.
+	for candidate: CombatUnit in by_distance:
+		var best: Vector2i = Vector2i(-1, -1)
+		var best_cost: int = actor.movement_left + 1
+		for x: int in range(actions.grid.map_size.x):
+			for y: int in range(actions.grid.map_size.y):
+				var cell: Vector2i = Vector2i(x, y)
+				if not reachable.has(cell) or not actions.grid.can_target(actor, candidate, "attack", cell):
+					continue
+				var cost: int = reachable[cell]
+				var drier: bool = best in actions.grid.water_cells and cell not in actions.grid.water_cells
+				if best == Vector2i(-1, -1) or cost < best_cost or (cost == best_cost and drier):
+					best = cell
+					best_cost = cost
+		if best != Vector2i(-1, -1):
+			return best
+	# 2) 여러 턴이 걸려도 사격 가능한 칸으로 가는 최단 걷기 경로를 따라 진행(매 턴 남은 걸음 수가 엄격히 감소).
+	var walk: Dictionary[Vector2i, int] = actions.grid.walk_costs(actor.cell)
+	var best_goal: Vector2i = Vector2i(-1, -1)
+	var best_goal_steps: int = 1 << 20
+	var best_goal_target_dist: int = 1 << 20
+	for x: int in range(actions.grid.map_size.x):
+		for y: int in range(actions.grid.map_size.y):
+			var cell: Vector2i = Vector2i(x, y)
+			if cell == actor.cell or not walk.has(cell):
+				continue
+			var steps: int = walk[cell]
+			if steps > best_goal_steps:
+				continue
+			var hit_dist: int = 1 << 20
+			for candidate: CombatUnit in by_distance:
+				if actions.grid.can_target(actor, candidate, "attack", cell):
+					hit_dist = mini(hit_dist, CombatGrid.distance(actor.cell, candidate.cell))
+					break
+			if hit_dist == (1 << 20):
+				continue
+			var drier: bool = best_goal in actions.grid.water_cells and cell not in actions.grid.water_cells
+			if (best_goal == Vector2i(-1, -1) or steps < best_goal_steps
+				or (steps == best_goal_steps and (hit_dist < best_goal_target_dist
+					or (hit_dist == best_goal_target_dist and drier)))):
+				best_goal = cell
+				best_goal_steps = steps
+				best_goal_target_dist = hit_dist
+	if best_goal != Vector2i(-1, -1):
+		var path: Array[Vector2i] = actions.grid.path_to(actor, best_goal)
+		var limit: int = mini(actor.movement_left, path.size())
+		for index: int in range(limit - 1, -1, -1):
+			if reachable.has(path[index]):
+				return path[index]
+	# 3) 사격 가능한 칸으로 가는 경로 자체가 없으면 가장 가까운 대상과의 거리를 줄이는 칸으로 이동.
+	var nearest: CombatUnit = by_distance[0]
+	var current_gap: int = CombatGrid.distance(actor.cell, nearest.cell)
+	var fallback: Vector2i = actor.cell
+	var fallback_gap: int = current_gap
+	var fallback_cost: int = 0
+	for x: int in range(actions.grid.map_size.x):
+		for y: int in range(actions.grid.map_size.y):
+			var cell: Vector2i = Vector2i(x, y)
+			if not reachable.has(cell):
+				continue
+			var gap: int = CombatGrid.distance(cell, nearest.cell)
+			var cost: int = reachable[cell]
+			if gap < fallback_gap or (gap == fallback_gap and fallback != actor.cell and cost < fallback_cost):
+				fallback = cell
+				fallback_gap = gap
+				fallback_cost = cost
+	return fallback
 
 
 ## 공격 사거리까지 가장 짧게 가는 칸. 못 닿으면 가장 가까운 대상에 가장 가까운 칸이다.
