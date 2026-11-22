@@ -17,15 +17,14 @@ if [ "$GODOT_PLATFORM" = macos.universal ]; then
 fi
 GODOT_BINARY="$GODOT_DIR/$godot_binary_rel"
 if [ -z "$godot_dir_override" ] && { [ ! -f "$GODOT_BINARY" ] || [ ! -x "$GODOT_BINARY" ]; }; then
-  godot_common_git_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
-  if [ -z "$godot_common_git_dir" ]; then
-    godot_common_git_dir=$(git rev-parse --git-common-dir 2>/dev/null || true)
-    if [ -n "$godot_common_git_dir" ] && [ -d "$godot_common_git_dir" ]; then
-      godot_common_git_dir=$(cd "$godot_common_git_dir" 2>/dev/null && pwd -P || true)
-    fi
+  godot_common_git_dir=$(git rev-parse --git-common-dir 2>/dev/null || true)
+  if [ -n "$godot_common_git_dir" ] && [ -d "$godot_common_git_dir" ]; then
+    godot_common_git_dir=$(cd "$godot_common_git_dir" 2>/dev/null && pwd -P || true)
+  else
+    godot_common_git_dir=""
   fi
   if [ -n "$godot_common_git_dir" ]; then
-    godot_common_dir="$(dirname "$godot_common_git_dir")/.cache/godot/$GODOT_VERSION/$GODOT_PLATFORM"
+    godot_common_dir="$(dirname -- "$godot_common_git_dir")/.cache/godot/$GODOT_VERSION/$GODOT_PLATFORM"
     if [ -f "$godot_common_dir/$godot_binary_rel" ] && [ -x "$godot_common_dir/$godot_binary_rel" ]; then
       GODOT_DIR="$godot_common_dir"
       GODOT_BINARY="$GODOT_DIR/$godot_binary_rel"

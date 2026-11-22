@@ -60,7 +60,8 @@ class GodotEnvironmentTests(unittest.TestCase):
         subprocess.run(["git", "config", "user.name", "Test"], cwd=main_repo, env=git_env, check=True)
         (main_repo / "README.md").write_text("fixture\n")
         subprocess.run(["git", "add", "README.md"], cwd=main_repo, env=git_env, check=True)
-        subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=main_repo, env=git_env, check=True)
+        subprocess.run(["git", "-c", "commit.gpgSign=false", "commit", "-q", "-m", "init"],
+                       cwd=main_repo, env=git_env, check=True)
         subprocess.run(["git", "worktree", "add", "-q", "-b", "wt-branch", str(worktree)],
                        cwd=main_repo, env=git_env, check=True)
         return main_repo.resolve(), worktree.resolve()
