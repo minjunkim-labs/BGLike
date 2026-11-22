@@ -9,21 +9,40 @@ tests=(
   tests/{save,title,pause,continue,ui_theme,music}_test.gd
 )
 if [ "$#" -gt 0 ]; then
-  registered=false
-  for test_script in "${tests[@]}"; do
-    if [ "$#" -eq 1 ] && [ "$1" = "${test_script%% *}" ]; then
-      registered=true
-      break
+  selected=()
+  for arg in "$@"; do
+    registered=false
+    for test_script in "${tests[@]}"; do
+      if [ "$arg" = "${test_script%% *}" ]; then
+        registered=true
+        break
+      fi
+    done
+    if [ "$registered" != true ]; then
+      printf 'Expected registered Godot test paths; omit arguments to run all tests.\n' >&2
+      exit 2
+    fi
+    duplicate=false
+    for existing in "${selected[@]+"${selected[@]}"}"; do
+      if [ "$arg" = "$existing" ]; then
+        duplicate=true
+        break
+      fi
+    done
+    if [ "$duplicate" != true ]; then
+      selected+=("$arg")
     fi
   done
-  if [ "$registered" != true ]; then
-    printf 'Expected one registered Godot test path; omit the argument to run all tests.\n' >&2
-    exit 2
-  fi
-  tests=("$1")
+  tests=("${selected[@]}")
 fi
 source scripts/godot_environment.sh
 godot="${GODOT:-$GODOT_BINARY}"
+if [ -z "${GODOT:-}" ] && [ ! -x "$godot" ] && [ "$GODOT_PLATFORM" = macos.universal ]; then
+  macos_app_godot="${GODOT_MACOS_APP_BINARY:-/Applications/Godot.app/Contents/MacOS/Godot}"
+  if [ -x "$macos_app_godot" ]; then
+    godot="$macos_app_godot"
+  fi
+fi
 if [ ! -x "$godot" ]; then
   printf 'Godot is missing: run make godot-install or set GODOT to the pinned editor executable.\n' >&2
   exit 1
