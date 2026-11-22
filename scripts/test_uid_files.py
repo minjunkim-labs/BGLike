@@ -48,6 +48,21 @@ class UidFileTests(unittest.TestCase):
                 ["new_missing.gd: 대응하는 new_missing.gd.uid 파일이 없음"],
             )
 
+    def test_staged_gd_missing_uid_fails_even_if_deleted_from_working_tree(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self._init_repo(root)
+            staged = root / "staged_only.gd"
+            staged.write_text("extends Node\n", encoding="utf-8")
+            subprocess.run(["git", "add", "staged_only.gd"], cwd=root, check=True)
+            staged.unlink()
+            self.assertEqual(
+                check(root),
+                ["staged_only.gd: 대응하는 staged_only.gd.uid 파일이 git에 추적되지 않음"],
+            )
+            subprocess.run(["git", "rm", "--cached", "-q", "staged_only.gd"], cwd=root, check=True)
+            self.assertEqual(check(root), [])
+
     def test_repository_gd_files_have_tracked_uids(self):
         self.assertEqual(check(ROOT), [])
 

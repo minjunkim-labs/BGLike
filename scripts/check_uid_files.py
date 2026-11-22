@@ -25,8 +25,6 @@ def check(root):
 
     problems = []
     for name in sorted(set(tracked_gd)):
-        if not (root / name).is_file():
-            continue
         uid_name = f"{name}.uid"
         if uid_name not in tracked_uid:
             problems.append(f"{name}: 대응하는 {uid_name} 파일이 git에 추적되지 않음")

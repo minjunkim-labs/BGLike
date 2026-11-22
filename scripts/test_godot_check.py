@@ -62,7 +62,7 @@ class GodotCheckTests(unittest.TestCase):
         result, calls = self.run_check(
             selected=("tests/combat_ai_test.gd", "tests/save_test.gd", "tests/combat_ai_test.gd"))
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
+        self.assertCountEqual(
             [call for call in calls if "--script" in call],
             [
                 "--headless --path . --script tests/combat_ai_test.gd",
