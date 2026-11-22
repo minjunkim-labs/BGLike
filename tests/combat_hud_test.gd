@@ -24,7 +24,6 @@ func _check(condition: bool, message: String) -> void:
 
 
 func _run() -> void:
-	_test_selection()
 	_test_skill_icons()
 	_test_cost_marks()
 	var scene: PackedScene = load("res://scenes/game.tscn") as PackedScene
@@ -168,29 +167,31 @@ func _test_floor_loot_ui() -> void:
 	battle.call("_hover_floor_loot", map.get_global_transform_with_canvas() * map.map_to_surface(Vector2i(0, 9)))
 	_check("바닥 아이템" not in hud.preview_label.text, "아이템이 없는 칸으로 옮기면 안내를 거둔다")
 	# 걷기 경로가 아이템 칸을 지나면 줍는다는 표시를 한다. 도착 칸이 아니어도 표시한다.
-	selection.selected_action = "move"
-	selection.select_move(Vector2i(2, 9), [Vector2i(3, 9), Vector2i(2, 9)])
+	var actor: CombatUnit = turns.current_unit
+	var saved_cell: Vector2i = actor.cell
+	actor.cell = Vector2i(4, 9)
+	selection.choose_move(actor, actions, Vector2i(2, 9))
 	battle.call("_update_turn_ui")
 	_check("줍기: 방어구, 무기" in hud.preview_label.text, "이동 미리보기의 줍기 표시: " + hud.preview_label.text)
 	# 점프는 착지 칸만 본다.
-	selection.selected_action = "jump"
-	selection.clear_preview()
-	selection.select_move(Vector2i(2, 9), [Vector2i(3, 9), Vector2i(2, 9)])
+	selection.choose_action(actor, actions, "jump")
+	selection.choose_move(actor, actions, Vector2i(2, 9))
 	battle.call("_update_turn_ui")
 	_check("줍기: 무기" in hud.preview_label.text and "방어구" not in hud.preview_label.text,
 		"점프 미리보기는 착지 칸의 줍기만 표시: " + hud.preview_label.text)
 	# 아이템이 없는 칸의 경로에는 표시하지 않는다.
-	selection.selected_action = "move"
-	selection.clear_preview()
-	selection.select_move(Vector2i(0, 9), [Vector2i(0, 9)])
+	selection.reset()
+	actor.cell = Vector2i(0, 9)
+	selection.choose_move(actor, actions, Vector2i(1, 9))
+	_check(not selection.preview_path.is_empty(), "아이템 없는 경로 미리보기가 생성된다")
 	battle.call("_update_turn_ui")
 	_check("줍기" not in hud.preview_label.text, "아이템이 없는 경로는 줍기 표시가 없다")
+	actor.cell = saved_cell
 	# 적이 고르는 경로와 밀려난 적은 줍지 않으므로 표시하지 않는다.
 	_check(actions.pickup_note(units[2], [Vector2i(2, 9)]).is_empty() and actions.shove_landing(units[2], Vector2i(2, 9)).is_empty(),
 		"적에게는 줍기 안내가 없다")
 	_check("줍기: 무기" in actions.shove_landing(units[0], Vector2i(2, 9)), "밀려날 아군의 도착 칸에 줍기 안내")
-	selection.clear_preview()
-	selection.selected_action = "attack"
+	selection.reset()
 	actions.floor_loot.clear()
 	battle.call("_hover_floor_loot", Vector2(-9999, -9999))
 	battle.call("_update_turn_ui")
@@ -333,7 +334,7 @@ func _test_opportunity_attack_warning() -> void:
 	# 전투 화면 통합: 적 위협 범위(T)가 꺼져 있어도 걷기·점프 미리보기에서 경고 아이콘과 안내가 표시된다.
 	battle.set("threat_visible", false)
 	selection.reset()
-	selection.select_move(Vector2i(2, 9), walk_path)
+	selection.choose_move(ally, actions, Vector2i(2, 9))
 	battle.call("_update_turn_ui")
 	_check(map.opportunity_warning_cells() == [Vector2i(4, 9), Vector2i(2, 9)],
 		"걷기 미리보기에서 이탈 칸과 최종 도착 칸 위에 경고 아이콘 표시: " + str(map.opportunity_warning_cells()))
@@ -347,8 +348,8 @@ func _test_opportunity_attack_warning() -> void:
 	ally.disengaged = false
 	# 점프 미리보기: 출발 칸 이탈로 기회 공격 유발 시 착지 칸 위에 경고 아이콘 표시.
 	selection.reset()
-	selection.selected_action = "jump"
-	selection.select_move(Vector2i(2, 9), [Vector2i(3, 9), Vector2i(2, 9)])
+	selection.choose_action(ally, actions, "jump")
+	selection.choose_move(ally, actions, Vector2i(2, 9))
 	battle.call("_update_turn_ui")
 	_check(map.opportunity_warning_cells() == [Vector2i(2, 9)] and "기회 공격 1명" in hud.preview_label.text,
 		"점프 미리보기에서 기회 공격 유발 시 착지 칸에 경고 아이콘과 안내 표시: " + str(map.opportunity_warning_cells()))
@@ -359,11 +360,13 @@ func _test_opportunity_attack_warning() -> void:
 	enemy.reaction_left = 1
 	# 무빙샷 도약 미리보기는 기회 공격을 유발하지 않으므로 경고 아이콘과 안내 없음.
 	selection.reset()
-	selection.selected_action = "moving_shot"
-	selection.select_move(Vector2i(3, 9), [Vector2i(3, 9)])
+	ally.moving_shot_ready = true
+	selection.offer_moving_shot(ally, ally)
+	selection.choose_move(ally, actions, Vector2i(3, 9))
 	battle.call("_update_turn_ui")
 	_check(map.opportunity_warning_cells().is_empty() and "기회 공격" not in hud.preview_label.text,
 		"무빙샷 도약 미리보기에는 기회 공격 경고 없음")
+	ally.moving_shot_ready = false
 	# 미리보기 취소 시 경고 아이콘 정리.
 	selection.reset()
 	battle.call("_update_turn_ui")
@@ -682,51 +685,6 @@ func _test_skill_icons() -> void:
 	var oil_icon: Texture2D = CombatActionRules.icon_of("oil_throw")
 	_check(oil_icon != null and oil_icon.resource_path.ends_with("/skills/oil_throw.png")
 		and oil_icon != CombatActionRules.icon_of("potion"), "기름병 던지기는 물약을 빌리지 않고 전용 아이콘을 쓴다(#560)")
-
-
-func _test_selection() -> void:
-	var selected: CombatSelection = CombatSelection.new()
-	var target: CombatUnit = CombatUnit.new()
-	var inspected: CombatUnit = CombatUnit.new()
-	var path: Array[Vector2i] = [Vector2i(1, 0), Vector2i(1, 1)]
-	_check(not selected.select_move(Vector2i(1, 1), path)
-		and selected.selected_action == "move" and selected.preview_path == path,
-		"선택 module: 첫 목적지 선택은 이동 미리보기")
-	_check(selected.select_move(Vector2i(1, 1), path)
-		and selected.preview_path.is_empty() and selected.preview_cell == Vector2i(-1, -1)
-		and not path.is_empty(), "선택 module: 같은 목적지는 한 번 확정하고 호출자의 경로는 보존")
-	selected.select_move(Vector2i(1, 1), path)
-	selected.select_move(Vector2i(2, 2), [])
-	_check(selected.selected_action == "move" and selected.preview_path.is_empty(),
-		"선택 module: 유효하지 않은 목적지는 경로만 취소")
-	selected.begin_field_input(true)
-	_check(selected.selected_action == "attack", "선택 module: 좌클릭은 이동 확정 대신 공격 선택으로 복귀")
-	selected.inspect(inspected)
-	_check(not selected.select_action("second_wind") and selected.inspected_unit == null,
-		"선택 module: 첫 보조 행동 선택은 조회만 해제")
-	_check(selected.select_action("second_wind") and selected.begin_execution() == "second_wind",
-		"선택 module: 같은 보조 행동의 두 번째 선택만 실행")
-	selected.finish_execution()
-	_check(selected.selected_action == "attack", "선택 module: 실행 뒤 기본 공격으로 복귀")
-	_check(not selected.select_target(target, true) and selected.preview_target == target
-		and not selected.select_target(target, false) and selected.select_target(target, true),
-		"선택 module: 대상 재선택은 실행 가능할 때만 확정")
-	selected.select_move(Vector2i(1, 1), path)
-	selected.inspect(inspected)
-	_check(selected.selected_action == "attack" and selected.preview_target == null
-		and selected.preview_path.is_empty() and selected.inspected_unit == inspected,
-		"선택 module: 초상 조회는 이동·대상 미리보기를 함께 취소")
-	inspected.hit_points = 0
-	selected.discard_incapacitated_inspection()
-	_check(selected.inspected_unit == null, "선택 module: 전투 불능 조회 해제")
-	selected.select_action("shock")
-	selected.preview_unit(target)
-	selected.reset()
-	_check(selected.selected_action == "attack" and selected.preview_target == null
-		and selected.preview_path.is_empty() and selected.inspected_unit == null,
-		"선택 module: 턴·스테이지 전환은 선택 전체 초기화")
-	target.free()
-	inspected.free()
 
 
 func _test_square_map() -> void:
@@ -1084,17 +1042,29 @@ func _test_tree_burn_ui() -> void:
 	archer.cell = stand
 	turns.select_unit(archer)
 	battle.call("_update_turn_ui")
-	var trick_note: String = battle.call("_arrow_note", archer, "trick_arrow", tree)
+	var selection: CombatSelection = battle.get("selection") as CombatSelection
+	selection.choose_action(archer, actions, "trick_arrow")
+	selection.choose_aim(archer, actions, tree)
+	var trick_note: String = selection.build_preview(archer, actions, units).target_note
 	_check(tr("화염이 나오면 나무가 타서 길이 열림") in trick_note, "장난스러운 화살이 나무를 겨누면 안내: " + trick_note)
 	var plain: Vector2i = Vector2i(-1, -1)
 	for cell: Vector2i in actions.aim_cells(archer, "firework_arrow"):
 		if actions.aim_area(archer, "firework_arrow", cell).all(func(area_cell: Vector2i) -> bool: return not grid.is_tree(area_cell)):
 			plain = cell
 			break
-	_check(plain != Vector2i(-1, -1) and tr("나무가 타서 길이 열림") not in (battle.call("_arrow_note", archer, "firework_arrow", plain) as String)
-		and tr("나무가 타서 길이 열림") not in (battle.call("_arrow_note", archer, "trick_arrow", plain) as String), "나무가 없으면 안내 줄 없음")
-	var firework_note: String = battle.call("_arrow_note", archer, "firework_arrow", tree)
+	selection.choose_action(archer, actions, "firework_arrow")
+	selection.choose_aim(archer, actions, plain)
+	var plain_firework: String = selection.build_preview(archer, actions, units).target_note
+	selection.choose_action(archer, actions, "trick_arrow")
+	selection.choose_aim(archer, actions, plain)
+	var plain_trick: String = selection.build_preview(archer, actions, units).target_note
+	_check(plain != Vector2i(-1, -1) and tr("나무가 타서 길이 열림") not in plain_firework
+		and tr("나무가 타서 길이 열림") not in plain_trick, "나무가 없으면 안내 줄 없음")
+	selection.choose_action(archer, actions, "firework_arrow")
+	selection.choose_aim(archer, actions, tree)
+	var firework_note: String = selection.build_preview(archer, actions, units).target_note
 	_check(firework_note.ends_with(tr("나무가 타서 길이 열림")), "폭죽 영역에 나무가 있으면 안내: " + firework_note)
+	selection.reset()
 	var map: CombatMap = battle.get_node("Map") as CombatMap
 	var markers: Array = (map.get("_blocked_markers") as Array).filter(func(marker: Node2D) -> bool: return marker.get_meta("tree", false))
 	actions.touch_attribute(tree, "fire", archer)
@@ -1206,7 +1176,7 @@ func _test_archer_moving_shot_input() -> void:
 		archer.firework_arrow_left = 1
 		archer.moving_shot_ready = false
 		archer.moving_shot_spent = false
-		arrow_selection.selected_action = "attack"
+		arrow_selection.finish_execution()
 		battle.call("_update_turn_ui")
 	_check((passives["moving_shot"] as Button).visible and not (passives["phalanx"] as Button).visible
 		and not (dots["moving_shot"] as Label).visible and (passives["moving_shot"] as Button).disabled,
@@ -2705,7 +2675,7 @@ func _test_skill_bar_keys() -> void:
 		elif not reaction:
 			pressed_seen += 1
 			_check(selection.selected_action == action, "숫자 키는 활성 버튼을 선택: " + action)
-		selection.selected_action = "attack"
+		selection.finish_execution()
 		battle.call("_update_turn_ui")
 	_check(disabled_seen > 0 and pressed_seen > 1, "숫자 키 검사는 활성·비활성 버튼을 모두 포함")
 	# AZERTY의 숫자 1 자리는 &를 보낸다. 자리로 고른다.
@@ -2732,10 +2702,10 @@ func _test_skill_bar_keys() -> void:
 	jump.grab_focus()
 	await _key(KEY_ENTER)
 	_check(selection.selected_action == "jump", "Enter는 포커스된 스킬을 선택")
-	selection.selected_action = "attack"
+	selection.finish_execution()
 	await _joypad(JOY_BUTTON_A)
 	_check(selection.selected_action == "jump", "컨트롤러 확인 버튼은 포커스된 스킬을 선택")
-	selection.selected_action = "attack"
+	selection.finish_execution()
 	potion.grab_focus()
 	await _key(KEY_ENTER)
 	await _joypad(JOY_BUTTON_A)
@@ -4264,7 +4234,7 @@ func _test_rock_presentation() -> void:
 			var effect: Node2D = battle.map.get_child(battle.map.get_child_count() - 1)
 			battle.map.build_grid(actions.grid, battle.stages[0].tile_set, battle.stages[0])
 			_check(not is_instance_valid(effect), "맵 재구축은 이전 충돌 효과를 즉시 제거")
-			(battle.get("selection") as CombatSelection).selected_action = "move"
+			(battle.get("selection") as CombatSelection).choose_move(turns.current_unit, actions, Vector2i(-1, -1))
 		for frame: int in range(30):
 			await process_frame
 		_check(not battle.map.has_node("PropAnimation") and rock.cell == Vector2i(6, 5)
