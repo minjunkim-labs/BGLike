@@ -40,6 +40,10 @@ const EDGE_CONTACT_ALPHA: float = 0.55
 ## 이동 범위 칸 윤곽의 폭(#556, 0.5에서 1px 굵게)과 꼭짓점 꺾쇠가 변을 따라 가는 비율.
 const EDGE_WIDTH: float = 1.5
 const CORNER_LENGTH: float = 0.25
+## 아군 이동 가능(파랑), 기본 공격 도달 바깥 칸(빨간 윤곽), 선택 동작 사거리(붉은 면·윤곽·꺾쇠) 색(#761).
+const MOVE_OVERLAY_COLOR: Color = Color(0.22, 0.56, 0.92, 0.1)
+const ACTION_RANGE_COLOR: Color = Color(0.92, 0.34, 0.3, 0.12)
+const REACH_OUTLINE_COLOR: Color = Color(0.92, 0.34, 0.3, 0.85)
 ## 이동 경로의 기회 공격 사전 경고 아이콘 색(#733).
 const OPPORTUNITY_WARNING_BG: Color = Color(0.16, 0.06, 0.05, 0.92)
 const OPPORTUNITY_WARNING_BORDER: Color = Color("ff5a36")
@@ -289,43 +293,24 @@ func _contains_sides(cell: Vector2i, point: Vector2) -> bool:
 	]))
 
 
-func show_movement(cells: Array[Vector2i], attack_cells: Array[Vector2i],
-		path: Array[Vector2i], origin: Vector2i, warning_cells: Array[Vector2i] = []) -> void:
+func show_movement(cells: Array[Vector2i], reach_cells: Array[Vector2i],
+		path: Array[Vector2i], origin: Vector2i, warning_cells: Array[Vector2i] = [],
+		action_cells: Array[Vector2i] = []) -> void:
 	for overlay: Node2D in _overlays:
 		overlay.free()
 	_overlays.clear()
-	if cells.is_empty() and path.is_empty() and warning_cells.is_empty():
+	if cells.is_empty() and reach_cells.is_empty() and action_cells.is_empty() and path.is_empty() and warning_cells.is_empty():
 		return
 	var half: Vector2 = Vector2(tile_set.tile_size) / 2.0
+	var move_edge: Color = Color(MOVE_OVERLAY_COLOR.r, MOVE_OVERLAY_COLOR.g, MOVE_OVERLAY_COLOR.b, 0.75)
 	for cell: Vector2i in cells:
-		var overlay: Polygon2D = Polygon2D.new()
-		overlay.position = map_to_local(cell)
-		var center: Vector2 = map_to_surface(cell) - overlay.position
-		overlay.polygon = PackedVector2Array([
-			center + Vector2(0, -half.y), center + Vector2(half.x, 0),
-			center + Vector2(0, half.y), center + Vector2(-half.x, 0)
-		])
-		overlay.color = Color(0.22, 0.8, 0.5, 0.12) if cell in attack_cells else Color(0.22, 0.56, 0.92, 0.1)
-		var edge: Line2D = Line2D.new()
-		edge.points = overlay.polygon
-		edge.closed = true
-		edge.width = EDGE_WIDTH
-		edge.default_color = Color(overlay.color.r, overlay.color.g, overlay.color.b, 0.75)
-		overlay.add_child(edge)
-		# 색에만 기대지 않게 네 꼭짓점에 짧은 꺾쇠를 더한다(#556). 바닥 마름모 안쪽에만 그린다.
-		var corner_color: Color = Color(overlay.color.r, overlay.color.g, overlay.color.b, 0.75).lightened(0.45)
-		corner_color.a = 1.0
-		for index: int in range(4):
-			var vertex: Vector2 = overlay.polygon[index]
-			var mark: Line2D = Line2D.new()
-			mark.points = PackedVector2Array([
-				vertex.lerp(overlay.polygon[(index + 3) % 4], CORNER_LENGTH), vertex,
-				vertex.lerp(overlay.polygon[(index + 1) % 4], CORNER_LENGTH)])
-			mark.width = 1.0
-			mark.default_color = corner_color
-			overlay.add_child(mark)
-		add_child(overlay)
-		_overlays.append(overlay)
+		_add_tile_overlay(cell, half, MOVE_OVERLAY_COLOR, move_edge, true)
+	var reach_fill: Color = Color(REACH_OUTLINE_COLOR.r, REACH_OUTLINE_COLOR.g, REACH_OUTLINE_COLOR.b, 0.0)
+	for cell: Vector2i in reach_cells:
+		_add_tile_overlay(cell, half, reach_fill, REACH_OUTLINE_COLOR, false)
+	var action_edge: Color = Color(ACTION_RANGE_COLOR.r, ACTION_RANGE_COLOR.g, ACTION_RANGE_COLOR.b, 0.75)
+	for cell: Vector2i in action_cells:
+		_add_tile_overlay(cell, half, ACTION_RANGE_COLOR, action_edge, true)
 	var previous: Vector2 = map_to_surface(origin)
 	for cell: Vector2i in path:
 		var line: Line2D = Line2D.new()
@@ -373,6 +358,39 @@ func opportunity_warning_cells() -> Array[Vector2i]:
 		if overlay.get_meta("opportunity_warning", false):
 			cells.append(overlay.get_meta("cell") as Vector2i)
 	return cells
+
+
+func _add_tile_overlay(cell: Vector2i, half: Vector2, fill_color: Color,
+		edge_color: Color, with_corners: bool) -> void:
+	var overlay: Polygon2D = Polygon2D.new()
+	overlay.position = map_to_local(cell)
+	var center: Vector2 = map_to_surface(cell) - overlay.position
+	overlay.polygon = PackedVector2Array([
+		center + Vector2(0, -half.y), center + Vector2(half.x, 0),
+		center + Vector2(0, half.y), center + Vector2(-half.x, 0)
+	])
+	overlay.color = fill_color
+	var edge: Line2D = Line2D.new()
+	edge.points = overlay.polygon
+	edge.closed = true
+	edge.width = EDGE_WIDTH
+	edge.default_color = edge_color
+	overlay.add_child(edge)
+	if with_corners:
+		# 색에만 기대지 않게 네 꼭짓점에 짧은 꺾쇠를 더한다(#556). 바닥 마름모 안쪽에만 그린다.
+		var corner_color: Color = edge_color.lightened(0.45)
+		corner_color.a = 1.0
+		for index: int in range(4):
+			var vertex: Vector2 = overlay.polygon[index]
+			var mark: Line2D = Line2D.new()
+			mark.points = PackedVector2Array([
+				vertex.lerp(overlay.polygon[(index + 3) % 4], CORNER_LENGTH), vertex,
+				vertex.lerp(overlay.polygon[(index + 1) % 4], CORNER_LENGTH)])
+			mark.width = 1.0
+			mark.default_color = corner_color
+			overlay.add_child(mark)
+	add_child(overlay)
+	_overlays.append(overlay)
 
 
 ## 행동 유닛이 선 칸의 윗면 마름모에 금색 테두리와 옅은 채움을 그린다(#516 1절).

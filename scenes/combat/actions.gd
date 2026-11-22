@@ -1033,6 +1033,72 @@ func threat_cells(enemy: CombatUnit) -> Array[Vector2i]:
 	return result
 
 
+## 아군 기본 선택 상태에서 이동 가능 영역 너머로 기본 공격이 닿는 바깥 칸 목록(#761).
+## 행동이 없거나 기절·넘어짐 등으로 기본 공격을 쓸 수 없으면 비어 있으며 엄폐(#358)는 반영하지 않는다.
+func attack_reach_cells(actor: CombatUnit) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	if actor == null or not actor.is_ally or not _can_act(actor) or actor.action_left <= 0:
+		return result
+	var movable: Dictionary[Vector2i, int] = reachable_cells(actor)
+	var stands: Array[Vector2i] = [actor.cell]
+	stands.append_array(movable.keys())
+	var attack_range: int = actor.get_attack_range()
+	var seen: Dictionary[Vector2i, bool] = {}
+	for stand: Vector2i in stands:
+		for x: int in range(-attack_range, attack_range + 1):
+			for y: int in range(-attack_range, attack_range + 1):
+				var cell: Vector2i = stand + Vector2i(x, y)
+				if seen.has(cell) or cell == actor.cell or movable.has(cell):
+					continue
+				if not grid.is_floor(cell) or grid.is_wall(cell) or not CombatGrid.in_range(stand, cell, attack_range):
+					continue
+				if attack_range == 1 and not grid.are_adjacent(stand, cell):
+					continue
+				seen[cell] = true
+				result.append(cell)
+	return result
+
+
+## 현재 위치에서 선택한 동작의 사거리(또는 대상·조준·방향·착지 가능) 칸 목록(#761).
+## 엄폐(#358)는 반영하지 않는다.
+func action_range_cells(actor: CombatUnit, action: String) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	if actor == null or not _can_act(actor):
+		return cells
+	match action:
+		"attack":
+			var attack_range: int = actor.get_attack_range()
+			if attack_range == 1:
+				for cell: Vector2i in CombatGrid.neighbors(actor.cell):
+					if grid.is_floor(cell) and not grid.is_wall(cell) and grid.are_adjacent(actor.cell, cell):
+						cells.append(cell)
+			else:
+				for y: int in range(maxi(0, actor.cell.y - attack_range), mini(grid.map_size.y, actor.cell.y + attack_range + 1)):
+					for x: int in range(maxi(0, actor.cell.x - attack_range), mini(grid.map_size.x, actor.cell.x + attack_range + 1)):
+						var cell: Vector2i = Vector2i(x, y)
+						if grid.is_floor(cell) and not grid.is_wall(cell) and CombatGrid.in_range(actor.cell, cell, attack_range):
+							cells.append(cell)
+		"cross_slash", "steel_charge", "bow_bash", "shove":
+			for cell: Vector2i in CombatGrid.neighbors(actor.cell):
+				if grid.is_floor(cell) and not grid.is_wall(cell) and grid.are_adjacent(actor.cell, cell):
+					cells.append(cell)
+		"jump":
+			cells.assign(jump_cells(actor).keys())
+		"moving_shot":
+			cells = moving_shot_cells(actor)
+		"oil_throw", "oil_bottle", "trick_arrow", "firework_arrow":
+			cells = aim_cells(actor, action)
+		"sweep":
+			for cell: Vector2i in CombatGrid.neighbors(actor.cell):
+				if can_sweep(actor, cell):
+					cells.append(cell)
+		"whistle":
+			for cell: Vector2i in CombatGrid.neighbors(actor.cell):
+				if can_whistle(actor, cell):
+					cells.append(cell)
+	return cells
+
+
 func can_move(actor: CombatUnit, destination: Vector2i) -> bool:
 	return reachable_cells(actor).has(destination)
 

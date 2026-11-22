@@ -1133,6 +1133,7 @@ func _run() -> void:
 	await _test_crate_ai_path()
 	_test_crate_callback_reset()
 	_test_threat_cells()
+	_test_ally_range_cells()
 	await _test_crate_stage()
 	await _test_crate_scene_input()
 	_test_novice_stats()
@@ -1317,6 +1318,77 @@ func _test_threat_cells() -> void:
 	enemy.hit_points = 0
 	_check(f.actions.threat_cells(enemy).is_empty(), "쓰러진 적은 위협 범위가 없다")
 	enemy.hit_points = enemy.get_max_hit_points()
+
+
+func _test_ally_range_cells() -> void:
+	var f: Fixture = _fixture()
+	var warrior: CombatUnit = f.units[0]
+	var archer: CombatUnit = f.units[1]
+	var enemy: CombatUnit = f.units[2]
+	warrior.cell = Vector2i(2, 2)
+	warrior.movement_left = 2
+	warrior.action_left = 1
+	archer.cell = Vector2i(8, 8)
+	enemy.cell = Vector2i(9, 9)
+	f.units[3].cell = Vector2i(9, 8)
+	f.actions.grid.blocked_cells = [Vector2i(5, 2)]
+	f.actions.grid.props = [CombatGrid.Prop.new(Vector2i(2, 5), "crate")]
+	var movable: Dictionary[Vector2i, int] = f.actions.reachable_cells(warrior)
+	var reach: Array[Vector2i] = f.actions.attack_reach_cells(warrior)
+	_check(Vector2i(2, 5) in reach and Vector2i(4, 3) in reach,
+		"근접 아군 기본 공격 도달 윤곽은 이동 가능 칸 너머 사거리 1 바깥 칸과 상자 칸을 포함")
+	_check(Vector2i(5, 2) not in reach, "막힌 벽 칸은 기본 공격 도달 윤곽에서 제외")
+	_check(warrior.cell not in reach and reach.all(func(cell: Vector2i) -> bool: return not movable.has(cell)),
+		"현재 칸과 이동 가능 파랑 칸은 기본 공격 도달 윤곽에서 제외")
+	var unique: Dictionary[Vector2i, bool] = {}
+	for cell: Vector2i in reach:
+		unique[cell] = true
+	_check(unique.size() == reach.size(), "기본 공격 도달 윤곽 칸은 중복이 없다")
+	f.actions.grid.heights[Vector2i(4, 3)] = 2
+	_check(Vector2i(4, 3) not in f.actions.attack_reach_cells(warrior),
+		"근접 기본 공격 도달 윤곽은 높이 차 2 이상 칸을 제외")
+	f.actions.grid.heights.clear()
+	f.actions.grid.blocked_cells.clear()
+	f.actions.grid.props.clear()
+	warrior.action_left = 0
+	_check(f.actions.attack_reach_cells(warrior).is_empty(), "행동이 없으면 기본 공격 도달 윤곽 없음")
+	warrior.action_left = 1
+	warrior.is_stunned = true
+	_check(f.actions.attack_reach_cells(warrior).is_empty(), "기절 상태면 기본 공격 도달 윤곽 없음")
+	warrior.is_stunned = false
+	warrior.fallen = true
+	_check(f.actions.attack_reach_cells(warrior).is_empty(), "넘어진 상태면 기본 공격 도달 윤곽 없음")
+	warrior.fallen = false
+	warrior.movement_left = 0
+	var zero_move_reach: Array[Vector2i] = f.actions.attack_reach_cells(warrior)
+	_check(zero_move_reach.size() == 4 and Vector2i(3, 2) in zero_move_reach and warrior.cell not in zero_move_reach,
+		"남은 이동력이 0이어도 행동이 있으면 현재 칸 기준 기본 공격 도달 윤곽 표시")
+	_check(f.actions.attack_reach_cells(enemy).is_empty(), "적 유닛은 아군 기본 공격 도달 윤곽 계산 대상이 아님")
+	# 현재 위치 기준 선택 동작 사거리 계산
+	var attack_range: Array[Vector2i] = f.actions.action_range_cells(warrior, "attack")
+	_check(attack_range.size() == 4 and Vector2i(3, 2) in attack_range and Vector2i(4, 2) not in attack_range,
+		"근접 기본 공격 선택 시 현재 위치 사거리 1 칸만 반환")
+	var slash_range: Array[Vector2i] = f.actions.action_range_cells(warrior, "cross_slash")
+	_check(slash_range == attack_range and f.actions.action_range_cells(warrior, "shove") == attack_range,
+		"근접 스킬 선택 시 현재 위치 인접 사거리 칸만 반환")
+	_check(f.actions.action_range_cells(warrior, "holy_veil").is_empty(),
+		"자기 대상 스킬은 사거리 칸 없음")
+	# 원거리 아군(궁수) 도달 윤곽 및 선택 동작 사거리
+	f.turns.select_unit(archer)
+	archer.cell = Vector2i(1, 1)
+	archer.movement_left = 1
+	archer.action_left = 1
+	var archer_movable: Dictionary[Vector2i, int] = f.actions.reachable_cells(archer)
+	var archer_reach: Array[Vector2i] = f.actions.attack_reach_cells(archer)
+	_check(Vector2i(8, 1) in archer_reach and Vector2i(9, 1) not in archer_reach
+		and archer.cell not in archer_reach and archer_reach.all(func(cell: Vector2i) -> bool: return not archer_movable.has(cell)),
+		"궁수 기본 공격 도달 윤곽은 이동 1 + 사거리 6 바깥 칸까지 포함하고 이동 가능 칸 제외")
+	var archer_attack: Array[Vector2i] = f.actions.action_range_cells(archer, "attack")
+	_check(Vector2i(7, 1) in archer_attack and Vector2i(8, 1) not in archer_attack and archer.cell not in archer_attack,
+		"궁수 기본 공격 명시 선택 시 현재 위치 사거리 1~6 칸만 반환")
+	var bow_bash: Array[Vector2i] = f.actions.action_range_cells(archer, "bow_bash")
+	_check(bow_bash.size() == 4 and Vector2i(2, 1) in bow_bash and Vector2i(3, 1) not in bow_bash,
+		"활 후려치기 선택 시 현재 위치 인접 1칸만 반환")
 
 
 func _test_scrap_robot_stats() -> void:

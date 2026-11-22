@@ -153,8 +153,9 @@ func _test_aim_and_facing_commands() -> void:
 	var warrior: CombatUnit = f.units[0]
 	f.selection.choose_action(warrior, f.actions, "sweep")
 	var before_face: CombatSelection.Preview = f.selection.build_preview(warrior, f.actions, f.units)
-	_check(not before_face.movement_cells.is_empty() and "휩쓸기" in before_face.target_note,
-		"휩쓸기 방향 선택 전에는 인접 칸과 안내를 보인다")
+	_check(before_face.movement_cells.is_empty() and not before_face.action_range_cells.is_empty()
+		and "휩쓸기" in before_face.target_note,
+		"휩쓸기 방향 선택 전에는 이동 칸을 걷어내고 인접 칸과 안내를 보인다")
 	var face_cell: Vector2i = Vector2i(4, 4)
 	var face_first: CombatSelection.Command = f.selection.choose_facing(warrior, f.actions, face_cell)
 	_check(face_first.is_empty() and f.selection.preview_cell == face_cell, "휩쓸기 첫 좌클릭은 방향 미리보기")
@@ -173,8 +174,9 @@ func _test_aim_and_facing_commands() -> void:
 	var aim_first: CombatSelection.Command = f.selection.choose_aim(archer, f.actions, aim_cell)
 	_check(aim_first.is_empty() and f.selection.preview_cell == aim_cell, "장난스러운 화살 첫 클릭은 칸 미리보기")
 	var aim_preview: CombatSelection.Preview = f.selection.build_preview(archer, f.actions, f.units)
-	_check(aim_preview.movement_cells == [aim_cell] and "장난스러운 화살" in aim_preview.target_note,
-		"장난스러운 화살 스냅샷에 목표 칸과 확률 안내가 담긴다")
+	_check(aim_preview.movement_cells.is_empty() and aim_preview.action_range_cells == [aim_cell]
+		and "장난스러운 화살" in aim_preview.target_note,
+		"장난스러운 화살 스냅샷에 이동 칸 없이 목표 칸과 확률 안내가 담긴다")
 	var aim_second: CombatSelection.Command = f.selection.choose_aim(archer, f.actions, aim_cell)
 	_check(aim_second.kind == CombatSelection.Command.Kind.AIM and aim_second.action == "trick_arrow"
 		and aim_second.cell == aim_cell, "장난스러운 화살 재클릭은 AIM 명령 반환")
@@ -260,6 +262,21 @@ func _test_inspection_and_reset_invariants() -> void:
 	f.selection.choose_action(warrior, f.actions, "shove")
 	f.selection.preview_unit(f.units[3])
 	f.selection.reset()
-	_check(f.selection.selected_action == "attack" and f.selection.preview_target == null
+	_check(f.selection.selected_action == "attack" and not f.selection.action_explicit and f.selection.is_default_mode()
+		and f.selection.preview_target == null
 		and f.selection.preview_path.is_empty() and f.selection.inspected_unit == null,
-		"reset은 선택·미리보기·조회 전체를 초기화")
+		"reset은 선택·미리보기·조회 전체를 초기화하고 기본 모드로 복귀")
+	var default_preview: CombatSelection.Preview = f.selection.build_preview(warrior, f.actions, f.units)
+	_check(not default_preview.movement_cells.is_empty() and not default_preview.attack_reach_cells.is_empty()
+		and default_preview.action_range_cells.is_empty(),
+		"기본 모드 스냅샷은 이동 가능 칸과 기본 공격 도달 윤곽을 함께 담는다")
+	enemy.hit_points = enemy.get_max_hit_points()
+	f.selection.choose_action(warrior, f.actions, "attack")
+	_check(f.selection.selected_action == "attack" and f.selection.action_explicit and not f.selection.is_default_mode(),
+		"기본 공격 명시 선택 시 기본 모드에서 벗어난다")
+	var explicit_preview: CombatSelection.Preview = f.selection.build_preview(warrior, f.actions, f.units)
+	_check(explicit_preview.movement_cells.is_empty() and explicit_preview.attack_reach_cells.is_empty()
+		and explicit_preview.action_range_cells == f.actions.action_range_cells(warrior, "attack"),
+		"기본 공격 명시 선택 스냅샷은 이동·도달 윤곽을 숨기고 현재 위치 사거리만 담는다")
+	f.selection.cancel_field_selection()
+	_check(f.selection.is_default_mode(), "빈 바닥 클릭 취소는 명시적 기본 공격을 기본 모드로 되돌린다")

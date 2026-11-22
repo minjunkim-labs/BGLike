@@ -31,6 +31,8 @@ var _enemy_shown: bool = false
 var _enemy_acted: bool = false
 var selection: CombatSelection = CombatSelection.new()
 var movement_cells: Array[Vector2i] = []
+var attack_reach_cells: Array[Vector2i] = []
+var action_range_cells: Array[Vector2i] = []
 var _last_ally: CombatUnit
 var loot: CombatLoot = CombatLoot.new()
 var preparation: CombatPreparation
@@ -906,7 +908,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		_update_turn_ui()
 		return
-	selection.clear_preview()
+	selection.cancel_field_selection()
 	_update_turn_ui()
 
 
@@ -1202,7 +1204,10 @@ func _update_turn_ui() -> void:
 	var can_act: bool = actions.has_available_action(turns.current_unit)
 	hud.refresh(turns, can_act)
 	movement_cells.assign(preview.movement_cells)
-	map.show_movement(preview.movement_cells, preview.attack_cells, preview.path, preview.origin, preview.warning_cells)
+	attack_reach_cells.assign(preview.attack_reach_cells)
+	action_range_cells.assign(preview.action_range_cells)
+	map.show_movement(preview.movement_cells, preview.attack_reach_cells, preview.path, preview.origin,
+		preview.warning_cells, preview.action_range_cells)
 	map.show_grounds(actions.get_grounds())
 	map.show_trees(actions.grid.trees)
 	map.show_floor_loot(actions.floor_loot.drops)
@@ -1223,7 +1228,7 @@ func _update_turn_ui() -> void:
 		map.show_rock_roll(preview.preview_prop.cell, preview.rock_roll)
 	elif preview.inspected_unit != null:
 		hud.show_unit(preview.inspected_unit)
-	hud.refresh_actions(actions, preview.selected_action, _last_ally)
+	hud.refresh_actions(actions, "" if selection.is_default_mode() else preview.selected_action, _last_ally)
 	staging.visible = waiting_for_start
 	if waiting_for_start:
 		hud.get_node("Round").text = tr("전투 준비")

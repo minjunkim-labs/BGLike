@@ -28,8 +28,10 @@ class CoverHover extends RefCounted:
 ## 현재 선택 상태와 전투 상태를 바탕으로 계산한 UI·맵 표시용 스냅샷.
 class Preview extends RefCounted:
 	var selected_action: String = "attack"
+	var action_explicit: bool = false
 	var movement_cells: Array[Vector2i] = []
-	var attack_cells: Array[Vector2i] = []
+	var attack_reach_cells: Array[Vector2i] = []
+	var action_range_cells: Array[Vector2i] = []
 	var path: Array[Vector2i] = []
 	var warning_cells: Array[Vector2i] = []
 	var origin: Vector2i = Vector2i.ZERO
@@ -47,6 +49,9 @@ class Preview extends RefCounted:
 
 
 var _selected_action: String = "attack"
+## 스킬 바에서 동작(기본 공격 포함)을 명시적으로 골랐는지(#761).
+## 거짓이면 기본 조작 상태(이동 가능 파랑 + 기본 공격 도달 빨간 윤곽)를 보인다.
+var _action_explicit: bool = false
 var _preview_target: CombatUnit
 var _preview_prop: CombatGrid.Prop
 var _preview_cell: Vector2i = Vector2i(-1, -1)
@@ -57,6 +62,9 @@ var _hover_cell: Vector2i = Vector2i(-1, -1)
 var selected_action: String:
 	get:
 		return _selected_action
+var action_explicit: bool:
+	get:
+		return _action_explicit
 var preview_target: CombatUnit:
 	get:
 		return _preview_target
@@ -74,8 +82,13 @@ var inspected_unit: CombatUnit:
 		return _inspected_unit
 
 
+func is_default_mode() -> bool:
+	return _selected_action == "move" or (_selected_action == "attack" and not _action_explicit)
+
+
 func reset() -> void:
 	_selected_action = "attack"
+	_action_explicit = false
 	_inspected_unit = null
 	clear_preview()
 
@@ -87,9 +100,16 @@ func clear_preview() -> void:
 	_preview_path.clear()
 
 
+func cancel_field_selection() -> void:
+	if _selected_action == "attack":
+		_action_explicit = false
+	clear_preview()
+
+
 func inspect(unit: CombatUnit) -> void:
 	if CombatActionRules.target_mode(_selected_action) == CombatActionRules.TargetMode.MOVE:
 		_selected_action = "attack"
+		_action_explicit = false
 	clear_preview()
 	_inspected_unit = unit
 
@@ -108,12 +128,14 @@ func set_hover_cell(cell: Vector2i, actions: CombatActions) -> bool:
 func offer_moving_shot(actor: CombatUnit, current_unit: CombatUnit) -> void:
 	if actor != null and actor.moving_shot_ready and actor == current_unit:
 		_selected_action = "moving_shot"
+		_action_explicit = true
 
 
 func begin_field_input(left_click: bool) -> void:
 	_inspected_unit = null
 	if left_click and CombatActionRules.target_mode(_selected_action) == CombatActionRules.TargetMode.MOVE:
 		_selected_action = "attack"
+		_action_explicit = false
 		clear_preview()
 
 
@@ -124,6 +146,7 @@ func preview_unit(target: CombatUnit) -> void:
 
 func finish_execution() -> void:
 	_selected_action = "attack"
+	_action_explicit = false
 
 
 ## 동작 바에서 동작을 고른다. 같은 자기 대상 동작을 다시 누르면 실행 명령을 돌려준다.
@@ -138,6 +161,7 @@ func choose_action(actor: CombatUnit, actions: CombatActions, action: String) ->
 		command.action = action
 		return command
 	_selected_action = action
+	_action_explicit = true
 	return Command.new()
 
 
@@ -157,6 +181,7 @@ func choose_move(actor: CombatUnit, actions: CombatActions, cell: Vector2i) -> C
 			path = actions.grid.path_to(actor, cell)
 	if _selected_action not in ["jump", "moving_shot"]:
 		_selected_action = "move"
+		_action_explicit = false
 	var confirmed: bool = not path.is_empty() and not _preview_path.is_empty() and cell == _preview_cell
 	clear_preview()
 	if confirmed:
@@ -276,6 +301,7 @@ func build_preview(actor: CombatUnit, actions: CombatActions, units: Array[Comba
 	_discard_stale_references(actions)
 	var snapshot: Preview = Preview.new()
 	snapshot.selected_action = _selected_action
+	snapshot.action_explicit = _action_explicit
 	var mode: CombatActionRules.TargetMode = CombatActionRules.target_mode(_selected_action)
 	var facing_preview: bool = (mode == CombatActionRules.TargetMode.FACING
 		and actor != null and actor.is_ally and _preview_cell != Vector2i(-1, -1))
@@ -288,7 +314,7 @@ func build_preview(actor: CombatUnit, actions: CombatActions, units: Array[Comba
 				or (not _preview_path.is_empty() and actions.can_target(actor, unit, "attack", _preview_cell))
 				or unit in sweep_targets):
 			snapshot.previewed_units.append(unit)
-	_fill_highlights(snapshot, actor, actions, units, mode, facing_preview)
+	_fill_highlights(snapshot, actor, actions, mode, facing_preview, direct_fire_open)
 	_fill_cover_blocks(snapshot, actor, actions, units, direct_fire_open)
 	_fill_notes(snapshot, actor, actions, units, mode, facing_preview, sweep_targets)
 	return snapshot
@@ -313,31 +339,8 @@ func _can_face(actor: CombatUnit, actions: CombatActions, action: String, facing
 	return actions.can_sweep(actor, facing) if action == "sweep" else actions.can_whistle(actor, facing)
 
 
-func _fill_highlights(snapshot: Preview, actor: CombatUnit, actions: CombatActions, units: Array[CombatUnit],
-		mode: CombatActionRules.TargetMode, facing_preview: bool) -> void:
-	if actor != null and actor.is_ally:
-		if _selected_action == "move":
-			snapshot.movement_cells.assign(actions.reachable_cells(actor).keys())
-		elif _selected_action == "jump":
-			snapshot.movement_cells.assign(actions.jump_cells(actor).keys())
-		elif _selected_action == "moving_shot":
-			snapshot.movement_cells.assign(actions.moving_shot_cells(actor))
-		elif facing_preview:
-			snapshot.movement_cells.assign(actions.grid.sweep_cells(actor.cell, _preview_cell)
-				if _selected_action == "sweep" else actions.grid.band_cells(actor.cell, _preview_cell))
-		elif mode == CombatActionRules.TargetMode.AIM_CELL:
-			var aimed: bool = actions.can_aim(actor, _selected_action, _preview_cell)
-			if aimed and _selected_action == "trick_arrow":
-				snapshot.movement_cells.assign([_preview_cell])
-			elif aimed:
-				snapshot.movement_cells.assign(actions.aim_area(actor, _selected_action, _preview_cell))
-			else:
-				snapshot.movement_cells.assign(actions.aim_cells(actor, _selected_action))
-		elif mode == CombatActionRules.TargetMode.FACING:
-			# 방향을 고르기 전에는 고를 수 있는 인접 칸을 보인다.
-			for cell: Vector2i in CombatGrid.neighbors(actor.cell):
-				if _can_face(actor, actions, _selected_action, cell):
-					snapshot.movement_cells.append(cell)
+func _fill_highlights(snapshot: Preview, actor: CombatUnit, actions: CombatActions,
+		mode: CombatActionRules.TargetMode, facing_preview: bool, combat_active: bool) -> void:
 	snapshot.origin = actor.cell if actor != null else Vector2i.ZERO
 	snapshot.path = _preview_path.duplicate()
 	if actions.pending_kind == "reflex" and actions.pending_reactor != null:
@@ -345,28 +348,42 @@ func _fill_highlights(snapshot: Preview, actor: CombatUnit, actions: CombatActio
 		snapshot.movement_cells.assign(actions.pending_cells)
 		snapshot.origin = actions.pending_reactor.cell
 		snapshot.path = []
-	else:
-		for cell: Vector2i in snapshot.movement_cells:
-			if mode == CombatActionRules.TargetMode.FACING or _has_attack_target_from(actor, actions, units, cell):
-				snapshot.attack_cells.append(cell)
-		if actor != null and actor.is_ally and not snapshot.path.is_empty():
-			if _selected_action == "move":
-				if not actions.move_reactors(actor, snapshot.path).is_empty():
-					snapshot.warning_cells = actions.move_opportunity_cells(actor, snapshot.path)
-					if snapshot.path[-1] not in snapshot.warning_cells:
-						snapshot.warning_cells.append(snapshot.path[-1])
-			elif _selected_action == "jump":
-				if not actions.jump_reactors(actor, _preview_cell).is_empty():
-					snapshot.warning_cells.append(_preview_cell)
-
-
-func _has_attack_target_from(actor: CombatUnit, actions: CombatActions, units: Array[CombatUnit],
-		cell: Vector2i) -> bool:
-	for unit: CombatUnit in units:
-		# 이동 후 공격 가능 칸(초록)은 이번 범위에서 엄폐를 반영하지 않는다(#358).
-		if actions.can_target(actor, unit, "attack", cell, false):
-			return true
-	return false
+		return
+	if combat_active and not actions.is_over() and actor != null and actor.is_ally:
+		if is_default_mode():
+			snapshot.movement_cells.assign(actions.reachable_cells(actor).keys())
+			snapshot.attack_reach_cells = actions.attack_reach_cells(actor)
+		elif _selected_action == "jump":
+			snapshot.movement_cells.assign(actions.jump_cells(actor).keys())
+		elif _selected_action == "moving_shot":
+			snapshot.movement_cells.assign(actions.moving_shot_cells(actor))
+		elif facing_preview:
+			snapshot.action_range_cells.assign(actions.grid.sweep_cells(actor.cell, _preview_cell)
+				if _selected_action == "sweep" else actions.grid.band_cells(actor.cell, _preview_cell))
+		elif mode == CombatActionRules.TargetMode.AIM_CELL:
+			var aimed: bool = actions.can_aim(actor, _selected_action, _preview_cell)
+			if aimed and _selected_action == "trick_arrow":
+				snapshot.action_range_cells.assign([_preview_cell])
+			elif aimed:
+				snapshot.action_range_cells.assign(actions.aim_area(actor, _selected_action, _preview_cell))
+			else:
+				snapshot.action_range_cells.assign(actions.aim_cells(actor, _selected_action))
+		elif mode == CombatActionRules.TargetMode.FACING:
+			# 방향을 고르기 전에는 고를 수 있는 인접 칸을 보인다.
+			for cell: Vector2i in CombatGrid.neighbors(actor.cell):
+				if _can_face(actor, actions, _selected_action, cell):
+					snapshot.action_range_cells.append(cell)
+		else:
+			snapshot.action_range_cells = actions.action_range_cells(actor, _selected_action)
+	if actor != null and actor.is_ally and not snapshot.path.is_empty():
+		if _selected_action == "move":
+			if not actions.move_reactors(actor, snapshot.path).is_empty():
+				snapshot.warning_cells = actions.move_opportunity_cells(actor, snapshot.path)
+				if snapshot.path[-1] not in snapshot.warning_cells:
+					snapshot.warning_cells.append(snapshot.path[-1])
+		elif _selected_action == "jump":
+			if not actions.jump_reactors(actor, _preview_cell).is_empty():
+				snapshot.warning_cells.append(_preview_cell)
 
 
 func _fill_cover_blocks(snapshot: Preview, actor: CombatUnit, actions: CombatActions, units: Array[CombatUnit],

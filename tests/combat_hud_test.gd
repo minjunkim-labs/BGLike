@@ -74,6 +74,7 @@ func _run() -> void:
 	_test_high_ground_guidance()
 	_test_water_guidance()
 	await _test_mouse_controls_and_inspection()
+	await _test_ally_range_and_action_display()
 	await _test_threat_range_input()
 	await _test_group_keyboard()
 	await _test_skill_bar_keys()
@@ -204,18 +205,18 @@ func _floor_loot_markers(map: CombatMap) -> Array[Node]:
 
 func _test_movement_overlay() -> void:
 	var grid: CombatGrid = CombatGrid.new()
-	grid.map_size = Vector2i(3, 2)
+	grid.map_size = Vector2i(4, 2)
 	grid.heights[Vector2i(1, 0)] = 1
 	var map: CombatMap = CombatMap.new()
 	root.add_child(map)
 	map.build_grid(grid, load("res://scenes/combat/floor_tiles.tres") as TileSet)
-	map.show_movement([Vector2i.ZERO, Vector2i(1, 0)], [Vector2i(1, 0)], [Vector2i(1, 0)], Vector2i.ZERO)
-	_check(map._overlays.size() == 4, "이동 면2개·미리보기 선·도착점을 유지")
+	map.show_movement([Vector2i.ZERO, Vector2i(1, 0)], [Vector2i(2, 0)], [Vector2i(1, 0)], Vector2i.ZERO)
+	_check(map._overlays.size() == 5, "이동 파랑 면2개·기본 공격 도달 빨간 윤곽1개·미리보기 선·도착점을 표시")
 	for index: int in range(2):
 		var overlay: Polygon2D = map._overlays[index] as Polygon2D
 		_check(overlay.color.a > 0.0 and overlay.color.a <= 0.16, "이동 면 채움이 바닥 재질을 가리지 않음")
-		_check(overlay.color.b > overlay.color.g if index == 0 else overlay.color.g > overlay.color.b,
-			"기존 파랑 이동·초록 이동 후 공격의 의미 유지")
+		_check(overlay.color.b > overlay.color.g and overlay.color.b > overlay.color.r,
+			"이동 가능 칸은 파랑 면 채움을 유지")
 		_check(overlay.get_child_count() == 5 and overlay.get_children().all(func(node: Node) -> bool: return node is Line2D),
 			"약한 면에 칸 윤곽과 네 꼭짓점 표시를 함께 표시")
 		if overlay.get_child_count() == 5:
@@ -245,6 +246,20 @@ func _test_movement_overlay() -> void:
 			center += point / overlay.polygon.size()
 		_check((overlay.position + center).is_equal_approx(map.map_to_surface(Vector2i(index, 0))),
 			"높이 있는 바닥 위에도 같은 좌표로 표시")
+	var reach_overlay: Polygon2D = map._overlays[2] as Polygon2D
+	var reach_edge: Line2D = reach_overlay.get_child(0) as Line2D if reach_overlay.get_child_count() == 1 else null
+	_check(is_zero_approx(reach_overlay.color.a) and reach_edge != null and reach_edge.closed
+		and is_equal_approx(reach_edge.width, 1.5) and reach_edge.default_color.r > reach_edge.default_color.b,
+		"이동 가능 영역 너머 기본 공격 도달 칸은 면 채움 없는 빨간 윤곽으로 표시")
+	# 이동 가능 칸이 없어도 기본 공격 도달 윤곽만 표시할 수 있다.
+	map.show_movement([], [Vector2i(2, 0)], [], Vector2i.ZERO)
+	_check(map._overlays.size() == 1, "이동 가능 칸 없이 기본 공격 도달 윤곽만 표시")
+	# 선택한 동작의 사거리 칸 표시
+	map.show_movement([], [], [], Vector2i.ZERO, [], [Vector2i(1, 0), Vector2i(2, 0)])
+	_check(map._overlays.size() == 2, "선택한 동작 사거리 칸 수만큼 오버레이 표시")
+	var action_overlay: Polygon2D = map._overlays[0] as Polygon2D
+	_check(action_overlay.color.a > 0.0 and action_overlay.color.r > action_overlay.color.b and action_overlay.get_child_count() == 5,
+		"선택한 동작 사거리 칸은 붉은 계열 면·윤곽·꼭짓점 꺾쇠로 표시")
 	map.show_movement([], [], [], Vector2i.ZERO)
 	_check(map._overlays.is_empty(), "이동 표시를 닫으면 면·윤곽·경로를 함께 제거")
 	map.free()
@@ -1910,7 +1925,9 @@ func _test_guidance() -> void:
 		and units[0].action_left == 1 and not (buttons["attack"] as Button).disabled
 		and (battle.get("selection") as CombatSelection).selected_action == "attack",
 		"실제 이동 후 행동과 공격 버튼 유지")
-	_check((battle.get("movement_cells") as Array).is_empty(), "이동 선택을 해제하면 범위 표시 제거")
+	_check(not (battle.get("movement_cells") as Array).is_empty()
+		and not (battle.get("attack_reach_cells") as Array).is_empty(),
+		"이동 후 남은 이동력이 있으면 기본 상태에서 파랑 이동 칸과 빨간 기본 공격 도달 윤곽 유지")
 	var point: Vector2 = units[2].get_global_transform_with_canvas() * Vector2(0, units[2].floor_offset_y)
 	await _click(point)
 	_check((battle.get("selection") as CombatSelection).preview_target == units[2] and units[0].action_left == 1,
@@ -2322,6 +2339,79 @@ func _test_mouse_controls_and_inspection() -> void:
 	_check(hud.unit_label.text == "아군 궁수" and ((battle.get("selection") as CombatSelection).preview_path as Array).is_empty(),
 		"반응 대기 중 초상·우클릭은 기존 잠금을 유지")
 	actions.busy = false
+	_reset_units()
+
+
+## #761: 아군 기본 선택(파랑 이동 + 빨간 기본 공격 도달 윤곽)과 명시적 동작 선택(해당 동작 사거리만 표시).
+func _test_ally_range_and_action_display() -> void:
+	_reset_units()
+	actions.grid.props.clear()
+	var warrior: CombatUnit = units[0]
+	var archer: CombatUnit = units[1]
+	var enemy: CombatUnit = units[2]
+	var selection: CombatSelection = battle.get("selection") as CombatSelection
+	var map: CombatMap = battle.map
+	warrior.cell = Vector2i(3, 4)
+	warrior.movement_left = 2
+	warrior.action_left = 1
+	warrior.bonus_action_left = 1
+	archer.cell = Vector2i(1, 8)
+	enemy.cell = Vector2i(4, 4)
+	units[3].cell = Vector2i(8, 8)
+	selection.reset()
+	battle.call("_update_turn_ui")
+	var move_cells: Array[Vector2i] = battle.get("movement_cells")
+	var reach_cells: Array[Vector2i] = battle.get("attack_reach_cells")
+	var action_cells: Array[Vector2i] = battle.get("action_range_cells")
+	_check(selection.is_default_mode() and not move_cells.is_empty()
+		and not reach_cells.is_empty() and action_cells.is_empty(),
+		"#761 기본 선택 상태에서 파랑 이동 가능 칸과 빨간 기본 공격 도달 윤곽을 함께 표시")
+	_check(map._overlays.size() == move_cells.size() + reach_cells.size(),
+		"#761 기본 선택 오버레이 수는 이동 가능 칸 + 기본 공격 도달 윤곽 칸")
+	# 행동이 없거나 기절이면 빨간 윤곽을 숨기고 파랑 이동 가능 칸만 표시한다.
+	warrior.action_left = 0
+	battle.call("_update_turn_ui")
+	_check(not (battle.get("movement_cells") as Array).is_empty()
+		and (battle.get("attack_reach_cells") as Array).is_empty(),
+		"#761 행동이 없으면 빨간 기본 공격 도달 윤곽을 표시하지 않고 파랑 이동 가능 칸만 표시")
+	warrior.action_left = 1
+	warrior.is_stunned = true
+	battle.call("_update_turn_ui")
+	_check((battle.get("attack_reach_cells") as Array).is_empty(),
+		"#761 기절 상태면 빨간 기본 공격 도달 윤곽을 표시하지 않음")
+	warrior.is_stunned = false
+	battle.call("_update_turn_ui")
+	# 기본 공격을 명시적으로 선택하면 이동 파랑·도달 빨간 윤곽을 걷어내고 현재 위치 기본 공격 사거리만 표시한다.
+	battle.call("_on_action_selected", "attack")
+	_check(not selection.is_default_mode()
+		and (battle.get("movement_cells") as Array).is_empty()
+		and (battle.get("attack_reach_cells") as Array).is_empty()
+		and (battle.get("action_range_cells") as Array) == actions.action_range_cells(warrior, "attack"),
+		"#761 기본 공격 명시 선택 시 이동 범위를 걷어내고 현재 위치 기본 공격 사거리만 표시")
+	# 스킬(십자 베기)을 선택하면 해당 스킬 사거리만 표시한다.
+	battle.call("_on_action_selected", "cross_slash")
+	_check((battle.get("movement_cells") as Array).is_empty()
+		and (battle.get("attack_reach_cells") as Array).is_empty()
+		and (battle.get("action_range_cells") as Array) == actions.action_range_cells(warrior, "cross_slash"),
+		"#761 십자 베기 선택 시 이동 범위를 걷어내고 해당 스킬 사거리만 표시")
+	# 점프를 선택하면 착지 가능 칸만 표시한다.
+	battle.call("_on_action_selected", "jump")
+	_check((battle.get("movement_cells") as Array) == actions.jump_cells(warrior).keys()
+		and (battle.get("attack_reach_cells") as Array).is_empty()
+		and (battle.get("action_range_cells") as Array).is_empty(),
+		"#761 점프 선택 시 착지 가능 칸만 표시")
+	# 바닥 우클릭으로 이동 경로를 미리보면 다시 기본 상태(파랑 이동 + 빨간 기본 공격 도달 윤곽)로 돌아온다.
+	battle.call("_on_action_selected", "attack")
+	var step_cell: Vector2i = Vector2i(3, 5)
+	var step_point: Vector2 = map.get_global_transform_with_canvas() * map.map_to_surface(step_cell)
+	await _click(step_point, MOUSE_BUTTON_RIGHT)
+	_check(selection.is_default_mode() and selection.preview_cell == step_cell
+		and not (battle.get("movement_cells") as Array).is_empty()
+		and not (battle.get("attack_reach_cells") as Array).is_empty()
+		and (battle.get("action_range_cells") as Array).is_empty(),
+		"#761 바닥 우클릭 이동 미리보기로 돌아오면 다시 파랑 이동 + 빨간 기본 공격 도달 윤곽 표시")
+	selection.reset()
+	battle.call("_update_turn_ui")
 	_reset_units()
 
 
