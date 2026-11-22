@@ -35,6 +35,8 @@ var _enemy_shown: bool = false
 var _enemy_acted: bool = false
 var selection: CombatSelection = CombatSelection.new()
 var movement_cells: Array[Vector2i] = []
+var attack_reach_cells: Array[Vector2i] = []
+var action_range_cells: Array[Vector2i] = []
 var _last_ally: CombatUnit
 var loot: CombatLoot = CombatLoot.new()
 var preparation: CombatPreparation
@@ -967,6 +969,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			await _execute_target(unit)
 		_update_turn_ui()
 		return
+	if selection.selected_action == "attack":
+		selection.action_explicit = false
 	selection.clear_preview()
 	_update_turn_ui()
 
@@ -1020,6 +1024,7 @@ func _select_move_cell(cell: Vector2i) -> void:
 func _offer_moving_shot(actor: CombatUnit) -> void:
 	if actor != null and actor.moving_shot_ready and actor == turns.current_unit:
 		selection.selected_action = "moving_shot"
+		selection.action_explicit = true
 
 
 func preview_enemy(target: CombatUnit) -> bool:
@@ -1254,31 +1259,8 @@ func _update_turn_ui() -> void:
 	var can_act: bool = actions.has_available_action(turns.current_unit)
 	hud.refresh(turns, can_act)
 	movement_cells.clear()
-	if turns.current_unit != null and turns.current_unit.is_ally:
-		if selection.selected_action == "move":
-			movement_cells.assign(actions.reachable_cells(turns.current_unit).keys())
-		elif selection.selected_action == "jump":
-			movement_cells.assign(actions.jump_cells(turns.current_unit).keys())
-		elif selection.selected_action == "moving_shot":
-			movement_cells.assign(actions.moving_shot_cells(turns.current_unit))
-		elif sweeping:
-			movement_cells.assign(actions.grid.sweep_cells(turns.current_unit.cell, selection.preview_cell)
-				if selection.selected_action == "sweep" else actions.grid.band_cells(turns.current_unit.cell, selection.preview_cell))
-		elif selection.selected_action in AIM_ACTIONS:
-			var aim_action: String = selection.selected_action
-			var aimed: bool = actions.can_aim(turns.current_unit, aim_action, selection.preview_cell)
-			if aimed and aim_action == "trick_arrow":
-				movement_cells.assign([selection.preview_cell])
-			elif aimed:
-				movement_cells.assign(actions.aim_area(turns.current_unit, aim_action, selection.preview_cell))
-			else:
-				movement_cells.assign(actions.aim_cells(turns.current_unit, aim_action))
-		elif selection.selected_action in FACING_ACTIONS:
-			# 방향을 고르기 전에는 고를 수 있는 인접 칸을 보인다.
-			for cell: Vector2i in CombatGrid.neighbors(turns.current_unit.cell):
-				if _can_face(turns.current_unit, selection.selected_action, cell):
-					movement_cells.append(cell)
-	var attack_cells: Array[Vector2i] = []
+	attack_reach_cells.clear()
+	action_range_cells.clear()
 	var origin: Vector2i = turns.current_unit.cell if turns.current_unit != null else Vector2i.ZERO
 	var path: Array[Vector2i] = selection.preview_path
 	if actions.pending_kind == "reflex" and actions.pending_reactor != null:
@@ -1286,11 +1268,34 @@ func _update_turn_ui() -> void:
 		movement_cells.assign(actions.pending_cells)
 		origin = actions.pending_reactor.cell
 		path = []
-	else:
-		for cell: Vector2i in movement_cells:
-			if selection.selected_action in FACING_ACTIONS or not _attack_targets_from(cell).is_empty():
-				attack_cells.append(cell)
-	map.show_movement(movement_cells, attack_cells, path, origin)
+	elif not waiting_for_start and not actions.is_over() and turns.current_unit != null and turns.current_unit.is_ally:
+		if selection.is_default_mode():
+			movement_cells.assign(actions.reachable_cells(turns.current_unit).keys())
+			attack_reach_cells = actions.attack_reach_cells(turns.current_unit)
+		elif selection.selected_action == "jump":
+			movement_cells.assign(actions.jump_cells(turns.current_unit).keys())
+		elif selection.selected_action == "moving_shot":
+			movement_cells.assign(actions.moving_shot_cells(turns.current_unit))
+		elif sweeping:
+			action_range_cells.assign(actions.grid.sweep_cells(turns.current_unit.cell, selection.preview_cell)
+				if selection.selected_action == "sweep" else actions.grid.band_cells(turns.current_unit.cell, selection.preview_cell))
+		elif selection.selected_action in AIM_ACTIONS:
+			var aim_action: String = selection.selected_action
+			var aimed: bool = actions.can_aim(turns.current_unit, aim_action, selection.preview_cell)
+			if aimed and aim_action == "trick_arrow":
+				action_range_cells.assign([selection.preview_cell])
+			elif aimed:
+				action_range_cells.assign(actions.aim_area(turns.current_unit, aim_action, selection.preview_cell))
+			else:
+				action_range_cells.assign(actions.aim_cells(turns.current_unit, aim_action))
+		elif selection.selected_action in FACING_ACTIONS:
+			# 방향을 고르기 전에는 고를 수 있는 인접 칸을 보인다.
+			for cell: Vector2i in CombatGrid.neighbors(turns.current_unit.cell):
+				if _can_face(turns.current_unit, selection.selected_action, cell):
+					action_range_cells.append(cell)
+		else:
+			action_range_cells = actions.action_range_cells(turns.current_unit, selection.selected_action)
+	map.show_movement(movement_cells, attack_reach_cells, path, origin, action_range_cells)
 	map.show_grounds(actions.get_grounds())
 	map.show_trees(actions.grid.trees)
 	map.show_floor_loot(actions.floor_loot.drops)
@@ -1387,7 +1392,7 @@ func _update_turn_ui() -> void:
 	elif selection.inspected_unit != null:
 		hud.show_unit(selection.inspected_unit)
 	var showing_move: bool = selection.selected_action == "move" or not selection.preview_path.is_empty()
-	hud.refresh_actions(actions, selection.selected_action, _last_ally)
+	hud.refresh_actions(actions, "" if selection.is_default_mode() else selection.selected_action, _last_ally)
 	staging.visible = waiting_for_start
 	if waiting_for_start:
 		hud.get_node("Round").text = tr("전투 준비")
@@ -1498,12 +1503,3 @@ func _arrow_note(actor: CombatUnit, action: String, cell: Vector2i) -> String:
 	if actions.aim_area(actor, action, cell).any(func(area_cell: Vector2i) -> bool: return actions.grid.is_tree(area_cell)):
 		firework += "\n" + tr("나무가 타서 길이 열림")
 	return firework
-
-
-func _attack_targets_from(cell: Vector2i) -> Array[CombatUnit]:
-	var targets: Array[CombatUnit] = []
-	for unit: CombatUnit in units:
-		# 이동 후 공격 가능 칸(초록)은 이번 범위에서 엄폐를 반영하지 않는다(#358).
-		if actions.can_target(turns.current_unit, unit, "attack", cell, false):
-			targets.append(unit)
-	return targets

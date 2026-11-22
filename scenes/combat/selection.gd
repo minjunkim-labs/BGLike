@@ -3,6 +3,9 @@ extends RefCounted
 ## 전투 조작의 선택·취소·확정. 좌표 입력과 실행·표시는 battle이 맡는다.
 
 var selected_action: String = "attack"
+## 스킬 바에서 동작(기본 공격 포함)을 명시적으로 골랐는지(#761).
+## 거짓이면 기본 조작 상태(이동 가능 파랑 + 기본 공격 도달 빨간 윤곽)를 보인다.
+var action_explicit: bool = false
 var preview_target: CombatUnit
 var preview_prop: CombatGrid.Prop
 var preview_cell: Vector2i = Vector2i(-1, -1)
@@ -10,8 +13,13 @@ var preview_path: Array[Vector2i] = []
 var inspected_unit: CombatUnit
 
 
+func is_default_mode() -> bool:
+	return selected_action == "move" or (selected_action == "attack" and not action_explicit)
+
+
 func reset() -> void:
 	selected_action = "attack"
+	action_explicit = false
 	inspected_unit = null
 	clear_preview()
 
@@ -26,6 +34,7 @@ func clear_preview() -> void:
 func inspect(unit: CombatUnit) -> void:
 	if selected_action in ["move", "jump", "moving_shot"]:
 		selected_action = "attack"
+		action_explicit = false
 	clear_preview()
 	inspected_unit = unit
 
@@ -37,6 +46,7 @@ func select_action(action: String) -> bool:
 	if action == selected_action and action in CombatActionRules.SELF_TARGET:
 		return true
 	selected_action = action
+	action_explicit = true
 	return false
 
 
@@ -44,6 +54,7 @@ func begin_field_input(left_click: bool) -> void:
 	inspected_unit = null
 	if left_click and selected_action in ["move", "jump", "moving_shot"]:
 		selected_action = "attack"
+		action_explicit = false
 		clear_preview()
 
 
@@ -51,6 +62,7 @@ func begin_field_input(left_click: bool) -> void:
 func select_move(cell: Vector2i, path: Array[Vector2i]) -> bool:
 	if selected_action not in ["jump", "moving_shot"]:
 		selected_action = "move"
+		action_explicit = false
 	var confirmed: bool = not path.is_empty() and cell == preview_cell
 	clear_preview()
 	if not confirmed and not path.is_empty():
@@ -96,6 +108,7 @@ func begin_execution() -> String:
 
 func finish_execution() -> void:
 	selected_action = "attack"
+	action_explicit = false
 
 
 func discard_incapacitated_inspection() -> void:
