@@ -67,7 +67,7 @@ var preview_cell: Vector2i:
 		return _preview_cell
 var preview_path: Array[Vector2i]:
 	get:
-		return _preview_path
+		return _preview_path.duplicate()
 var inspected_unit: CombatUnit:
 	get:
 		return _inspected_unit
@@ -156,7 +156,7 @@ func choose_move(actor: CombatUnit, actions: CombatActions, cell: Vector2i) -> C
 			path = actions.grid.path_to(actor, cell)
 	if _selected_action not in ["jump", "moving_shot"]:
 		_selected_action = "move"
-	var confirmed: bool = not path.is_empty() and cell == _preview_cell
+	var confirmed: bool = not path.is_empty() and not _preview_path.is_empty() and cell == _preview_cell
 	clear_preview()
 	if confirmed:
 		var command: Command = Command.new()
@@ -289,7 +289,7 @@ func build_preview(actor: CombatUnit, actions: CombatActions, units: Array[Comba
 			snapshot.previewed_units.append(unit)
 	_fill_highlights(snapshot, actor, actions, units, mode, facing_preview)
 	_fill_cover_blocks(snapshot, actor, actions, units, direct_fire_open)
-	_fill_notes(snapshot, actor, actions, units, facing_preview, sweep_targets)
+	_fill_notes(snapshot, actor, actions, units, mode, facing_preview, sweep_targets)
 	return snapshot
 
 
@@ -376,7 +376,7 @@ func _fill_cover_blocks(snapshot: Preview, actor: CombatUnit, actions: CombatAct
 
 
 func _fill_notes(snapshot: Preview, actor: CombatUnit, actions: CombatActions, units: Array[CombatUnit],
-		facing_preview: bool, sweep_targets: Array[CombatUnit]) -> void:
+		mode: CombatActionRules.TargetMode, facing_preview: bool, sweep_targets: Array[CombatUnit]) -> void:
 	if _preview_target != null:
 		snapshot.preview_target = _preview_target
 		# 고른 동작의 명중 능력치·근접 여부를 따른다(활 후려치기는 힘 d6, 원거리 불리 없음).
@@ -421,7 +421,8 @@ func _fill_notes(snapshot: Preview, actor: CombatUnit, actions: CombatActions, u
 	var hovered: Dictionary = actions.floor_loot.item_at(_hover_cell)
 	if (not hovered.is_empty() and _preview_target == null and _preview_prop == null
 			and _preview_path.is_empty()
-			and _selected_action not in ["jump", "sweep", "whistle", "oil_throw", "oil_bottle", "moving_shot", "trick_arrow", "firework_arrow"]):
+			and mode not in [CombatActionRules.TargetMode.AIM_CELL, CombatActionRules.TargetMode.FACING]
+			and _selected_action not in ["jump", "moving_shot"]):
 		snapshot.show_move_mode = false
 		snapshot.target_note = tr("바닥 아이템 · %s") % CombatLoot.describe(hovered)
 

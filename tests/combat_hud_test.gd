@@ -180,7 +180,9 @@ func _test_floor_loot_ui() -> void:
 		"점프 미리보기는 착지 칸의 줍기만 표시: " + hud.preview_label.text)
 	# 아이템이 없는 칸의 경로에는 표시하지 않는다.
 	selection.reset()
-	selection.choose_move(actor, actions, Vector2i(4, 8))
+	actor.cell = Vector2i(0, 9)
+	selection.choose_move(actor, actions, Vector2i(1, 9))
+	_check(not selection.preview_path.is_empty(), "아이템 없는 경로 미리보기가 생성된다")
 	battle.call("_update_turn_ui")
 	_check("줍기" not in hud.preview_label.text, "아이템이 없는 경로는 줍기 표시가 없다")
 	actor.cell = saved_cell

@@ -132,6 +132,11 @@ func _test_target_unit_and_shove_preview() -> void:
 	var preview: CombatSelection.Preview = f.selection.build_preview(warrior, f.actions, f.units)
 	_check(preview.preview_target == enemy and preview.attack_preview != null and enemy in preview.previewed_units,
 		"대상 미리보기 스냅샷에 명중 예측과 강조 대상이 담긴다")
+	warrior.action_left = 0
+	var blocked_confirm: CombatSelection.Command = f.selection.choose_unit(warrior, f.actions, enemy)
+	_check(blocked_confirm.is_empty() and f.selection.preview_target == enemy,
+		"행동이 없으면 같은 적을 다시 클릭해도 확정하지 않는다")
+	warrior.action_left = 1
 	var second: CombatSelection.Command = f.selection.choose_unit(warrior, f.actions, enemy)
 	_check(second.kind == CombatSelection.Command.Kind.TARGET and second.action == "attack" and second.target == enemy,
 		"적 재좌클릭은 TARGET 명령 반환")
@@ -173,6 +178,16 @@ func _test_aim_and_facing_commands() -> void:
 	var aim_second: CombatSelection.Command = f.selection.choose_aim(archer, f.actions, aim_cell)
 	_check(aim_second.kind == CombatSelection.Command.Kind.AIM and aim_second.action == "trick_arrow"
 		and aim_second.cell == aim_cell, "장난스러운 화살 재클릭은 AIM 명령 반환")
+	f.selection.choose_action(archer, f.actions, "firework_arrow")
+	var move_after_aim: Vector2i = Vector2i(4, 6)
+	f.selection.choose_aim(archer, f.actions, move_after_aim)
+	var first_right_click: CombatSelection.Command = f.selection.choose_move(archer, f.actions, move_after_aim)
+	_check(first_right_click.is_empty() and f.selection.selected_action == "move"
+		and not f.selection.preview_path.is_empty(),
+		"칸 조준 미리보기 뒤 같은 칸 첫 우클릭은 즉시 이동하지 않고 이동 경로를 미리 본다")
+	var leaked_path: Array[Vector2i] = f.selection.preview_path
+	leaked_path.clear()
+	_check(not f.selection.preview_path.is_empty(), "preview_path getter는 내부 배열을 노출하지 않는다")
 
 
 func _test_cover_blocking_and_hover() -> void:
