@@ -330,7 +330,8 @@ func _execute_target(actor: CombatUnit, target: CombatUnit) -> void:
 
 ## 무빙샷을 쓸 수 있게 되면 선택을 도약으로 바꿔 도착 칸을 보인다(#528).
 func _offer_moving_shot(actor: CombatUnit) -> void:
-	if actor != null and actor.moving_shot_ready:
+	if (actor != null and actor.moving_shot_ready
+			and (_actions.turns == null or actor == _actions.turns.current_unit)):
 		selected_action = "moving_shot"
 
 

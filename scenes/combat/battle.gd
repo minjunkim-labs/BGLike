@@ -816,9 +816,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	var facing: Vector2i = (_facing_at(actor, cell, candidates, prop, world_position)
 		if CombatActionRules.is_facing_action(selection.selected_action) else Vector2i(-1, -1))
 	var prop_in_front: bool = prop != null and (target == null or map.map_to_local(prop.cell).y >= target.position.y)
-	var handled: bool = await selection.left_click_field(actor, cell, target, prop, facing, prop_in_front)
-	if handled:
+	if (CombatActionRules.is_aim_action(selection.selected_action)
+			or CombatActionRules.is_facing_action(selection.selected_action)
+			or target != null or prop != null):
 		get_viewport().set_input_as_handled()
+	await selection.left_click_field(actor, cell, target, prop, facing, prop_in_front)
 	_update_turn_ui()
 
 

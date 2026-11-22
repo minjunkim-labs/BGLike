@@ -141,6 +141,11 @@ func _test_move_jump_and_moving_shot() -> void:
 	await selection.right_click_cell(archer, leap_cell)
 	await selection.right_click_cell(archer, leap_cell)
 	_check(archer.cell == leap_cell and selection.selected_action == "attack", "무빙샷 도약 2회 우클릭 확정")
+	# 현재 턴이 다른 유닛으로 바뀐 뒤에는 무빙샷이 준비돼 있어도 선택을 덮어쓰지 않는다.
+	archer.moving_shot_ready = true
+	f.turns.end_turn()
+	selection.call("_offer_moving_shot", archer)
+	_check(selection.selected_action == "attack", "현재 턴 유닛이 아니면 무빙샷 자동 전환 안 함")
 
 
 func _test_unit_and_shove_targeting() -> void:
