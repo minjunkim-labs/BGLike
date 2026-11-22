@@ -31,6 +31,7 @@ class Preview extends RefCounted:
 	var movement_cells: Array[Vector2i] = []
 	var attack_cells: Array[Vector2i] = []
 	var path: Array[Vector2i] = []
+	var warning_cells: Array[Vector2i] = []
 	var origin: Vector2i = Vector2i.ZERO
 	var previewed_units: Array[CombatUnit] = []
 	var direct_fire: bool = false
@@ -348,6 +349,15 @@ func _fill_highlights(snapshot: Preview, actor: CombatUnit, actions: CombatActio
 		for cell: Vector2i in snapshot.movement_cells:
 			if mode == CombatActionRules.TargetMode.FACING or _has_attack_target_from(actor, actions, units, cell):
 				snapshot.attack_cells.append(cell)
+		if actor != null and actor.is_ally and not snapshot.path.is_empty():
+			if _selected_action == "move":
+				if not actions.move_reactors(actor, snapshot.path).is_empty():
+					snapshot.warning_cells = actions.move_opportunity_cells(actor, snapshot.path)
+					if snapshot.path[-1] not in snapshot.warning_cells:
+						snapshot.warning_cells.append(snapshot.path[-1])
+			elif _selected_action == "jump":
+				if not actions.jump_reactors(actor, _preview_cell).is_empty():
+					snapshot.warning_cells.append(_preview_cell)
 
 
 func _has_attack_target_from(actor: CombatUnit, actions: CombatActions, units: Array[CombatUnit],
@@ -393,10 +403,14 @@ func _fill_notes(snapshot: Preview, actor: CombatUnit, actions: CombatActions, u
 	elif _inspected_unit != null:
 		snapshot.inspected_unit = _inspected_unit
 	snapshot.show_move_mode = _selected_action == "move" or not _preview_path.is_empty()
-	# 걷기·무빙샷 도약 미리보기는 안내를 숨기지만, 도착 칸이 물이면 서기 전에 물 칸 화상 규칙을, 기름 칸이면 미끌거림 안내를 보인다(#503, #600).
+	# 걷기·무빙샷 도약 미리보기는 안내를 숨기지만, 도착 칸이 물이면 서기 전에 물 칸 화상 규칙을, 기름 칸이면 미끌거림 안내를,
+	# 걷기 경로에 기회 공격이 걸리면 사전 경고를 보인다(#503, #600, #733).
 	if _selected_action != "jump" and not _preview_path.is_empty():
 		var notes: Array[String] = []
-		for note: String in [actions.water_note(_preview_cell),
+		var opportunity: String = (actions.opportunity_note(actions.move_reactors(actor, _preview_path))
+			if _selected_action == "move" else "")
+		for note: String in [opportunity,
+				actions.water_note(_preview_cell),
 				actions.slip_note(actor, _preview_path),
 				actions.pickup_note(actor, _preview_path)]:
 			if not note.is_empty():
@@ -494,10 +508,10 @@ func _jump_note(actor: CombatUnit, actions: CombatActions) -> String:
 	if _preview_path.is_empty():
 		return note
 	var cell: Vector2i = _preview_cell
-	var reactors: int = actions.jump_reactors(actor, cell).size()
+	var jump_oa: Array[CombatUnit] = actions.jump_reactors(actor, cell)
 	var fall: int = actions.fall_damage(actor, cell)
 	note = tr("점프 · 이동 %d · 보조 행동1\n%s · %s") % [actions.jump_cells(actor).get(cell, 0),
-		tr_n("기회 공격 %d명", "기회 공격 %d명", reactors) % reactors if reactors > 0 else tr("기회 공격 없음"),
+		actions.opportunity_note(jump_oa) if not jump_oa.is_empty() else tr("기회 공격 없음"),
 		tr("낙하 피해 %d") % fall if fall > 0 else tr("낙하 없음")]
 	var water: String = actions.water_note(cell)
 	if not water.is_empty():

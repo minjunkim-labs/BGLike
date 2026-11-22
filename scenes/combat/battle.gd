@@ -1202,7 +1202,7 @@ func _update_turn_ui() -> void:
 	var can_act: bool = actions.has_available_action(turns.current_unit)
 	hud.refresh(turns, can_act)
 	movement_cells.assign(preview.movement_cells)
-	map.show_movement(preview.movement_cells, preview.attack_cells, preview.path, preview.origin)
+	map.show_movement(preview.movement_cells, preview.attack_cells, preview.path, preview.origin, preview.warning_cells)
 	map.show_grounds(actions.get_grounds())
 	map.show_trees(actions.grid.trees)
 	map.show_floor_loot(actions.floor_loot.drops)
