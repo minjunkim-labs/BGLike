@@ -40,6 +40,20 @@ const EDGE_CONTACT_ALPHA: float = 0.55
 ## 이동 범위 칸 윤곽의 폭(#556, 0.5에서 1px 굵게)과 꼭짓점 꺾쇠가 변을 따라 가는 비율.
 const EDGE_WIDTH: float = 1.5
 const CORNER_LENGTH: float = 0.25
+## 그래픽 높이·크기별 타일 윗면 중심 기준 발 오프셋(논리 px, #735).
+## 아래 끝이 점유 마름모 앞쪽 변을 넘지 않게 잡아 뒤 요소가 앞 요소를 덮지 않게 한다.
+const ART_FOOT_OFFSETS: Dictionary[String, float] = {
+	"crate": 4.0,
+	"rock": 4.0,
+	"ruin_wall": 4.0,
+	"tree": 4.0,
+	"cottage": 6.0,
+}
+const DEFAULT_ART_FOOT: float = 4.0
+
+
+static func art_foot_offset(id: String) -> float:
+	return ART_FOOT_OFFSETS.get(id, DEFAULT_ART_FOOT)
 
 
 func build_grid(combat_grid: CombatGrid, floors: TileSet, stage: CombatStage = null) -> void:
@@ -90,7 +104,7 @@ func build_grid(combat_grid: CombatGrid, floors: TileSet, stage: CombatStage = n
 			var id: String = stage.scenery[anchor]
 			var size: Vector2i = CombatStage.SCENERY_SIZE[id]
 			var front: Vector2i = anchor + size - Vector2i.ONE
-			var marker: Node2D = _art_marker(front, id, 8.0 if id == "cottage" else 4.0)
+			var marker: Node2D = _art_marker(front, id)
 			marker.set_meta("cell", front)
 			marker.set_meta("tree", id == "tree")
 			add_child(marker)
@@ -100,13 +114,13 @@ func build_grid(combat_grid: CombatGrid, floors: TileSet, stage: CombatStage = n
 					occupied.append(anchor + Vector2i(x, y))
 	for cell: Vector2i in grid.blocked_cells:
 		if grid.is_floor(cell) and not occupied.has(cell):
-			var marker: Node2D = _art_marker(cell, "ruin_wall", 4.0)
+			var marker: Node2D = _art_marker(cell, "ruin_wall")
 			marker.name = "BlockedCell"
 			marker.set_meta("cell", cell)
 			add_child(marker)
 			_blocked_markers.append(marker)
 
-## 서 있지 않은 나무(탄 나무)의 그림을 지운다. 그 칸의 클릭·가림은 일반 바닥과 같아진다(환경요소 5장).
+## 서 있지 않은 나무(탄 나무)의 그림을 지운다. 그 칸의 가림은 일반 바닥과 같아진다(환경요소 5장).
 func show_trees(standing: Array[Vector2i]) -> void:
 	for marker: Node2D in _blocked_markers.duplicate():
 		if marker.get_meta("tree", false) and not standing.has(marker.get_meta("cell") as Vector2i):
@@ -119,19 +133,16 @@ func map_to_surface(cell: Vector2i) -> Vector2:
 	return map_to_local(cell) - Vector2(0, height * tile_set.tile_size.y / 2.0)
 
 
+## 칸 윗면 마름모와 높이 측면만으로 입력 좌표를 칸으로 바꾼다(#735). 장식 픽셀은 앞 칸 클릭을 가로채지 않는다.
 func surface_to_map(point: Vector2) -> Vector2i:
-	var scenery: Node2D
-	for marker: Node2D in _blocked_markers:
-		if _art_contains(marker, point) and (scenery == null or marker.position.y > scenery.position.y):
-			scenery = marker
 	var cells: Array[Vector2i] = get_used_cells()
 	cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x + a.y > b.x + b.y)
 	for cell: Vector2i in cells:
-		if contains_surface(cell, point) or _contains_sides(cell, point):
-			if scenery != null and scenery.position.y >= map_to_local(cell).y:
-				return scenery.get_meta("cell") as Vector2i
-			return cell if contains_surface(cell, point) else Vector2i(-1, -1)
-	return scenery.get_meta("cell") as Vector2i if scenery != null else Vector2i(-1, -1)
+		if contains_surface(cell, point):
+			return cell
+		if _contains_sides(cell, point):
+			return Vector2i(-1, -1)
+	return Vector2i(-1, -1)
 
 
 func occludes(unit_cell: Vector2i, point: Vector2) -> bool:
@@ -144,7 +155,7 @@ func occludes(unit_cell: Vector2i, point: Vector2) -> bool:
 				return true
 	return false
 
-## 가림 판정·클릭은 원래 픽셀을 쓰고 표시만 옅게 한다(#349).
+## 시각적 가림 윤곽과 반투명화는 원래 스프라이트 픽셀을 쓰고, 클릭 판정은 칸 윗면 마름모를 쓴다(#735).
 func reveal_units(units: Array[CombatUnit]) -> void:
 	for marker: Node2D in _unit_markers:
 		marker.free()
@@ -176,7 +187,8 @@ func reveal_units(units: Array[CombatUnit]) -> void:
 ## 판정 직전의 경로만 표시한다. 호출자가 입력을 잠그고 끝난 뒤 기존 판정을 실행한다.
 func animate_prop(prop: CombatGrid.Prop, roll: CombatActions.RockRoll, can_continue: Callable) -> void:
 	var generation: int = revision
-	var marker: Node2D = _art_marker(prop.cell, prop.kind, 4.0)
+	var foot: float = art_foot_offset(prop.kind)
+	var marker: Node2D = _art_marker(prop.cell, prop.kind)
 	marker.name = "PropAnimation"
 	_animating_prop = prop
 	_animation_marker = marker
@@ -199,7 +211,7 @@ func animate_prop(prop: CombatGrid.Prop, roll: CombatActions.RockRoll, can_conti
 			var destination: Vector2 = map_to_local(step.cell) if step.advance else marker.position
 			var tween: Tween = create_tween().set_parallel(true)
 			tween.tween_property(marker, "position", destination, CombatPresentation.duration(ROCK_MOVE_TIME))
-			tween.tween_property(sprite, "position:y", map_to_surface(step.cell).y - destination.y + 4.0
+			tween.tween_property(sprite, "position:y", map_to_surface(step.cell).y - destination.y + foot
 				if step.advance else sprite.position.y, CombatPresentation.duration(ROCK_MOVE_TIME))
 			tween.tween_property(sprite, "skew", 0.15, CombatPresentation.duration(ROCK_TILT_TIME))
 			# 밀리는 유닛은 바위와 같은 트윈으로 옮긴다. 칸·피해 판정은 연출 뒤 attack_prop이 한다.
@@ -506,16 +518,18 @@ func show_floor_loot(drops: Dictionary[Vector2i, Dictionary]) -> void:
 
 
 func prop_at_point(point: Vector2) -> CombatGrid.Prop:
-	var markers: Array[Node2D] = _prop_markers.duplicate()
-	markers.sort_custom(func(a: Node2D, b: Node2D) -> bool: return a.position.y > b.position.y)
-	for marker: Node2D in markers:
+	var cell: Vector2i = surface_to_map(point)
+	if cell == Vector2i(-1, -1):
+		return null
+	for marker: Node2D in _prop_markers:
 		var prop: CombatGrid.Prop = marker.get_meta("prop") as CombatGrid.Prop
-		if _art_contains(marker, point) and not occludes(prop.cell, point):
+		if prop.cell == cell:
 			return prop
 	return null
 
 
-func _art_marker(cell: Vector2i, id: String, foot: float) -> Node2D:
+func _art_marker(cell: Vector2i, id: String, foot: float = INF) -> Node2D:
+	var resolved_foot: float = art_foot_offset(id) if is_inf(foot) else foot
 	var marker: Node2D = Node2D.new()
 	marker.position = map_to_local(cell)
 	var sprite: Sprite2D = Sprite2D.new()
@@ -525,7 +539,7 @@ func _art_marker(cell: Vector2i, id: String, foot: float) -> Node2D:
 	sprite.offset = Vector2(-sprite.texture.get_width() / 2.0, -sprite.texture.get_height() + 8)
 	sprite.scale = Vector2.ONE * 0.5
 	sprite.material = preload("res://scenes/combat/art/pixel_art.tres")
-	sprite.position = map_to_surface(cell) - marker.position + Vector2(0, foot)
+	sprite.position = map_to_surface(cell) - marker.position + Vector2(0, resolved_foot)
 	marker.add_child(sprite)
 	return marker
 
@@ -578,7 +592,7 @@ func show_props(props: Array[CombatGrid.Prop], preview: CombatGrid.Prop = null,
 		marker.free()
 	_prop_markers.clear()
 	for prop: CombatGrid.Prop in props:
-		var marker: Node2D = _art_marker(prop.cell, prop.kind, 4.0)
+		var marker: Node2D = _art_marker(prop.cell, prop.kind)
 		marker.set_meta("prop", prop)
 		var sprite: Sprite2D = marker.get_node("Sprite") as Sprite2D
 		if prop in blocked_props:

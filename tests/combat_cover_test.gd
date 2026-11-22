@@ -325,11 +325,11 @@ func _test_ui_preview_and_selection_block() -> void:
 	battle.call("_update_turn_ui")
 	await process_frame
 	_check(enemy.is_cover_blocked, "직사 엄폐에 막힌 적은 회색 표시(is_cover_blocked)")
-	# 막힌 적 클릭 시 선택·미리보기 없음 (몸통 적중 좌표로 확인)
-	var enemy_world: Vector2 = enemy.to_global(Vector2(0, enemy.floor_offset_y - 10))
+	# 막힌 적 클릭 시 선택·미리보기 없음 (칸 윗면 마름모 적중 좌표로 확인, #735)
+	var enemy_world: Vector2 = map.to_global(map.map_to_surface(enemy.cell))
 	var enemy_screen: Vector2 = battle.get_canvas_transform() * enemy_world
-	_check(enemy.contains_body_point(enemy.to_local(enemy_world)),
-		"테스트 클릭 좌표가 적 몸통 안에 적중함")
+	_check(map.contains_surface(enemy.cell, map.to_local(enemy_world)),
+		"테스트 클릭 좌표가 적 칸 윗면 마름모 안에 적중함")
 	var click: InputEventMouseButton = InputEventMouseButton.new()
 	click.position = enemy_screen
 	click.global_position = enemy_screen
