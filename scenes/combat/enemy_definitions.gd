@@ -4,33 +4,33 @@ extends RefCounted
 
 static var NOVICE_BARBARIAN: Dictionary = {
 	"abilities": [10, 6, 4, 4, 4, 4], "defense_bonus": 0,
-	"name": TranslationServer.tr("풋내기 야만인"), "max_hit_points": 12,
+	"name": TranslationServer.tr("풋내기 야만인"), "max_hit_points": 22, "armor_class": 6,
 	"attack_bonus": 3, "damage_bonus": 1, "attack_range": 1,
 	"actions": ["attack", "second_wind"]
 }
 static var NOVICE_ARCHER: Dictionary = {
 	"abilities": [4, 10, 4, 4, 4, 4], "defense_bonus": 0,
 	"name": TranslationServer.tr("풋내기 궁수"), "max_hit_points": 14,
-	"attack_bonus": 0, "damage_bonus": 1, "attack_range": 8,
+	"attack_bonus": 2, "damage_bonus": 1, "attack_range": 8,
 	"actions": ["attack", "disengage"]
 }
 static var SCRAP_ROBOT_1000: Dictionary = {
 	"abilities": [12, 4, 8, 4, 12, 4], "defense_bonus": 2,
-	"name": TranslationServer.tr("고철로봇-1000"), "boss": true, "max_hit_points": 40,
+	"name": TranslationServer.tr("고철로봇-1000"), "boss": true, "max_hit_points": 80,
 	"movement": 6,
 	"attack_bonus": 3, "damage_bonus": 2, "attack_range": 1,
 	"actions": ["attack"]
 }
 static var SCRAP_ROBOT_2000: Dictionary = {
 	"abilities": [12, 4, 8, 4, 12, 4], "defense_bonus": 3,
-	"name": TranslationServer.tr("고철로봇-2000"), "boss": true, "max_hit_points": 45,
+	"name": TranslationServer.tr("고철로봇-2000"), "boss": true, "max_hit_points": 90,
 	"movement": 6,
 	"attack_bonus": 3, "damage_bonus": 2, "attack_range": 1,
 	"actions": ["attack", "pull"]
 }
 static var SCRAP_ROBOT_3000: Dictionary = {
 	"abilities": [12, 4, 8, 4, 12, 4], "defense_bonus": 4,
-	"name": TranslationServer.tr("고철로봇-3000"), "boss": true, "max_hit_points": 50,
+	"name": TranslationServer.tr("고철로봇-3000"), "boss": true, "max_hit_points": 100,
 	"movement": 6,
 	"attack_bonus": 3, "damage_bonus": 2, "attack_range": 1,
 	"actions": ["attack", "pull", "spin"]
@@ -38,7 +38,8 @@ static var SCRAP_ROBOT_3000: Dictionary = {
 static var SPIDERLING: Dictionary = {
 	"abilities": [4, 8, 4, 4, 4, 4], "defense_bonus": 0,
 	"name": TranslationServer.tr("새끼 거미"), "max_hit_points": 1, "poison_immune": true,
-	"attack_bonus": 3, "damage_bonus": 1, "attack_range": 1,
+	"movement": 12, "armor_class": 4,
+	"attack_bonus": 3, "damage_bonus": 2, "attack_range": 1,
 	"actions": ["attack"]
 }
 static var MOTHER_SPIDER: Dictionary = {
