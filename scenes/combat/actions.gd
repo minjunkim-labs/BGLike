@@ -784,8 +784,10 @@ func _enter_oil(unit: CombatUnit) -> void:
 	_slip_roll(unit)
 
 
-## 솜씨 내성굴림(DC 4). 실패하면 넘어진다. 굴림은 성공과 무관하게 이번 턴의 기름 1회로 쓴다. 참이면 제자리를 지킨 것이다.
+## 솜씨 내성굴림(DC 4). 실패하면 넘어진다. 보스는 면역이다. 굴림은 성공과 무관하게 이번 턴의 기름 1회로 쓴다. 참이면 제자리를 지킨 것이다.
 func _slip_roll(unit: CombatUnit) -> bool:
+	if unit.is_boss():
+		return true  # 보스는 넘어짐에 면역이다. 굴림 없이 제자리를 지킨다.
 	var ability: CombatUnit.Ability = CombatUnit.Ability.FINESSE
 	var sides: int = unit.get_ability_sides(ability)
 	unit.oil_slipped = true
