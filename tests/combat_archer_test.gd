@@ -323,7 +323,7 @@ func _test_moving_shot() -> void:
 func _test_trick_attribute() -> void:
 	var got: Array[String] = []
 	for face: int in range(1, 7):
-		got.append(CombatOil.trick_attribute(face))
+		got.append(CombatActionRules.trick_attribute(face))
 	_check(got == ["", "water", "water", "fire", "fire", "fire"], "지능 눈 1 삐끗, 2~3 물, 4~6 화염: " + str(got))
 
 
@@ -564,7 +564,7 @@ func _test_stealth_save() -> void:
 
 
 func _oil_count(f: Fixture) -> int:
-	return f.actions.get_grounds().filter(func(ground: CombatActions.Ground) -> bool: return ground.kind == "oil").size()
+	return f.actions.get_grounds().filter(func(ground: CombatGrounds.Ground) -> bool: return ground.kind == "oil").size()
 
 
 ## 폭죽 화살: 막당 1, 반경 1 안의 모두에게 민첩 내성 DC 4, 솜씨 d20 두 번 합(레벨은 한 번), 성공 시 절반, 점화.

@@ -321,6 +321,18 @@ static func combat_uses_text(actor: CombatUnit, action: String) -> String:
 	return TranslationServer.tr("전투마다 %d회 · %d회 남음") % [USES_PER_COMBAT[action], uses_left(actor, action)]
 
 
+## 장난스러운 화살의 지능 d6 눈 → 속성 (궁수 문서). 1은 삐끗(빈 문자열), 2~3 물, 4~6 화염.
+static func trick_attribute(face: int) -> String:
+	if face <= 1:
+		return ""
+	return "water" if face <= 3 else "fire"
+
+
+## 일어서기 비용: 최대 이동력의 절반을 올림 (궁수 4, 전사 2).
+static func standing_cost(max_movement: int) -> int:
+	return ceili(max_movement / 2.0)
+
+
 ## 동작의 피해 보정. 강철 돌진은 기타 가산치를 더하지 않는다 (전사 문서).
 static func damage_bonus(actor: CombatUnit, action: String) -> int:
 	return 0 if action in ["steel_charge", "firework_arrow", "trick_arrow"] else actor.get_damage_bonus()

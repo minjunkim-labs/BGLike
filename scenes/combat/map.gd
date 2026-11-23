@@ -498,19 +498,19 @@ func show_rock_roll(origin: Vector2i, roll: CombatActions.RockRoll) -> void:
 		_overlays.append(marker)
 
 
-func show_grounds(grounds: Array[CombatActions.Ground]) -> void:
+func show_grounds(grounds: Array[CombatGrounds.Ground]) -> void:
 	for marker: Node2D in _ground_markers:
 		marker.free()
 	_ground_markers.clear()
 	var fog_cells: Array[Vector2i] = []
-	for entry: CombatActions.Ground in grounds:
-		var ground: CombatActions.Ground = entry
+	for entry: CombatGrounds.Ground in grounds:
+		var ground: CombatGrounds.Ground = entry
 		# 겹친 독안개는 칸 하나로 그린다. 남은 기간은 가장 오래 남는 기록을 보인다.
 		if ground.kind == "fog":
 			if ground.cell in fog_cells:
 				continue
 			fog_cells.append(ground.cell)
-			for other: CombatActions.Ground in grounds:
+			for other: CombatGrounds.Ground in grounds:
 				if other.kind == "fog" and other.cell == ground.cell and other.turns_left > ground.turns_left:
 					ground = other
 		var marker: Node2D = Node2D.new()

@@ -55,25 +55,6 @@ class RockRoll extends RefCounted:
 	var reason: String = TranslationServer.tr("최대3칸")
 
 
-class Ground extends RefCounted:
-	## 독 장판 정의의 고정 DC (능력치 기획서 8장). 부여한 독이 이 값을 보존한다.
-	const POISON_DC: int = 4
-	var source: CombatUnit
-	var cell: Vector2i
-	var kind: String
-	var turns_left: int
-	var dc: int
-	var entered: Array[CombatUnit] = []
-
-	## fog는 시전 때 기록한 save_dc를 쓴다. 시전마다 칸 하나에 기록 하나를 둔다.
-	func _init(caster: CombatUnit, position: Vector2i, effect: String, save_dc: int = 0) -> void:
-		source = caster
-		cell = position
-		kind = effect
-		turns_left = 2 if kind == "burn" else (CombatOil.TURNS if kind == "oil" else 4)
-		dc =POISON_DC if kind == "poison" else (save_dc if kind == "fog" else (CombatOil.SLIP_DC if kind == "oil" else 0))
-
-
 ## 쓰러진 시전자의 턴 자리. anchor는 그 자리 바로 뒤의 유닛이고, anchor의 턴 시작 직전에 시전자의 유닛 효과를 줄인다.
 ## skip은 anchor의 다음 턴 시작 앞 자리를 이미 줄였다는 뜻이다(시전자가 자기 턴을 시작한 뒤 쓰러짐 등).
 class ClockSlot extends RefCounted:
@@ -121,13 +102,21 @@ var roll_animation: Callable
 var reaction_answers: Array = []
 ## 이어하기가 다시 실행하는 적 턴에서 묻지 않고 차례로 쓸 반응 답.
 var replay_answers: Array = []
-var _grounds: Array[Ground] = []
-## 이번 전투에서 탄 나무 칸. 전투를 다시 열면 비고 저장에 들어간다.
-var burned_trees: Array[Vector2i] = []
+var grounds: CombatGrounds = CombatGrounds.new()
+## 이번 전투에서 탄 나무 칸. CombatGrounds가 소유하며 기존 호출자 호환을 위해 위임한다.
+var burned_trees: Array[Vector2i]:
+	get:
+		return grounds.burned_trees
+	set(value):
+		grounds.burned_trees = value
 var _clock_slots: Array[ClockSlot] = []
 ## 턴 시작의 틱까지 처리했고 기간 감소는 아직인 유닛. 이 틱으로 쓰러지면 쓰러질 때 바로 줄인다.
 var _pending_decrease: CombatUnit
 var _revision: int = 0
+
+
+func _init() -> void:
+	grounds.bind(self)
 
 
 func initialize(combat_units: Array[CombatUnit], combat_turns: CombatTurns) -> void:
@@ -138,8 +127,7 @@ func initialize(combat_units: Array[CombatUnit], combat_turns: CombatTurns) -> v
 	grid.units = combat_units
 	grid.props.clear()
 	floor_loot.clear()
-	_grounds.clear()
-	burned_trees.clear()
+	grounds.clear()
 	_clock_slots.clear()
 	turns = combat_turns
 	turns.turn_started.connect(_on_turn_started)
@@ -151,14 +139,11 @@ func save_state() -> Dictionary:
 	var props: Array = []
 	for prop: CombatGrid.Prop in grid.props:
 		props.append([prop.kind, prop.cell, prop.hit_points])
-	var grounds: Array = []
-	for ground: Ground in _grounds:
-		grounds.append([units.find(ground.source), ground.cell, ground.kind, ground.turns_left,
-			ground.entered.map(func(unit: CombatUnit) -> int: return units.find(unit)), ground.dc])
+	var ground_state: Dictionary = grounds.save_state(units)
 	var slots: Array = _clock_slots.map(func(slot: ClockSlot) -> Array:
 		return [units.find(slot.caster), units.find(slot.anchor), slot.skip])
-	return {"props": props, "floor_loot": floor_loot.save_state(), "grounds": grounds, "clock_slots": slots, "dice": dice.state,
-		"burned_trees": burned_trees.duplicate()}
+	return {"props": props, "floor_loot": floor_loot.save_state(), "grounds": ground_state.grounds, "clock_slots": slots, "dice": dice.state,
+		"burned_trees": ground_state.burned_trees}
 
 
 ## save_state()의 값으로 되돌린다. initialize() 뒤에 부르고, is_valid_state()를 먼저 확인한다.
@@ -169,18 +154,7 @@ func load_state(data: Dictionary) -> void:
 		prop.hit_points = saved[2]
 		grid.props.append(prop)
 	floor_loot.load_state(data.floor_loot)
-	_grounds.clear()
-	for saved: Array in data.grounds:
-		var ground: Ground = Ground.new(units[saved[0]], saved[1], saved[2])
-		ground.turns_left = saved[3]
-		ground.dc = saved[5]
-		for index: int in saved[4]:
-			ground.entered.append(units[index])
-		_grounds.append(ground)
-	burned_trees.clear()
-	for saved: Vector2i in data.burned_trees:
-		if grid.burn_tree(saved):
-			burned_trees.append(saved)
+	grounds.load_state(data, units, grid)
 	_clock_slots.clear()
 	for saved: Array in data.clock_slots:
 		_clock_slots.append(ClockSlot.new(units[saved[0]], units[saved[1]], saved[2]))
@@ -191,28 +165,15 @@ func load_state(data: Dictionary) -> void:
 static func is_valid_state(data: Variant, count: int, map_size: Vector2i, tree_cells: Array[Vector2i] = []) -> bool:
 	var area: Rect2i = Rect2i(Vector2i.ZERO, map_size)
 	if not (data is Dictionary and data.get("dice") is int and data.get("props") is Array
-			and data.props.size() <= area.get_area() and data.get("grounds") is Array
-			and data.grounds.size() <= area.get_area() * 2 and data.get("clock_slots") is Array
-			and data.clock_slots.size() <= count and data.get("burned_trees") is Array
-			and data.burned_trees.size() <= tree_cells.size()):
-		return false
-	var burned: Array = data.burned_trees
-	if not burned.all(func(saved: Variant) -> bool:
-			return saved is Vector2i and saved in tree_cells and burned.count(saved) == 1):
+			and data.props.size() <= area.get_area() and data.get("clock_slots") is Array
+			and data.clock_slots.size() <= count
+			and CombatGrounds.is_valid_state(data, count, map_size, tree_cells)):
 		return false
 	var unit_index: Callable = func(index: Variant) -> bool: return index is int and index >= 0 and index < count
 	return (data.props.all(func(saved: Variant) -> bool:
 			return (saved is Array and saved.size() == 3 and saved[0] in ["crate", "rock"]
 				and saved[1] is Vector2i and area.has_point(saved[1]) and saved[2] is int and saved[2] > 0
 				and saved[2] <= 6))
-		and data.grounds.all(func(saved: Variant) -> bool:
-			return (saved is Array and saved.size() == 6 and unit_index.call(saved[0])
-				and saved[1] is Vector2i and area.has_point(saved[1]) and saved[2] in ["burn", "poison", "fog", "oil"]
-				and saved[3] is int and saved[3] >= 1 and saved[3] <= 4
-				and saved[4] is Array and saved[4].size() <= count and saved[4].all(unit_index)
-				and saved[5] is int and saved[5] >= 0 and saved[5] <= CombatUnit.SAVED_INT_LIMIT
-				and (saved[5] == 0 if saved[2] == "burn" else saved[5] > 0)
-					and (saved[5] == CombatOil.SLIP_DC and saved[3] <= CombatOil.TURNS if saved[2] == "oil" else true)))
 		and data.clock_slots.all(func(saved: Variant) -> bool:
 			return (saved is Array and saved.size() == 3 and unit_index.call(saved[0])
 				and unit_index.call(saved[1]) and saved[0] != saved[1] and saved[2] is bool))
@@ -554,14 +515,13 @@ func _on_turn_started(unit: CombatUnit) -> void:
 	for target: CombatUnit in units:
 		if target.stun_source == unit:
 			target.is_stunned = false
-	for ground: Ground in _grounds:
-		ground.entered.erase(unit)
+	grounds.clear_entered_for(unit)
 	_clear_burn_in_water(unit)
 	if unit.overloaded and unit.hit_points > 0 and not is_over():
 		_damage(unit, CombatActionRules.OVERLOAD_SELF_DAMAGE)
 		logged.emit(tr("%s 과부하: 자기 피해 %d · HP %d") % [unit.get_display_name(), CombatActionRules.OVERLOAD_SELF_DAMAGE, unit.hit_points])
 		feedback.emit(unit, tr("과부하 %d") % CombatActionRules.OVERLOAD_SELF_DAMAGE)
-	_apply_grounds(unit, false)
+	grounds.apply_to_unit(unit, false)
 	var poison_checked: bool = false
 	for effect: CombatUnit.StatusEffect in unit.status_effects.duplicate():
 		if unit.hit_points <= 0 or is_over():
@@ -619,14 +579,7 @@ func _emit_overload_burn(robot: CombatUnit) -> void:
 func _decrease_durations(unit: CombatUnit) -> void:
 	_tick_unit_effects(unit)
 	_clock_slots = _clock_slots.filter(func(slot: ClockSlot) -> bool: return _has_unit_effects(slot.caster))
-	var ground_messages: Array[String] = []
-	for ground: Ground in _grounds.duplicate():
-		if ground.source == unit and ground.kind not in ["fog", "oil"]:
-			ground.turns_left -= 1
-			if ground.turns_left == 0:
-				_grounds.erase(ground)
-				ground_messages.append(tr("%s %s 장판 만료: %d, %d") % [unit.get_display_name(),
-					tr("불") if ground.kind == "burn" else tr("독"), ground.cell.x, ground.cell.y])
+	var ground_messages: Array[String] = grounds.tick_non_persistent(unit)
 	for target: CombatUnit in units:
 		for effect: CombatUnit.StatusEffect in target.status_effects.duplicate():
 			if effect.source == unit and effect.turns_left > 0:
@@ -663,23 +616,17 @@ func _tick_unit_effects(caster: CombatUnit) -> void:
 				calmed.append(target.get_display_name())
 	if not calmed.is_empty():
 		logged.emit(tr("산만함 만료: %s") % ", ".join(calmed))
-	# 독안개는 시전 순서대로 줄인다. 시전자가 쓰러졌어도 시계 슬롯이 이 길로 줄인다.
-	for ground: Ground in _grounds.duplicate():
-		if ground.kind in ["fog", "oil"] and ground.source == caster:
-			ground.turns_left -= 1
-			if ground.turns_left == 0:
-				_grounds.erase(ground)
-				logged.emit(tr("%s %s 만료: %d, %d") % [caster.get_display_name(),
-						tr("독안개") if ground.kind == "fog" else tr("기름 장판"), ground.cell.x, ground.cell.y])
+	# 독안개·기름 장판은 시전 순서대로 줄인다. 시전자가 쓰러졌어도 시계 슬롯이 이 길로 줄인다.
+	grounds.tick_persistent(caster)
 
 
 func _has_unit_effects(caster: CombatUnit) -> bool:
 	return (units.any(func(unit: CombatUnit) -> bool: return unit.battle_cry_source == caster or unit.distracted_source == caster)
-		or _grounds.any(func(ground: Ground) -> bool: return ground.kind in ["fog", "oil"] and ground.source == caster))
+		or grounds.has_persistent_for(caster))
 
 
 func apply_status(source: CombatUnit, target: CombatUnit, kind: String,
-	dc: int = Ground.POISON_DC) -> bool:
+	dc: int = CombatGrounds.POISON_DC) -> bool:
 	if (not is_instance_valid(source) or not is_instance_valid(target)
 		or source not in units or target not in units or source.hit_points <= 0 or target.hit_points <= 0
 		or kind not in ["stun", "burn", "poison"]
@@ -703,63 +650,12 @@ func apply_status(source: CombatUnit, target: CombatUnit, kind: String,
 	return true
 
 
-## 칸의 기름 장판. 칸마다 하나이므로 없으면 null이다.
-func _oil_at(cell: Vector2i) -> Ground:
-	for ground: Ground in _grounds:
-		if ground.kind == "oil" and ground.cell == cell:
-			return ground
-	return null
-
-
-func _oil_cells() -> Array[Vector2i]:
-	var cells: Array[Vector2i] = []
-	for ground: Ground in _grounds:
-		if ground.kind == "oil" and ground.cell not in cells:
-			cells.append(ground.cell)
-	return cells
-
-
-## 기름을 깔 수 있는 칸: 맵 안의 바닥, 벽·박스·바위 아님, 중심과 높이 차 1 이하. 물 칸도 된다.
-func _oil_site_ok(center: Vector2i, cell: Vector2i) -> bool:
-	return (grid.is_floor(cell) and not grid.is_blocked(cell)
-		and absi(grid.height_at(center) - grid.height_at(cell)) <= 1)
-
-
-## 목표 칸 center에 던졌을 때 실제로 기름이 깔리는 칸. 생성과 미리보기가 함께 쓴다.
-## 중심이 박스·바위 칸이어도 고를 수 있고, 그 칸만 빠진 나머지가 깔린다. 중심이 고를 수 없는 칸이면 비어 있다.
 func oil_sites(center: Vector2i) -> Array[Vector2i]:
-	var cells: Array[Vector2i] = []
-	if not grid.is_aimable(center):
-		return cells
-	for cell: Vector2i in CombatOil.cross_cells(center):
-		if _oil_site_ok(center, cell):
-			cells.append(cell)
-	return cells
+	return grounds.oil_sites(center)
 
 
-## 중심의 십자 5칸에 기름 장판을 깐다. 같은 칸은 하나이고 다시 깔면 기간만 3으로 갱신한다(원 시전자 유지).
-## 시전자가 쓰러져도 남는다. 칸 위의 유닛에게는 즉시 효과가 없다.
 func create_oil(source: CombatUnit, center: Vector2i) -> bool:
-	var sites: Array[Vector2i] = oil_sites(center)
-	if not is_instance_valid(source) or source not in units or source.hit_points <= 0 or sites.is_empty():
-		return false
-	var placed: Array[Vector2i] = []
-	for cell: Vector2i in sites:
-		var existing: Ground = _oil_at(cell)
-		if existing != null:
-			existing.turns_left = CombatOil.TURNS
-		else:
-			_grounds.append(Ground.new(source, cell, "oil"))
-		placed.append(cell)
-	logged.emit(tr("%s 기름 장판: %d, %d · %d칸") % [source.get_display_name(), center.x, center.y, placed.size()])
-	# 불 장판 칸에 기름이 생겨도 닿은 것으로 본다(전투 설계 6장). create_ground처럼 그 칸에 불 장판을 남기지 않는다.
-	for ground: Ground in _grounds.duplicate():
-		if ground.kind == "burn" and ground.cell in placed and _oil_at(ground.cell) != null:
-			_grounds.erase(ground)
-			var alive: bool = is_instance_valid(ground.source) and ground.source in units and ground.source.hit_points > 0
-			ignite(ground.cell, ground.source if alive else source)
-	changed.emit()
-	return true
+	return grounds.create_oil(source, center)
 
 
 ## 기름병 던지기(궁수 스킬, 보조 행동, 전투마다 1)와 기름병 아이템(물약 칸 1개, #576). 목표 칸 십자 5칸에 기름을 깐다.
@@ -776,46 +672,17 @@ func throw_oil(caster: CombatUnit, cell: Vector2i, action: String = "oil_throw")
 	return create_oil(caster, cell)
 
 
-## 기름 칸에 들어가거나 기름 칸에 강제로 착지한 유닛의 미끌거림. 턴마다 기름 장판 전체에 대해 한 번이다.
-func _enter_oil(unit: CombatUnit) -> void:
-	if (not is_instance_valid(unit) or unit.hit_points <= 0 or is_over() or unit.oil_slipped
-		or _oil_at(unit.cell) == null):
-		return
-	_slip_roll(unit)
-
-
-## 솜씨 내성굴림(DC 4). 실패하면 넘어진다. 굴림은 성공과 무관하게 이번 턴의 기름 1회로 쓴다. 참이면 제자리를 지킨 것이다.
-func _slip_roll(unit: CombatUnit) -> bool:
-	var ability: CombatUnit.Ability = CombatUnit.Ability.FINESSE
-	var sides: int = unit.get_ability_sides(ability)
-	unit.oil_slipped = true
-	var saved: CombatChecks.RollResult = CombatChecks.saving_throw(sides, unit.get_defense_bonus(), CombatOil.SLIP_DC,
-		CombatActionRules.save_mode(unit, ability), dice, unit.get_ability_modifier(ability))
-	_show_roll_in_background(CombatDiceRoll.save(unit, sides, saved, saved.added(), tr("DC"), CombatOil.SLIP_DC))
-	var slip_reason: String = _save_reason(unit, ability)
-	logged.emit(tr("%s 미끌거림(솜씨 내성%s): 솜씨 d%d %s %+d = %d / DC %d · %s") % [unit.get_display_name(),
-		"" if slip_reason.is_empty() else " · " + slip_reason, sides, str(saved.rolls), saved.added(), saved.total, CombatOil.SLIP_DC, _save_outcome(saved)])
-	if saved.success:
-		return true
-	unit.fallen = true
-	status_applied.emit(unit, "fallen")
-	logged.emit(tr("%s 넘어짐") % unit.get_display_name())
-	feedback.emit(unit, tr("넘어짐"))
-	changed.emit()
-	return false
-
-
 ## 넘어진 유닛이 지금 일어날 수 있는지. 자기 턴에 남은 이동력이 일어서기 비용 이상이어야 한다.
 func can_stand_up(actor: CombatUnit) -> bool:
 	return (_can_move_now(actor) and actor.fallen
-		and actor.movement_left >= CombatOil.standing_cost(actor.get_movement()))
+		and actor.movement_left >= CombatActionRules.standing_cost(actor.get_movement()))
 
 
 ## 넘어진 유닛이 일어난다. 비용은 최대 이동력의 절반(올림)이고 자기 턴에만 쓴다. 이동을 시도하면 먼저 이 비용을 낸다.
 func stand_up(actor: CombatUnit) -> bool:
 	if not can_stand_up(actor):
 		return false
-	var cost: int = CombatOil.standing_cost(actor.get_movement())
+	var cost: int = CombatActionRules.standing_cost(actor.get_movement())
 	actor.spend_movement(cost)
 	actor.fallen = false
 	logged.emit(tr("%s 일어남: 이동력 %d") % [actor.get_display_name(), cost])
@@ -823,77 +690,20 @@ func stand_up(actor: CombatUnit) -> bool:
 	return true
 
 
-## 속성 동작이 칸에 닿았을 때 반응표(CombatOil.REACTIONS)를 적용한다. 화염은 기름을 점화하고, 물은 닿은 칸의 기름과 불 장판을 지운다.
 func touch_attribute(cell: Vector2i, attribute: String, source: CombatUnit) -> bool:
-	if attribute == "fire" and grid.burn_tree(cell):
-		burned_trees.append(cell)
-		logged.emit(tr("나무가 불탐: %d, %d") % [cell.x, cell.y])
-		changed.emit()
-		return true
-	var removed: bool = false
-	for ground: Ground in _grounds.duplicate():
-		if ground.cell != cell:
-			continue
-		match CombatOil.reaction(attribute, ground.kind):
-			"ignite":
-				return ignite(cell, source)
-			"remove":
-				_grounds.erase(ground)
-				removed = true
-	if removed:
-		logged.emit(tr("속성: 장판 삭제 %d, %d") % [cell.x, cell.y])
-		changed.emit()
-	return removed
+	return grounds.touch_attribute(cell, attribute, source)
 
 
-## 화염이 기름 칸에 닿았다: 이어진 기름 칸 전체가 타고, 그 칸 위의 모든 살아 있는 유닛(점화한 유닛 포함)이 화상 2중첩을 받는다.
-## 물 칸 위의 유닛은 화상을 받지 않는다(apply_status의 기존 규칙).
 func ignite(cell: Vector2i, igniter: CombatUnit) -> bool:
-	if (not is_instance_valid(igniter) or igniter not in units or igniter.hit_points <= 0 or is_over()
-		or _oil_at(cell) == null):
-		return false
-	var burned: Array[Vector2i] = CombatOil.connected(cell, _oil_cells())
-	for ground: Ground in _grounds.duplicate():
-		if ground.kind == "oil" and ground.cell in burned:
-			_grounds.erase(ground)
-	logged.emit(tr("%s 점화: 기름 %d칸") % [igniter.get_display_name(), burned.size()])
-	oil_ignited.emit(burned)
-	for unit: CombatUnit in units.duplicate():
-		if unit.hit_points > 0 and unit.cell in burned and apply_status(igniter, unit, "burn"):
-			apply_status(igniter, unit, "burn")
-			logged.emit(tr("%s 점화: 화상 2중첩") % unit.get_display_name())
-	changed.emit()
-	return true
+	return grounds.ignite(cell, igniter)
 
 
-func get_grounds() -> Array[Ground]:
-	return _grounds.duplicate()
+func get_grounds() -> Array[CombatGrounds.Ground]:
+	return grounds.all()
 
 
 func create_ground(source: CombatUnit, cell: Vector2i, kind: String) -> bool:
-	if (not is_instance_valid(source) or source not in units or source.hit_points <= 0
-		or kind not in ["burn", "poison"] or not grid.is_floor(cell) or grid.is_blocked(cell)
-		or kind == "burn" and cell in grid.water_cells):
-		# 물 칸에는 불 장판이 생기지 않는다(환경요소 6장). 범위로 깔면 칸마다 이 검사를 지나 물 칸만 빠진다.
-		return false
-	# 불이 기름 칸에 닿으면 점화한다. 기름이 불이 된 칸에는 불 장판을 새로 두지 않는다.
-	# shortcut: 범위 불은 첫 칸의 점화가 이어진 기름을 다 지워 남은 칸에 불이 생긴다. 범위 불 공급원(#500 2b) 전에 점화 칸 목록으로 거른다.
-	if kind == "burn" and _oil_at(cell) != null:
-		return ignite(cell, source)
-	var refreshed: bool = false
-	var owner: CombatUnit = source
-	for ground: Ground in _grounds:
-		if ground.cell == cell and ground.kind == kind:
-			ground.turns_left = 2 if kind == "burn" else 4
-			owner = ground.source
-			refreshed = true
-			break
-	if not refreshed:
-		_grounds.append(Ground.new(source, cell, kind))
-	logged.emit(tr("%s %s 장판 %s: %d, %d") % [owner.get_display_name(),
-		tr("불") if kind == "burn" else tr("독"), tr("갱신") if refreshed else tr("생성"), cell.x, cell.y])
-	changed.emit()
-	return true
+	return grounds.create_ground(source, cell, kind)
 
 
 ## 남은 적이 없으면 승리다.
@@ -913,13 +723,7 @@ func incapacitate(target: CombatUnit) -> void:
 	target.clear_unit_effects()
 	target.stealthed = false
 	_keep_clock_slot(target)
-	var ground_messages: Array[String] = []
-	for ground: Ground in _grounds.duplicate():
-		ground.entered.erase(target)
-		if ground.source == target and ground.kind in ["burn", "poison"]:
-			_grounds.erase(ground)
-			ground_messages.append(tr("%s %s 장판 해제: %d, %d") % [target.get_display_name(),
-				tr("불") if ground.kind == "burn" else tr("독"), ground.cell.x, ground.cell.y])
+	var ground_messages: Array[String] = grounds.on_caster_incapacitated(target)
 	for unit: CombatUnit in units:
 		if unit.stun_source == target:
 			unit.is_stunned = false
@@ -1004,7 +808,7 @@ func is_over() -> bool:
 func reachable_cells(actor: CombatUnit) -> Dictionary[Vector2i, int]:
 	if not _can_move_now(actor):
 		return {}
-	var budget: int = actor.movement_left - (CombatOil.standing_cost(actor.get_movement()) if actor.fallen else 0)
+	var budget: int = actor.movement_left - (CombatActionRules.standing_cost(actor.get_movement()) if actor.fallen else 0)
 	if budget < 0:
 		return {}
 	return grid.reachable_cells(actor, budget)
@@ -1126,7 +930,7 @@ func jump_to(actor: CombatUnit, destination: Vector2i) -> bool:
 	busy = true
 	actor.moving_shot_ready = false
 	changed.emit()
-	if _oil_at(actor.cell) != null and not actor.oil_slipped and not _slip_roll(actor):
+	if not grounds.try_leave_oil(actor):
 		# 떠나기에서 넘어지면 도약이 취소되고 비용은 쓰지 않는다 (궁수 문서).
 		_finish()
 		return true
@@ -1258,12 +1062,7 @@ func shove_landing(target: CombatUnit, destination: Vector2i) -> String:
 ## 걷기 경로(출발 칸 제외)에서 미끌거림을 굴리게 되면 그 DC 안내. 굴림은 턴마다 한 번이라 안내도 한 줄이다.
 ## 출발 칸이 기름이면 떠나기, 경로에 기름 칸이 있으면 들어가기다. 이미 굴렸거나 기름을 지나지 않으면 빈 문자열이다.
 func slip_note(unit: CombatUnit, path: Array[Vector2i]) -> String:
-	if not is_instance_valid(unit) or path.is_empty() or unit.oil_slipped:
-		return ""
-	var leaving: bool = _oil_at(unit.cell) != null
-	if not leaving and not path.any(func(cell: Vector2i) -> bool: return _oil_at(cell) != null):
-		return ""
-	return tr("미끌거림: 솜씨 내성 DC %d") % CombatOil.SLIP_DC
+	return grounds.slip_note(unit, path)
 
 
 ## 걷기·점프 도착 칸이 물이면 서기 전에 읽는 물 칸 화상 규칙(#503)과 명중굴림 불리(#532). 물이 아니면 빈 문자열이다.
@@ -1475,12 +1274,7 @@ func move_to(actor: CombatUnit, destination: Vector2i) -> bool:
 		return false
 	var ground_cells: Array[Vector2i] = []
 	if not actor.is_ally:
-		for ground: Ground in _grounds:
-			# 독 면역은 불이 아닌 장판(독·독안개)을 피할 이유가 없다.
-			if actor.is_poison_immune() and ground.kind not in ["burn", "oil"]:
-				continue
-			if ground.cell not in ground_cells:
-				ground_cells.append(ground.cell)
+		ground_cells = grounds.hazard_cells_for(actor)
 	var path: Array[Vector2i] = grid.path_to(actor, destination, ground_cells)
 	busy = true
 	actor.moving_shot_ready = false
@@ -1490,7 +1284,7 @@ func move_to(actor: CombatUnit, destination: Vector2i) -> bool:
 		if actor.hit_points <= 0 or is_over():
 			break
 		# 기름 칸을 떠나기 직전에 미끌거림을 먼저 굴린다. 실패하면 이동이 취소되어 칸을 떠나지 않으므로 기회 공격도 없다.
-		if _oil_at(actor.cell) != null and not actor.oil_slipped and not _slip_roll(actor):
+		if not grounds.try_leave_oil(actor):
 			break
 		var origin: Vector2i = actor.cell
 		if not actor.disengaged and not actor.stealthed:
@@ -1509,7 +1303,7 @@ func move_to(actor: CombatUnit, destination: Vector2i) -> bool:
 		actor.spend_movement(1)
 		actor.cell = step
 		_clear_burn_in_water(actor)
-		_apply_grounds(actor, true)
+		grounds.apply_to_unit(actor, true)
 		_pick_up(actor)
 		moved += 1
 		# 들어간 기름 칸에서 넘어졌으면 이동은 거기서 멈춘다.
@@ -1566,7 +1360,7 @@ func moving_shot(actor: CombatUnit, cell: Vector2i) -> bool:
 	actor.moving_shot_ready = false
 	changed.emit()
 	# 무빙샷 도약도 기름 칸을 떠날 때 굴린다. 실패하면 도약이 취소된다.
-	if _oil_at(actor.cell) != null and not actor.oil_slipped and not _slip_roll(actor):
+	if not grounds.try_leave_oil(actor):
 		_finish()
 		return true
 	if jump_animation.is_valid():
@@ -1590,7 +1384,7 @@ func trick_arrow(actor: CombatUnit, cell: Vector2i) -> bool:
 	var revision: int = _revision
 	var sides: int = actor.get_ability_sides(CombatUnit.Ability.INTELLIGENCE)
 	var face: int = CombatChecks.face_value(sides, dice.roll(sides))
-	var attribute: String = CombatOil.trick_attribute(face)
+	var attribute: String = CombatActionRules.trick_attribute(face)
 	logged.emit(tr("%s 장난스러운 화살: 지능 d%d = %d · %s") % [actor.get_display_name(), sides, face,
 		{"": tr("삐끗"), "water": tr("물"), "fire": tr("화염")}[attribute]])
 	var target: CombatUnit = grid.unit_at(cell)
@@ -2109,7 +1903,7 @@ func _reflex(target: CombatUnit, attacker: CombatUnit) -> bool:
 	target.spend_movement(1)
 	feedback.emit(target, tr("회피"))
 	# 기름 칸을 떠나기 직전에 미끌거림을 굴린다. 실패하면 회피는 성립하고 이동만 취소되어 그 자리에서 넘어진다.
-	if _oil_at(target.cell) != null and not target.oil_slipped and not _slip_roll(target):
+	if not grounds.try_leave_oil(target):
 		logged.emit(tr("%s 반사신경: 회피, 기름에 미끄러져 제자리에서 넘어짐") % target.get_display_name())
 		return true
 	if jump_animation.is_valid():
@@ -2291,62 +2085,6 @@ func _save_outcome(result: CombatChecks.RollResult) -> String:
 	return tr("성공") if result.success else tr("실패")
 
 
-func _apply_grounds(unit: CombatUnit, entering: bool) -> void:
-	var revision: int = _revision
-	_apply_fog(unit, entering)
-	if entering:
-		_enter_oil(unit)
-	if not _same_combat(unit, revision):
-		return
-	for ground: Ground in _grounds.duplicate():
-		if not is_instance_valid(unit) or unit.hit_points <= 0 or is_over():
-			break
-		if ground.kind in ["fog", "oil"]:
-			continue
-		if (ground not in _grounds or ground.cell != unit.cell
-			or not is_instance_valid(ground.source) or ground.source.hit_points <= 0):
-			continue
-		if entering:
-			if unit in ground.entered:
-				continue
-			ground.entered.append(unit)
-		if apply_status(ground.source, unit, ground.kind, ground.dc):
-			logged.emit(tr("%s %s 장판: %s 부여") % [unit.get_display_name(),
-				tr("불") if ground.kind == "burn" else tr("독"), tr("화상") if ground.kind == "burn" else tr("독")])
-
-
-## 독안개 칸의 건강 내성굴림. 칸 단위로 한 번 굴리고 그 칸의 모든 독안개 기록에 진입을 남긴다.
-## 시전자가 쓰러졌어도 장판은 남으므로 시전자의 생사를 보지 않는다. DC는 칸에서 가장 먼저 시전한 기록을 쓴다.
-func _apply_fog(unit: CombatUnit, entering: bool) -> void:
-	if not is_instance_valid(unit) or unit.hit_points <= 0 or is_over() or unit.is_poison_immune():
-		return
-	var fogs: Array[Ground] = []
-	for ground: Ground in _grounds:
-		if ground.kind == "fog" and ground.cell == unit.cell:
-			fogs.append(ground)
-	if fogs.is_empty() or entering and fogs.all(func(ground: Ground) -> bool: return unit in ground.entered):
-		return
-	for ground: Ground in fogs:
-		if unit not in ground.entered:
-			ground.entered.append(unit)
-	var revision: int = _revision
-	var health_sides: int = unit.get_ability_sides(CombatUnit.Ability.HEALTH)
-	var saved: CombatChecks.RollResult = CombatChecks.saving_throw(health_sides, unit.get_defense_bonus(),
-		fogs[0].dc, CombatActionRules.save_mode(unit, CombatUnit.Ability.HEALTH), dice, unit.get_ability_modifier(CombatUnit.Ability.HEALTH))
-	_show_roll_in_background(CombatDiceRoll.save(unit, health_sides, saved, saved.added(), tr("DC"), fogs[0].dc))
-	var fog_reason: String = _save_reason(unit, CombatUnit.Ability.HEALTH)
-	logged.emit(tr("%s 독안개(건강 내성%s): 건강 d%d %s %+d = %d / DC %d · %s") % [unit.get_display_name(),
-		"" if fog_reason.is_empty() else " · " + fog_reason, health_sides, str(saved.rolls), saved.added(), saved.total, fogs[0].dc, _save_outcome(saved)])
-	if not _same_combat(unit, revision) or saved.success or unit.get_status_count("poison") >= 3:
-		return
-	# 독안개로 얻은 독 중첩은 기간이 없고(turns_left 0) 시전자가 쓰러져도 남는다. 제거 DC는 고정 4다.
-	unit.status_effects.append(CombatUnit.StatusEffect.new("poison", fogs[0].source, 0, Ground.POISON_DC))
-	status_applied.emit(unit, "poison")
-	logged.emit(tr("%s 독안개: 독 부여") % unit.get_display_name())
-	feedback.emit(unit, tr("독"))
-	changed.emit()
-
-
 ## 독안개를 시전한다. 칸 조준으로 고른 cell 기준 영역(상자·바위 칸 포함)에 시전마다 칸당 기록 하나를 만들고,
 ## 시전 순간 영역 안의 유닛이 바로 굴린다(진입 1회로 소비).
 func cast_fog(caster: CombatUnit, cell: Vector2i) -> bool:
@@ -2359,36 +2097,16 @@ func cast_fog(caster: CombatUnit, cell: Vector2i) -> bool:
 	var dc: int = CombatActionRules.save_dc(caster, "fog")
 	if not caster.spend_resource(CombatUnit.TurnResource.ACTION):
 		return false
-	for area_cell: Vector2i in area:
-		_grounds.append(Ground.new(caster, area_cell, "fog", dc))
-	var revision: int = _revision
-	logged.emit(tr("%s 독안개 시전: %d, %d · DC %d") % [caster.get_display_name(), cell.x, cell.y, dc])
-	for unit: CombatUnit in units.duplicate():
-		if revision != _revision or is_over():
-			break
-		if unit.cell in area:
-			_apply_fog(unit, true)
-	if revision == _revision:
-		changed.emit()
+	grounds.place_fog(caster, cell, area, dc)
 	return true
 
 
-## 시전자의 독안개 중 남은 기간 값의 종류 수. 한 턴에 한 번만 시전하므로 같은 시전의 칸은 같은 값이라 유효한 시전 수가 된다.
 func fog_cast_count(caster: CombatUnit) -> int:
-	var durations: Array[int] = []
-	for ground: Ground in _grounds:
-		if ground.kind == "fog" and ground.source == caster and ground.turns_left not in durations:
-			durations.append(ground.turns_left)
-	return durations.size()
+	return grounds.fog_cast_count(caster)
 
 
-## caster가 시전한 독안개가 덮은 칸. caster가 null이면 모든 독안개 칸이다.
 func fog_cells(caster: CombatUnit = null) -> Array[Vector2i]:
-	var cells: Array[Vector2i] = []
-	for ground: Ground in _grounds:
-		if ground.kind == "fog" and (caster == null or ground.source == caster) and ground.cell not in cells:
-			cells.append(ground.cell)
-	return cells
+	return grounds.fog_cells(caster)
 
 
 ## 유닛의 화상 중첩을 모두 지운다.
@@ -2443,7 +2161,7 @@ func _land(target: CombatUnit, destination: Vector2i) -> void:
 		feedback.emit(target, str(amount))
 	if not _same_combat(target, revision):
 		return
-	_apply_grounds(target, true)
+	grounds.apply_to_unit(target, true)
 	if _same_combat(target, revision):
 		_pick_up(target)
 
