@@ -250,7 +250,11 @@ func animate_roll(roll: CombatDiceRoll) -> void:
 
 ## 빈 칸을 겨눈 화살 연출.
 func animate_cell_attack(actor: CombatUnit, cell: Vector2i) -> void:
-	await animate_attack_at(actor, _map.map_to_surface(cell) + Vector2(0, -8))
+	var destination: Vector2 = _map.map_to_surface(cell) + Vector2(0, -8)
+	if _is_muted():
+		actor.face_toward(destination)
+		return
+	await animate_attack_at(actor, destination)
 
 
 func animate_attack_at(actor: CombatUnit, destination: Vector2) -> void:

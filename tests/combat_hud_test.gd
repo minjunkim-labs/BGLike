@@ -1367,7 +1367,6 @@ func _test_log_and_status() -> void:
 	_check(not hit_sound.playing and hit_played.is_empty(), "실제 장면의 빗나감은 타격음 무음")
 	_check(_has_two_dice_log("불리"),
 		"불리 판정은 로그에 주사위 두 값을 모두 표시")
-	var parent: Node = units[2].get_parent()
 	var has_popup: bool = false
 	for child: Label in (battle.get("presentation") as CombatPresentation).feedback_popups():
 		if child.text == "빗나감":
