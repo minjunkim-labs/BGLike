@@ -4259,10 +4259,10 @@ func _test_rock_presentation() -> void:
 	units[3].cell = Vector2i(9, 9)
 	turns.select_unit(actor)
 	var rock: CombatGrid.Prop = actions.create_prop(Vector2i(6, 5), "rock")
-	var preview: CombatActions.RockRoll = actions.preview_rock(actor, rock)
+	var preview: CombatProps.RockRoll = actions.preview_rock(actor, rock)
 	var hp: int = units[2].hit_points
 	var landing: Vector2i = units[2].cell
-	for step: CombatActions.RockStep in preview.steps:
+	for step: CombatProps.RockStep in preview.steps:
 		if step.push and step.target == units[2]:
 			landing = step.push_cell
 	_check(landing != units[2].cell, "바위 연출 검수는 유닛을 미는 경로를 쓴다")

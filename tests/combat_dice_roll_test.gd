@@ -48,7 +48,7 @@ func _run() -> void:
 	await _test_give_up_during_roll()
 	await _test_give_up_during_spin_roll()
 	_test_pull_save_does_not_block_the_action()
-	_test_rock_stun_save_is_presented()
+	await _test_rock_stun_save_is_presented()
 	_test_values_without_presentation()
 	await _test_scene()
 	for f: Fixture in _fixtures:
@@ -384,7 +384,7 @@ func _test_rock_stun_save_is_presented() -> void:
 	target.cell = Vector2i(4, 6)
 	var rock: CombatGrid.Prop = f.actions.create_prop(Vector2i(4, 5), "rock")
 	f.actions.dice = _dice_for([1], [target.get_ability_sides(agility)])
-	_check(f.actions.attack_prop(f.units[0], rock) and target.is_stunned, "바위 충돌 기절 전제: 내성 실패로 기절")
+	_check(await f.actions.attack_prop(f.units[0], rock) and target.is_stunned, "바위 충돌 기절 전제: 내성 실패로 기절")
 	_check(f.rolls.size() == 1 and f.rolls[0].category == CombatDiceRoll.Category.SAVE
 		and f.rolls[0].roller == target and f.rolls[0].sides == target.get_ability_sides(agility)
 		and f.rolls[0].target_label == tr("DC") and f.rolls[0].target_value == CombatActions.ROCK_STUN_DC
@@ -398,7 +398,7 @@ func _test_rock_stun_save_is_presented() -> void:
 	boss.cell = Vector2i(4, 6)
 	var boss_rock: CombatGrid.Prop = boss_fixture.actions.create_prop(Vector2i(4, 5), "rock")
 	boss_fixture.actions.dice = _dice_for([], [])
-	_check(boss_fixture.actions.attack_prop(boss_fixture.units[0], boss_rock) and boss_fixture.rolls.is_empty(),
+	_check(await boss_fixture.actions.attack_prop(boss_fixture.units[0], boss_rock) and boss_fixture.rolls.is_empty(),
 		"보스 대상은 굴리지 않아 연출도 없다")
 
 
