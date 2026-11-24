@@ -42,7 +42,7 @@ class Preview extends RefCounted:
 	var preview_target: CombatUnit
 	var attack_preview: CombatChecks.AttackPreview
 	var preview_prop: CombatGrid.Prop
-	var rock_roll: CombatActions.RockRoll
+	var rock_roll: CombatProps.RockRoll
 	var inspected_unit: CombatUnit
 	var show_move_mode: bool = false
 	var target_note: String = ""
@@ -485,7 +485,7 @@ func _steel_charge_note(actor: CombatUnit, actions: CombatActions, target: Comba
 
 
 func _prop_note(actor: CombatUnit, actions: CombatActions, prop: CombatGrid.Prop,
-		roll: CombatActions.RockRoll) -> String:
+		roll: CombatProps.RockRoll) -> String:
 	var note: String = tr("기본 공격만 가능")
 	var title: String = tr("바위") if prop.kind == "rock" else tr("나무 상자 · 내구도 %d/6") % prop.hit_points
 	if _selected_action == "attack" and actor != null:

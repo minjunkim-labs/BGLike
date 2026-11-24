@@ -796,22 +796,16 @@ func _execute_command(actor: CombatUnit, command: CombatSelection.Command) -> vo
 			selection.finish_execution()
 		CombatSelection.Command.Kind.PROP:
 			var prop: CombatGrid.Prop = command.prop
-			var generation: int = map.revision
-			actions.busy = true
-			await presentation.animate_attack_at(actor, map.map_to_surface(prop.cell) + Vector2(0, -8))
-			if generation != map.revision:
-				return
 			var origin: Vector2i = prop.cell
-			var roll: CombatActions.RockRoll = actions.preview_rock(actor, prop) if prop.kind == "rock" else null
-			if not actions.is_over():
-				await map.animate_prop(prop, roll, func() -> bool: return not actions.is_over())
-			if generation != map.revision:
-				return
-			actions.busy = false
-			if actions.attack_prop(actor, prop):
+			var generation: int = map.revision
+			if await actions.attack_prop(actor, prop):
+				if generation != map.revision:
+					return
 				map.prop_impact(prop.cell, prop.hit_points == 0)
 				if prop.cell != origin:
 					map.prop_impact(origin, false)
+			elif generation != map.revision:
+				return
 			selection.finish_execution()
 			selection.offer_moving_shot(actor, turns.current_unit)
 		CombatSelection.Command.Kind.TARGET:

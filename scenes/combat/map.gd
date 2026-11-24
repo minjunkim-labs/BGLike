@@ -193,7 +193,7 @@ func reveal_units(units: Array[CombatUnit]) -> void:
 
 
 ## 판정 직전의 경로만 표시한다. 호출자가 입력을 잠그고 끝난 뒤 기존 판정을 실행한다.
-func animate_prop(prop: CombatGrid.Prop, roll: CombatActions.RockRoll, can_continue: Callable) -> void:
+func animate_prop(prop: CombatGrid.Prop, roll: CombatProps.RockRoll, can_continue: Callable) -> void:
 	var generation: int = revision
 	var foot: float = art_foot_offset(prop.kind)
 	var marker: Node2D = _art_marker(prop.cell, prop.kind)
@@ -213,7 +213,7 @@ func animate_prop(prop: CombatGrid.Prop, roll: CombatActions.RockRoll, can_conti
 		await tween.finished
 	else:
 		var pushed: Array[CombatUnit] = []
-		for step: CombatActions.RockStep in roll.steps:
+		for step: CombatProps.RockStep in roll.steps:
 			if generation != revision or not can_continue.call():
 				break
 			var destination: Vector2 = map_to_local(step.cell) if step.advance else marker.position
@@ -466,7 +466,7 @@ func show_threat(cells: Array[Vector2i]) -> void:
 		move_child(_turn_tile, -1)
 
 
-func show_rock_roll(origin: Vector2i, roll: CombatActions.RockRoll) -> void:
+func show_rock_roll(origin: Vector2i, roll: CombatProps.RockRoll) -> void:
 	var previous: Vector2 = map_to_surface(origin)
 	for cell: Vector2i in roll.cells:
 		var marker: Node2D = Node2D.new()

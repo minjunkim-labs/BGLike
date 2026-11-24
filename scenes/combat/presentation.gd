@@ -70,6 +70,7 @@ func bind(actions: CombatActions, turns: CombatTurns, map: CombatMap, hud: Comba
 	actions.jump_animation = animate_jump
 	actions.attack_animation = animate_attack
 	actions.cell_attack_animation = animate_cell_attack
+	actions.prop_animation = animate_prop
 	actions.roll_animation = animate_roll
 	turns.turn_started.connect(on_turn_started)
 
@@ -255,6 +256,22 @@ func animate_cell_attack(actor: CombatUnit, cell: Vector2i) -> void:
 		actor.face_toward(destination)
 		return
 	await animate_attack_at(actor, destination)
+
+
+## 상자·바위 공격과 바위 굴림 연출. 맵 세대가 바뀌어 중단되면 false를 돌려 새 세대 상태를 보존한다.
+func animate_prop(actor: CombatUnit, prop: CombatGrid.Prop, roll: CombatProps.RockRoll) -> bool:
+	var destination: Vector2 = _map.map_to_surface(prop.cell) + Vector2(0, -8)
+	if _is_muted():
+		actor.face_toward(destination)
+		return true
+	var generation: int = _map.revision
+	await animate_attack_at(actor, destination)
+	if generation != _map.revision:
+		return false
+	if _actions.is_over():
+		return true
+	await _map.animate_prop(prop, roll, func() -> bool: return not _actions.is_over())
+	return generation == _map.revision
 
 
 func animate_attack_at(actor: CombatUnit, destination: Vector2) -> void:
