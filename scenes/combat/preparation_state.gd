@@ -17,7 +17,7 @@ func open(
 	model: CombatLoot, allies: Array[CombatUnit], drops: Array[Dictionary],
 	is_final: bool, is_last_in_act: bool, is_maintaining: bool = false, lost_drops: int = 0
 ) -> bool:
-	if active:
+	if active or model == null:
 		return false
 	loot = model
 	party = allies
@@ -28,6 +28,10 @@ func open(
 	lost_floor_items = lost_drops
 	active = true
 	return true
+
+
+func close() -> void:
+	active = false
 
 
 func begin_maintenance() -> bool:

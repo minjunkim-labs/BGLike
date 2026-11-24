@@ -629,6 +629,10 @@ func _drop_item(data: Variant, kind: String, index: int) -> void:
 
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_VISIBILITY_CHANGED:
+		if not visible:
+			state.close()
+		return
 	if what not in [NOTIFICATION_DRAG_BEGIN, NOTIFICATION_DRAG_END] or not is_inside_tree():
 		return
 	if what == NOTIFICATION_DRAG_BEGIN:
