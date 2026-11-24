@@ -231,6 +231,7 @@ func _run() -> void:
 	before.erase("waiting_for_start")
 	ck(battle.call("restore_combat", before) and not battle.get("waiting_for_start"), "기존 전투 저장 호환")
 	await _transitions()
+	_test_preparation_state()
 	ck(ScriptedDice.finish().is_empty(), "이니셔티브 fixture 소비 일치")
 	main.queue_free()
 	await process_frame
@@ -387,3 +388,53 @@ func _tap(event: InputEvent) -> void:
 	event.set("pressed", false)
 	Input.parse_input_event(event)
 	await _settle()
+
+
+## UI 노드 없이 CombatPreparationState의 단계·이동·폐기·드롭·종료 규칙을 직접 검증한다.
+func _test_preparation_state() -> void:
+	var model: CombatLoot = CombatLoot.new()
+	var warrior: CombatUnit = CombatUnit.new()
+	warrior.kind = CombatUnit.Kind.WARRIOR
+	var archer: CombatUnit = CombatUnit.new()
+	archer.kind = CombatUnit.Kind.ARCHER
+	var allies: Array[CombatUnit] = [warrior, archer]
+	var weapon: Dictionary = _item("weapon")
+	var armor: Dictionary = _item("armor")
+	var potion: Dictionary = _item("potion")
+	var drops: Array[Dictionary] = [weapon.duplicate(true), armor.duplicate(true), potion.duplicate(true)]
+	var prep_state: CombatPreparationState = CombatPreparationState.new()
+	ck(prep_state.open(model, allies, drops, false, true, false, 2), "상태 단독 open")
+	ck(not prep_state.open(model, allies, drops, false, false), "이미 열린 상태는 중복 open 거부")
+	ck(prep_state.active and not prep_state.maintaining and prep_state.lost_floor_items == 2 and prep_state.last_in_act,
+		"open 직후 초기 단계·메타 보존")
+	ck(not prep_state.receive_reward(0, 0) and not prep_state.store_reward(0)
+		and not prep_state.finish() and not prep_state.can_drop("reward", 0, drops[0], "ally", 0),
+		"보상 확인 단계에서는 이동·드롭·종료 거부")
+	ck(prep_state.begin_maintenance() and not prep_state.begin_maintenance(), "정비 단계 전환은 한 번만 성공")
+	ck(prep_state.item_at("reward", 0) == weapon and prep_state.item_at("reward", 99).is_empty()
+		and prep_state.item_at("unknown", 0).is_empty(), "item_at 범위·종류 안전 조회")
+	ck(prep_state.apply_drop("reward", 0, drops[0], "empty_bag", 0)
+		and model.bag.size() == 1 and prep_state.rewards.size() == 2, "드롭으로 보상을 빈 가방에 보관")
+	ck(prep_state.apply_drop("bag", 0, model.bag[0], "weapon", 0)
+		and warrior.weapon == weapon and model.bag.is_empty(), "드롭으로 가방 무기 장착")
+	ck(prep_state.receive_reward(0, 1) and archer.armor == armor and prep_state.rewards.size() == 1, "보상 방어구 수령")
+	ck(prep_state.apply_drop("armor", 1, archer.armor, "empty_bag", 0)
+		and archer.armor.is_empty() and model.bag.size() == 1, "드롭으로 방어구 가방 해제")
+	ck(prep_state.receive_reward(0, 0) and warrior.potions.size() == 1 and prep_state.rewards.is_empty(), "보상 물약 수령")
+	var slot_item: Dictionary = prep_state.slot_potion(warrior, 0)
+	ck(not prep_state.can_drop("potion", 0, slot_item, "potion", 0, 0)
+		and not prep_state.can_drop("potion", 0, slot_item, "potion", 1, "bad"), "자기 자신·잘못된 슬롯 물약 드롭 거부")
+	ck(prep_state.apply_drop("potion", 0, slot_item, "potion", 1, 0)
+		and warrior.potions.is_empty() and archer.potions.size() == 1, "드롭으로 물약 전달")
+	ck(prep_state.discard_bag_item(0) and model.bag.is_empty() and not prep_state.discard_bag_item(0), "가방 폐기·빈 가방 거부")
+	var limit: int = prep_state.bag_limit()
+	for _i: int in range(limit):
+		model.bag.append(armor.duplicate(true))
+	prep_state.rewards.append(potion.duplicate(true))
+	ck(prep_state.needs_finish_confirmation(true) and not prep_state.needs_finish_confirmation(false), "남은 보상 종료 확인 판정")
+	ck(prep_state.bag_shortage() == 1 and not prep_state.finish() and prep_state.active, "가방 공간 부족 시 종료 거부")
+	ck(prep_state.discard_bag_item(0) and prep_state.bag_shortage() == 0, "폐기로 공간 확보")
+	ck(prep_state.finish() and not prep_state.active and prep_state.rewards.is_empty() and model.bag.size() == limit,
+		"종료 시 남은 보상 가방 보관 및 비활성화")
+	warrior.free()
+	archer.free()
