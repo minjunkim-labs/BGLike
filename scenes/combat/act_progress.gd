@@ -69,6 +69,18 @@ func load_state(data: Dictionary) -> void:
 	level = data.level
 
 
+static func is_valid_state(data: Variant, count: int, loot: CombatLoot) -> bool:
+	if not (data is Dictionary and data.get("stage") is int and data.stage >= 0 and data.stage < count
+			and data.get("rewarded") is bool and data.get("rewards") is Array
+			and (data.rewards as Array).all(loot.is_valid_item)
+			and data.rewards.size() <= CombatUnit.SAVED_INT_LIMIT):
+		return false
+	# 파티 레벨은 깬 막 수를 넘을 수 없다. 막의 마지막 스테이지는 승리를 기록한 뒤에 깬 것으로 센다 (#477).
+	return (data.get("level") is int and data.level >= 0
+		and data.level <= data.stage / STAGES_PER_ACT
+		+ (1 if data.rewarded and data.stage % STAGES_PER_ACT == STAGES_PER_ACT - 1 else 0))
+
+
 ## 아군 전멸 뒤 그 막의 첫 스테이지로 돌아간다.
 func restart_act() -> void:
 	stage_index -= stage_index % STAGES_PER_ACT

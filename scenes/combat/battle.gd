@@ -1,11 +1,7 @@
 extends Node2D
 ## 전투 화면과 3막 진행. 적 묶음은 이니셔티브 순서대로 실행한다.
 
-const MOVE_STEP_TIME: float = 0.09
-const ARROW_FLIGHT_TIME: float = 0.16
 const ENEMY_PAUSE_TIME: float = 0.35
-## 근접 공격 뒤 기다리는 시간(기본값). 전체 속도 계수로 늘어난다.
-const MELEE_ATTACK_TIME: float = 1.0 / 6.0
 ## 적 턴에 Space를 누르고 있는 동안의 시간 배율. 규칙이 아니라 표시 속도다.
 const ENEMY_FAST_SPEED: float = 4.0
 ## 마지막 적 처치 시 전투 불능(사라짐) 애니메이션이 끝난 뒤 승리 화면을 띄우기 전 기다리는 게임 시간(초, #728).
@@ -55,6 +51,7 @@ var start_button: Button
 
 var hit_effects: CombatHitEffects
 var sounds: CombatSounds
+var presentation: CombatPresentation
 @onready var map: CombatMap = $Map
 @onready var camera: CombatCamera = $Camera
 @onready var hud: CombatTurnHud = $UI/TurnHud
@@ -107,83 +104,35 @@ func _ready() -> void:
 	pause_menu.give_up_confirmed.connect(_give_up)
 	actions.changed.connect(_on_actions_changed)
 	actions.logged.connect(hud.add_log)
-	actions.feedback.connect(func(unit: CombatUnit, text: String) -> void:
-		if not _replaying():
-			unit.show_feedback(text, hud.feedback_obstacles()))
-	actions.healed.connect(func(unit: CombatUnit, amount: int) -> void:
-		if not _replaying():
-			unit.show_feedback(str(amount), hud.feedback_obstacles(), CombatUnit.HEAL_COLOR)
-			sounds.play(&"heal")
-			hit_effects.play_heal(unit))
-	actions.damaged.connect(func(target: Object) -> void:
-		if not _replaying():
-			sounds.play_hit(target))
-	actions.critical_hit.connect(func(_target: CombatUnit) -> void:
-		if not _replaying():
-			sounds.play_critical())
-	actions.downed.connect(func(unit: CombatUnit) -> void:
-		if not _replaying():
-			sounds.play(&"downed")
-			hit_effects.play_down(unit, map.map_to_surface(unit.cell))
-			if is_processing() and not unit.is_ally and actions.is_over() and actions.is_victory():
-				_begin_victory_wait())
-	actions.self_used.connect(func(actor: CombatUnit, action: String) -> void:
-		if _replaying():
-			return
-		if action == "holy_veil":
-			sounds.play(&"shield")
-			hit_effects.play_shield(actor)
-		elif action == "battle_cry":
-			sounds.play(&"shout")
-			for unit: CombatUnit in units:
-				if unit.hit_points > 0 and unit.battle_cry_source == actor:
-					hit_effects.play_buff(unit))
-	actions.swept.connect(func(actor: CombatUnit, facing: Vector2i) -> void:
-		if not _replaying():
-			hit_effects.play_sweep(actor, map.map_to_local(facing) - map.map_to_local(actor.cell)))
-	actions.status_applied.connect(func(target: CombatUnit, kind: String) -> void:
-		if not _replaying():
-			hit_effects.play_status(map.map_to_surface(target.cell), kind))
-	actions.status_ticked.connect(func(unit: CombatUnit, kind: String, _amount: int) -> void:
-		if not _replaying():
-			hit_effects.play_status(map.map_to_surface(unit.cell), kind))
-	actions.oil_ignited.connect(func(cells: Array[Vector2i]) -> void:
-		if not _replaying():
-			for cell: Vector2i in cells:
-				hit_effects.play_ignite(map.map_to_surface(cell)))
 	hit_effects = CombatHitEffects.new()
 	hit_effects.name = "HitEffects"
 	hit_effects.z_index = 5
 	add_child(hit_effects)
-	actions.struck.connect(_on_struck)
+	presentation = CombatPresentation.new()
+	presentation.name = "Presentation"
+	add_child(presentation)
+	presentation.bind(actions, turns, map, hud, dice_view, sounds, hit_effects, {
+		"is_replaying": _replaying,
+		"is_waiting_for_start": func() -> bool: return waiting_for_start,
+		"get_units": func() -> Array[CombatUnit]: return units,
+		"get_stage": func() -> CombatStage: return stages[progress.stage_index],
+		"show_enemy_action": _show_enemy_action,
+		"follow_turn_tile": _follow_turn_tile,
+		"on_victory_downed": _on_victory_downed,
+	})
 	actions.reaction_requested.connect(_on_reaction_requested)
 	hud.reflex_selected.connect(_on_reflex_selected)
 	hud.reflex_previewed.connect(_on_reflex_previewed)
 	hud.reflex_label = _reflex_arrow
 	hud.grid = actions.grid
-	actions.movement_animation = _animate_movement
-	actions.jump_animation = _animate_jump
-	actions.attack_animation = _animate_attack
-	actions.cell_attack_animation = _animate_cell_attack
-	actions.prop_animation = _animate_prop
-	actions.roll_animation = _animate_roll
 	turns.changed.connect(_on_turn_changed)
-	turns.turn_started.connect(_on_turn_started_sound)
 	turns.order_rotated.connect(hud.prepare_order_rotation)
 	_start_stage(true)
 
 
-## 타격 섬광·히트스톱·빗나감 잔상(#559). 이어하기 재실행에서는 피해 팝업·피격음처럼 생략한다.
-func _on_struck(attacker: CombatUnit, target: CombatUnit, cell: Vector2i, hit: bool) -> void:
-	if _replaying():
-		return
-	if not hit:
-		sounds.play(&"miss")
-		hit_effects.play_miss(attacker, target)
-	elif target == null:
-		hit_effects.play_hit(attacker, null, map.map_to_surface(cell) + Vector2(0, -8))
-	else:
-		hit_effects.play_hit(attacker, target, target.position + Vector2(0, target.floor_offset_y - 14))
+func _on_victory_downed(unit: CombatUnit) -> void:
+	if is_processing() and not unit.is_ally and actions.is_over() and actions.is_victory():
+		_begin_victory_wait()
 
 
 ## 반응 확인 창을 띄운다. 반사신경이면 후보 칸을 맵에 보인다.
@@ -267,7 +216,7 @@ func start_battle() -> void:
 	_save_pending = true
 	get_viewport().gui_release_focus()
 	sounds.start_ambient(actions.grid)
-	_on_turn_started_sound(turns.current_unit)
+	presentation.on_turn_started(turns.current_unit)
 	_update_turn_ui()
 
 
@@ -282,9 +231,7 @@ func _build_stage() -> CombatStage:
 	for unit: CombatUnit in units:
 		if not unit.is_ally:
 			unit.free()
-	for child: Node in $Units.get_children():
-		if child is Label:
-			child.free()
+	presentation.clear_feedback()
 	units = party.duplicate()
 	map_size = stage.map_size
 	actions.grid.map_size = map_size
@@ -313,44 +260,24 @@ func _build_stage() -> CombatStage:
 
 ## 이어하기에 필요한 전투 상태 전체. Object 없이 GameSave에 그대로 쓸 수 있는 값이다 (docs/adr/0003).
 func combat_state() -> Dictionary:
-	var state: Dictionary = progress.save_state()
-	state["waiting_for_start"] = waiting_for_start
-	state.merge(actions.save_state())
-	state["bag"] = loot.bag
-	state["units"] = units.map(func(unit: CombatUnit) -> Dictionary: return unit.save_state(units))
-	state["turns"] = turns.save_state(units)
-	state["last_ally"] = units.find(_last_ally)
-	return state.duplicate(true)
+	return CombatSnapshot.capture_combat(progress, waiting_for_start, actions, loot, units, turns, _last_ally)
 
 
 ## combat_state()로 저장한 전투로 되돌린다. 저장이 맞지 않으면 아무것도 바꾸지 않고 false다.
 ## 값은 GameSave.read()의 sections.combat을 그대로 받는다.
 ## 적 턴 중간의 저장이면 그 적 턴이 시작한 상태로 되돌리고, 다음 프레임에 끝낸 적 행동까지 연출 없이 다시 실행한다.
 func restore_combat(state: Variant) -> bool:
-	if actions.busy or _enemy_turn_running or _victory_waiting or preparation.visible or not (state is Dictionary and _is_valid_state(state)):
+	if (actions.busy or _enemy_turn_running or _victory_waiting or preparation.visible
+			or not CombatSnapshot.is_valid_combat(state, stages.size(), _stage_meta, loot, party[0])):
 		push_warning("전투 저장을 읽을 수 없음")
 		return false
 	progress.stage_index = state.stage
 	_build_stage()
-	progress.load_state(state)
-	# 유닛 load_state 전에 맞춘다. 레벨 setter가 보정한 HP를 저장한 HP로 덮는다.
-	_sync_party_level()
-	waiting_for_start = state.get("waiting_for_start", false)
-	loot.bag.assign(state.bag)
-	for saved: Dictionary in state.units.slice(units.size()):
-		var child: CombatUnit = (preload("res://scenes/combat/unit.tscn") as PackedScene).instantiate() as CombatUnit
-		child.kind = saved.kind
-		child.is_ally = false
-		$Units.add_child(child)
-		units.append(child)
-	for index: int in range(units.size()):
-		units[index].load_state(state.units[index], units)
-	actions.load_state(state)
-	turns.load_state(state.turns, units)
-	_last_ally = units[state.last_ally]
-	var replay: Dictionary = state.get("replay", {})
-	_replay_actions = replay.get("actions", 0)
-	actions.replay_answers.assign(replay.get("reactions", []))
+	var restored: Dictionary = CombatSnapshot.apply_combat(state, progress, loot, units, actions, turns,
+		_spawn_saved_enemy, _sync_party_level)
+	waiting_for_start = restored.waiting_for_start
+	_last_ally = restored.last_ally
+	_replay_actions = restored.replay_actions
 	selection.reset()
 	_update_turn_ui()
 	# 방금 읽은 저장과 같은 상태다. 적 턴 중간 저장을 시작 상태로 덮지 않는다.
@@ -358,118 +285,18 @@ func restore_combat(state: Variant) -> bool:
 	return true
 
 
-## 저장 파일의 값은 신뢰하지 않는다. 스테이지·유닛 구성·번호·칸·아이템을 모두 확인한다.
-func _is_valid_state(state: Dictionary) -> bool:
-	if not state.get("waiting_for_start", false) is bool:
-		return false
-	if not (state.get("stage") is int and state.stage >= 0 and state.stage < stages.size()
-			and state.get("rewarded") is bool and state.get("units") is Array and state.get("last_ally") is int
-			and _valid_items(state.get("rewards")) and _valid_items(state.get("bag"))
-			and state.rewards.size() <= CombatUnit.SAVED_INT_LIMIT and state.bag.size() <= int(loot.data["bag_limit"])):
-		return false
-	if state.get("waiting_for_start", false) and state.rewarded:
-		return false
-	# 파티 레벨은 깬 막 수를 넘을 수 없다. 막의 마지막 스테이지는 승리를 기록한 뒤에 깬 것으로 센다 (#477).
-	if not (state.get("level") is int and state.level >= 0
-			and state.level <= state.stage / CombatActProgress.STAGES_PER_ACT
-			+ (1 if state.rewarded and state.stage % CombatActProgress.STAGES_PER_ACT == CombatActProgress.STAGES_PER_ACT - 1 else 0)):
-		return false
-	var stage: CombatStage = stages[state.stage]
-	var identities: Array = party.map(func(unit: CombatUnit) -> Array: return [unit.kind, true])
-	var enemies: Node = stage.enemies.instantiate()
-	for child: Node in enemies.get_children():
-		identities.append([(child as CombatUnit).kind, false])
-	enemies.free()
-	var saved_units: Array = state.units
-	var count: int = saved_units.size()
-	# 늘어나는 유닛은 새끼 거미뿐이고 한 칸에 하나다.
-	if count < identities.size() or count > identities.size() + stage.map_size.x * stage.map_size.y:
-		return false
-	for index: int in range(count):
-		var saved: Variant = saved_units[index]
-		var identity: Array = identities[index] if index < identities.size() else [CombatUnit.Kind.SPIDERLING, false]
-		if (not party[0].is_valid_state(saved, count, stage.map_size) or [saved.kind, saved.ally] != identity
-				or not (saved.weapon.is_empty() or loot.is_valid_item(saved.weapon) and saved.weapon.kind == "weapon")
-				or not (saved.armor.is_empty() or loot.is_valid_item(saved.armor) and saved.armor.kind == "armor")
-				or not loot.is_valid_potions(saved.potions) or not (saved.ally or saved.potions.is_empty())):
-			return false
-		var agility_sides: int = (CombatUnit.ALLY_ABILITY_SIDES[saved.kind][CombatUnit.Ability.AGILITY]
-			if saved.ally else CombatEnemyDefinitions.for_kind(saved.kind)["abilities"][CombatUnit.Ability.AGILITY])
-		# 생성한 새끼는 굴리지 않고 엄마 앞에 삽입되므로 원본 값 0을 보존한다.
-		if saved.initiative_roll < (1 if index < identities.size() else 0) or saved.initiative_roll > agility_sides:
-			return false
-	if not (state.last_ally >= 0 and state.last_ally < count and saved_units[state.last_ally].ally
-			and CombatTurns.is_valid_state(state.get("turns"), count)
-			and CombatActions.is_valid_state(state, count, stage.map_size, stage.tree_cells())):
-		return false
-	# 떨어진·주운 아이템은 이 스테이지의 상자 수를 넘지 않고, 남은 상자 칸에 떨어져 있지 않다.
-	var crates: Array = state.props.filter(func(saved: Array) -> bool: return saved[0] == "crate")
-	if not (CombatFloorLoot.is_valid_state(state.get("floor_loot"), stage.map_size,
-			maxi(0, stage.crate_cells.size() - crates.size()), loot.is_valid_item)
-			and crates.all(func(saved: Array) -> bool: return state.floor_loot.drops.all(
-				func(drop: Array) -> bool: return drop[0] != saved[1]))):
-		return false
-	# 턴 순서는 살아 있는 유닛 전부다. 쓰러진 유닛이나 빠진 유닛이 있으면 턴이 끝없이 넘어가거나 멈춘다.
-	var order: Array = state.turns.order
-	var living: Array = range(count).filter(func(index: int) -> bool: return saved_units[index].hit_points > 0)
-	if (order.size() != living.size() or not living.all(func(index: int) -> bool: return index in order)
-			or not order.is_empty() and state.turns.current < 0):
-		return false
-	# 시계 슬롯은 쓰러진 시전자의 자리다. 시전자가 살아 있으면 두 번 줄고, 기준 유닛이 쓰러졌으면 줄지 않는다.
-	for slot: Array in state.clock_slots:
-		if slot[0] in order or slot[1] not in order:
-			return false
-	# 기절은 시전자의 턴이 와야 풀린다. 시전자가 살아서 순서에 있어야 턴이 끝없이 넘어가지 않는다.
-	for saved: Dictionary in saved_units:
-		if saved.stunned and saved.hit_points > 0 and (saved_units[saved.stun_source].hit_points <= 0
-				or saved.stun_source not in state.turns.order):
-			return false
-	var replay: Variant = state.get("replay", {})
-	if not (replay is Dictionary and replay.get("actions", 0) is int
-			and replay.get("actions", 0) <= CombatUnit.SAVED_INT_LIMIT and replay.get("reactions", []) is Array
-			and replay.get("reactions", []).size() <= CombatUnit.SAVED_INT_LIMIT
-			# 반응 답은 bool이거나, 반사신경이 고른 지도 안의 칸이다.
-			and replay.get("reactions", []).all(func(answer: Variant) -> bool:
-				return answer is bool or answer is Vector2i and Rect2i(Vector2i.ZERO, stage.map_size).has_point(answer))
-			and (replay.get("actions", 0) > 0 or replay.get("reactions", []).is_empty())):
-		return false
-	if state.get("waiting_for_start", false) and (state.turns.round != 1 or replay.get("actions", 0) != 0):
-		return false
-	if replay.get("actions", 0) == 0:
-		return true
-	# 적 턴 중간 저장은 살아 있는 적의 차례이고 양편이 남아 있을 때만 있다.
-	var current: int = state.turns.current
-	return (replay.actions > 0 and current >= 0 and not saved_units[current].ally
-		and saved_units[current].hit_points > 0
-		and saved_units.any(func(unit: Dictionary) -> bool: return unit.ally and unit.hit_points > 0))
-
-
 ## 이어하기. GameSave.read()의 sections를 그대로 받는다. 정비·보상 확인 화면 중의 저장이면 그 화면과 단계를 다시 연다.
 ## 저장이 맞지 않으면 아무것도 바꾸지 않고 false다.
 func restore_save(sections: Variant) -> bool:
-	var combat: Variant = sections.get("combat") if sections is Dictionary else null
-	var screen: Variant = sections.get("preparation", {}) if sections is Dictionary else null
-	if not (screen is Dictionary and combat is Dictionary and _is_valid_state(combat)):
-		push_warning("저장을 읽을 수 없음")
+	var plan: CombatSnapshot.SavePlan = CombatSnapshot.parse_save(sections, stages.size(), _stage_meta, loot, party[0])
+	if not plan.valid:
+		push_warning(plan.error_message)
 		return false
-	# #345의 지도 준비 정비 화면 저장(`before_battle`)은 #395 뒤에 만들지 않는다. 그 화면의 변경은 이미 combat에 있어
-	# 같은 지도 준비로 이어한다.
-	var before_battle: bool = screen.get("before_battle") is bool and screen.before_battle
-	if not screen.is_empty():
-		var valid: bool = screen.get("maintaining") is bool
-		if before_battle:
-			valid = valid and screen.size() == 2 and screen.maintaining and combat.get("waiting_for_start", false)
-		else:
-			valid = valid and screen.keys() == ["maintaining"] and combat.rewarded
-			valid = valid and combat.units.all(func(unit: Dictionary) -> bool: return unit.ally or unit.hit_points <= 0)
-		if not valid:
-			push_warning("저장한 정비 단계가 전투 상태와 맞지 않음")
-			return false
-	if not restore_combat(combat):
+	if not restore_combat(plan.combat):
 		return false
-	if not screen.is_empty() and not before_battle:
+	if plan.open_preparation:
 		preparation.open_rewards(loot, party, progress.rewards, progress.is_final_stage(),
-			progress.is_last_in_act(), screen.maintaining, actions.floor_loot.cells().size())
+			progress.is_last_in_act(), plan.maintaining, actions.floor_loot.cells().size())
 		hud.hide_result()
 		_sync_music()
 		# 방금 읽은 저장과 같은 상태다.
@@ -477,8 +304,16 @@ func restore_save(sections: Variant) -> bool:
 	return true
 
 
-func _valid_items(items: Variant) -> bool:
-	return items is Array and (items as Array).all(loot.is_valid_item)
+func _stage_meta(index: int) -> CombatSnapshot.StageMeta:
+	return CombatSnapshot.StageMeta.from_stage(stages[index], party)
+
+
+func _spawn_saved_enemy(saved: Dictionary) -> CombatUnit:
+	var child: CombatUnit = (preload("res://scenes/combat/unit.tscn") as PackedScene).instantiate() as CombatUnit
+	child.kind = saved.kind
+	child.is_ally = false
+	$Units.add_child(child)
+	return child
 
 
 func _restart() -> void:
@@ -594,10 +429,7 @@ func _can_save() -> bool:
 ## 쓰기에 실패하면 이전 저장이 남고 다음 행동이 끝날 때 다시 쓴다. 매 프레임 다시 쓰지 않는다.
 func _autosave(state: Dictionary) -> void:
 	_save_pending = false
-	var sections: Dictionary = {"combat": state}
-	# 선택한 칸과 열린 확인 창은 저장하지 않는다. 이어하기는 같은 화면 단계에서 아무것도 고르지 않은 채 시작한다.
-	if preparation.visible:
-		sections["preparation"] = {"maintaining": preparation.maintaining}
+	var sections: Dictionary = CombatSnapshot.capture_sections(state, preparation.visible, preparation.maintaining)
 	if GameSave.write(progress.act_number(), progress.stage_in_act(), sections) == OK:
 		autosaved.emit()
 
@@ -1002,12 +834,6 @@ func preview_enemy(target: CombatUnit) -> bool:
 	return true
 
 
-## 진영이 바뀌는 턴 시작 신호음. 전투 준비 중과 이어하기 재실행에서는 내지 않는다.
-func _on_turn_started_sound(unit: CombatUnit) -> void:
-	if not waiting_for_start and not _replaying():
-		sounds.turn_started(unit)
-
-
 func _on_actions_changed() -> void:
 	_save_pending = true
 	if actions.is_over():
@@ -1060,108 +886,6 @@ func _on_turn_changed() -> void:
 	_save_pending = true
 	selection.reset()
 	_update_turn_ui()
-
-
-func _animate_movement(unit: CombatUnit, cell: Vector2i) -> void:
-	var destination: Vector2 = map.map_to_local(cell)
-	# 다시 실행할 때도 방향은 저장하는 상태라 그대로 바꾼다.
-	if _replaying():
-		unit.face_toward(destination)
-		return
-	await _show_enemy_action()
-	unit.face_toward(destination)
-	sounds.play(CombatSounds.step_cue(actions.grid, stages[progress.stage_index], cell))
-	unit.is_moving = true
-	var tween: Tween = create_tween().set_parallel()
-	var step_time: float = CombatPresentation.duration(MOVE_STEP_TIME)
-	tween.tween_property(unit, "position", destination, step_time)
-	tween.tween_property(unit, "floor_offset_y", map.map_to_surface(cell).y - destination.y, step_time)
-	tween.tween_property(unit, "body_offset_y", -3.0, step_time / 2.0)
-	tween.tween_property(unit, "body_offset_y", 0.0, step_time / 2.0).from(-3.0).set_delay(step_time / 2.0)
-	await tween.finished
-	unit.position = destination
-	unit.body_offset_y = 0.0
-	unit.is_moving = false
-	_follow_turn_tile(unit, cell)
-
-
-func _animate_jump(unit: CombatUnit, cell: Vector2i) -> void:
-	var destination: Vector2 = map.map_to_local(cell)
-	if _replaying():
-		unit.face_toward(destination)
-		return
-	await _show_enemy_action()
-	var duration: float = CombatPresentation.duration(MOVE_STEP_TIME * 2.0)
-	var apex: float = -float(map.tile_set.tile_size.y)
-	unit.face_toward(destination)
-	sounds.play(&"jump")
-	unit.is_moving = true
-	var tween: Tween = create_tween().set_parallel()
-	tween.tween_property(unit, "position", destination, duration)
-	tween.tween_property(unit, "floor_offset_y", map.map_to_surface(cell).y - destination.y, duration)
-	tween.tween_property(unit, "body_offset_y", apex, duration / 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tween.tween_property(unit, "body_offset_y", 0.0, duration / 2.0).from(apex).set_delay(duration / 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-	await tween.finished
-	unit.position = destination
-	unit.body_offset_y = 0.0
-	unit.is_moving = false
-	_follow_turn_tile(unit, cell)
-	sounds.play(&"land")
-
-
-func _animate_attack(actor: CombatUnit, target: CombatUnit) -> void:
-	var destination: Vector2 = target.position + Vector2(0, target.floor_offset_y - 14)
-	if _replaying():
-		actor.face_toward(destination)
-		return
-	await _show_enemy_action()
-	await _animate_attack_at(actor, destination)
-
-
-## 아군이 굴릴 때만 보인다. 몬스터의 굴림과 이어하기로 다시 실행하는 굴림은 보이지 않는다.
-func _animate_roll(roll: CombatDiceRoll) -> void:
-	if _replaying() or not roll.roller.is_ally:
-		return
-	await dice_view.play(roll)
-
-
-## 빈 칸을 겨눈 화살 연출.
-func _animate_cell_attack(actor: CombatUnit, cell: Vector2i) -> void:
-	await _animate_attack_at(actor, map.map_to_surface(cell) + Vector2(0, -8))
-
-
-## 상자·바위 공격과 바위 굴림 연출. 맵 세대가 바뀌어 중단되면 false를 돌려 새 세대 상태를 보존한다.
-func _animate_prop(actor: CombatUnit, prop: CombatGrid.Prop, roll: CombatProps.RockRoll) -> bool:
-	var generation: int = map.revision
-	await _animate_attack_at(actor, map.map_to_surface(prop.cell) + Vector2(0, -8))
-	if generation != map.revision:
-		return false
-	if actions.is_over():
-		return true
-	await map.animate_prop(prop, roll, func() -> bool: return not actions.is_over())
-	return generation == map.revision
-
-
-func _animate_attack_at(actor: CombatUnit, destination: Vector2) -> void:
-	actor.face_toward(destination)
-	actor.play_attack()
-	if actor.kind != CombatUnit.Kind.ARCHER:
-		await get_tree().create_timer(CombatPresentation.duration(MELEE_ATTACK_TIME), false).timeout
-		return
-	var arrow: Polygon2D = Polygon2D.new()
-	arrow.name = "Arrow"
-	arrow.polygon = PackedVector2Array([
-		Vector2(-4, -1), Vector2(4, -1), Vector2(4, 1), Vector2(-4, 1)
-	])
-	arrow.color = Color("efe4c8")
-	arrow.z_index = 1
-	arrow.position = actor.position + Vector2(-8 if actor.facing_left else 8, actor.floor_offset_y - 16)
-	arrow.rotation = (destination - arrow.position).angle()
-	add_child(arrow)
-	var tween: Tween = create_tween()
-	tween.tween_property(arrow, "position", destination, CombatPresentation.duration(ARROW_FLIGHT_TIME))
-	await tween.finished
-	arrow.queue_free()
 
 
 ## 발밑 칸 표시와 카메라가 따라가는 행동 유닛. 전투 시작 전·전투 끝·전투 불능이면 null이다.
