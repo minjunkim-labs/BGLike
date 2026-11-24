@@ -100,7 +100,7 @@ func _test_struck_signal() -> void:
 	var h: Fixture = _fixture()
 	var crate: CombatGrid.Prop = h.actions.create_prop(Vector2i(4, 5), "crate")
 	h.actions.dice = _dice_for([4], [20])
-	h.actions.attack_prop(h.units[0], crate)
+	await h.actions.attack_prop(h.units[0], crate)
 	_check(h.strikes.size() == 1 and h.strikes[0]["target"] == null and h.strikes[0]["cell"] == Vector2i(4, 5)
 		and h.strikes[0]["hit"] == true, "나무 상자 공격은 target=null과 상자 칸으로 알린다")
 	# 공격이 아닌 피해(화상 틱)는 알리지 않는다.
@@ -142,14 +142,14 @@ func _test_sound_signals() -> void:
 	h.actions.damaged.connect(prop_hits.append)
 	var crate: CombatGrid.Prop = h.actions.create_prop(Vector2i(4, 5), "crate")
 	h.actions.dice = _dice_for([4], [20])
-	h.actions.attack_prop(h.units[0], crate)
+	await h.actions.attack_prop(h.units[0], crate)
 	_check(prop_hits.size() == 1 and prop_hits[0] == crate, "나무 상자 공격은 상자의 damaged: %s" % [prop_hits])
 	prop_hits.clear()
 	var rock_fixture: Fixture = _fixture()
 	rock_fixture.actions.damaged.connect(prop_hits.append)
 	var rock: CombatGrid.Prop = rock_fixture.actions.create_prop(Vector2i(4, 5), "rock")
 	rock_fixture.actions.dice = _dice_for([], [])
-	rock_fixture.actions.attack_prop(rock_fixture.units[0], rock)
+	await rock_fixture.actions.attack_prop(rock_fixture.units[0], rock)
 	# 사물 공격은 명중굴림이 없어 늘 닿는다. 바위는 피해 없이 굴러가지만 때린 소리는 난다.
 	_check(prop_hits.size() == 1 and prop_hits[0] == rock, "바위 공격은 피해 없이도 맞은 소리용 damaged 한 번: %s" % [prop_hits])
 	var s: Fixture = _fixture()
@@ -185,10 +185,10 @@ func _test_rock_roll() -> void:
 	if rock == null:
 		return
 	f.actions.dice = _dice_for([], [])
-	_check(f.actions.attack_prop(f.units[0], rock) and rock.cell == Vector2i(4, 8)
+	_check(await f.actions.attack_prop(f.units[0], rock) and rock.cell == Vector2i(4, 8)
 		and f.units[0].action_left == 0 and f.actions.last_damage == 0,
 		"기본 공격 행동1로 바위를 공격자 반대 방향3칸 굴리며 주사위와 무기 피해를 쓰지 않는다")
-	_check(not f.actions.attack_prop(f.units[0], rock) and rock.cell == Vector2i(4, 8),
+	_check(not await f.actions.attack_prop(f.units[0], rock) and rock.cell == Vector2i(4, 8),
 		"행동을 쓴 뒤 반복 바위 공격은 실행하지 않는다")
 
 
@@ -206,7 +206,7 @@ func _test_rock_geometry() -> void:
 		_check(preview.get("cells") == [Vector2i(4, 6)] and rock.cell == Vector2i(4, 5)
 			and f.units[0].action_left == 1, "순수 바위 경로 미리보기는 장애물 앞까지만 보여준다: " + obstacle)
 		f.actions.dice = _dice_for([], [])
-		_check(f.actions.attack_prop(f.units[0], rock) and rock.cell == Vector2i(4, 6),
+		_check(await f.actions.attack_prop(f.units[0], rock) and rock.cell == Vector2i(4, 6),
 			"실제 바위는 미리보기와 같은 장애물 앞에서 멈춘다: " + obstacle)
 	for hazard: String in ["pit", "drop"]:
 		var f: Fixture = _fixture()
@@ -220,14 +220,14 @@ func _test_rock_geometry() -> void:
 		_check(preview.get("destroyed") and preview.get("cells") == [Vector2i(4, 6)],
 			"낭떠러지와 한단계 높이차2 파괴를 미리 보여준다: " + hazard)
 		f.actions.dice = _dice_for([], [])
-		_check(f.actions.attack_prop(f.units[0], rock) and f.actions.get_props().is_empty(),
+		_check(await f.actions.attack_prop(f.units[0], rock) and f.actions.get_props().is_empty(),
 			"바위는 유닛 충돌 전에 낭떠러지/높이차2에서 제거된다: " + hazard)
 	var f: Fixture = _fixture()
 	var rock: CombatGrid.Prop = f.actions.create_prop(Vector2i(5, 5), "rock")
 	f.units[0].kind = CombatUnit.Kind.ARCHER
 	f.units[0].cell = Vector2i(7, 6)
 	f.actions.dice = _dice_for([], [])
-	_check(f.actions.attack_prop(f.units[0], rock) and rock.cell == Vector2i(2, 5),
+	_check(await f.actions.attack_prop(f.units[0], rock) and rock.cell == Vector2i(2, 5),
 		"원거리 공격은 공격자에서 바위로 향한 큰축 음수 방향으로 굴린다")
 	ScriptedDice.start_turn(f.units[0])
 	f.units[0].cell = Vector2i(1, 4)
@@ -236,11 +236,11 @@ func _test_rock_geometry() -> void:
 		"대각선 거리의 두 축이 같으면 x축을 쓴다")
 	rock.cell = Vector2i(9, 5)
 	f.units[0].cell = Vector2i(8, 5)
-	_check(f.actions.attack_prop(f.units[0], rock) and rock.cell == Vector2i(9, 5),
+	_check(await f.actions.attack_prop(f.units[0], rock) and rock.cell == Vector2i(9, 5),
 		"맵 경계 앞의 유효한 바위 공격은 행동1을 쓰고 제자리에 멈춘다")
 	ScriptedDice.start_turn(f.units[0])
 	f.units[0].cell = rock.cell
-	_check(not f.actions.attack_prop(f.units[0], rock) and f.units[0].action_left == 1,
+	_check(not await f.actions.attack_prop(f.units[0], rock) and f.units[0].action_left == 1,
 		"공격자와 같은 칸의 바위는 방향을 만들지 않고 거부한다")
 
 
@@ -256,7 +256,7 @@ func _test_rock_collisions() -> void:
 			and preview.get("collisions") == [target] and target.hit_points == before
 			and target.cell == Vector2i(4, 6), "미리보기는 아군/적 충돌과 반복 밀기를 상태 변경 없이 예측한다")
 		f.actions.dice = _dice_for([], []).then_seeded()
-		_check(f.actions.attack_prop(f.units[0], rock) and target.hit_points == before - 4
+		_check(await f.actions.attack_prop(f.units[0], rock) and target.hit_points == before - 4
 			and target.cell == Vector2i(4, 9) and rock.cell == Vector2i(4, 8) and f.hits.size() == 1,
 			"아군과 적 모두 한 굴림에서4피해1회만 받고 최대3회 밀린다")
 		_check(target.movement_left == 8 and target.action_left == 1 and target.reaction_left == 1,
@@ -275,7 +275,7 @@ func _test_rock_collisions() -> void:
 		else:
 			f.actions.create_prop(Vector2i(4, 7), obstacle)
 		f.actions.dice = _dice_for([], []).then_seeded()
-		_check(f.actions.attack_prop(f.units[0], rock) and target.hit_points == 8
+		_check(await f.actions.attack_prop(f.units[0], rock) and target.hit_points == 8
 			and target.cell == Vector2i(4, 6) and rock.cell == Vector2i(4, 5)
 			and f.units[3].hit_points == 14, "밀 수 없으면 충돌 피해만 주고 대상 앞에서 멈추며 연쇄 밀지 않는다: " + obstacle)
 	var f: Fixture = _fixture()
@@ -283,14 +283,14 @@ func _test_rock_collisions() -> void:
 	f.units[2].hit_points = 4
 	var rock: CombatGrid.Prop = f.actions.create_prop(Vector2i(4, 5), "rock")
 	f.actions.dice = _dice_for([], [])
-	_check(f.actions.attack_prop(f.units[0], rock) and f.units[2].hit_points == 0
+	_check(await f.actions.attack_prop(f.units[0], rock) and f.units[2].hit_points == 0
 		and rock.cell == Vector2i(4, 8), "충돌로 전투 불능이 된 대상의 빈칸으로 바위가 계속 굴러간다")
 	f = _fixture()
 	f.units[2].cell = Vector2i(4, 6)
 	f.actions.grid.pits = [Vector2i(4, 7)]
 	rock = f.actions.create_prop(Vector2i(4, 5), "rock")
 	f.actions.dice = _dice_for([], []).then_seeded()
-	_check(f.actions.attack_prop(f.units[0], rock) and f.units[2].hit_points == 0
+	_check(await f.actions.attack_prop(f.units[0], rock) and f.units[2].hit_points == 0
 		and f.units[2].cell == Vector2i(4, 7) and f.actions.get_props().is_empty(),
 		"대상을 낭떠러지로 민 뒤 바위도 다음 낭떠러지에서 소멸한다")
 	f = _fixture()
@@ -304,7 +304,7 @@ func _test_rock_collisions() -> void:
 	f.actions.create_ground(f.units[3], Vector2i(4, 7), "poison")
 	rock = f.actions.create_prop(Vector2i(4, 5), "rock")
 	f.actions.dice = _dice_for([], []).then_seeded()
-	_check(f.actions.attack_prop(f.units[0], rock) and target.cell == Vector2i(4, 7)
+	_check(await f.actions.attack_prop(f.units[0], rock) and target.cell == Vector2i(4, 7)
 		and target.hit_points == 6 and target.get_status_count("burn") == 0
 		and target.get_status_count("poison") == 1 and f.actions.get_props().is_empty(),
 		"바위 밀기는 기존 물→낙하2피해→장판 착지를 거치고 바위는 높이차3에서 먼저 파괴된다")
@@ -314,7 +314,7 @@ func _test_rock_collisions() -> void:
 	f.actions.grid.heights[Vector2i(4, 5)] = 2
 	rock = f.actions.create_prop(Vector2i(4, 5), "rock")
 	f.actions.dice = _dice_for([], [])
-	_check(f.actions.attack_prop(f.units[0], rock) and f.units[2].hit_points == 12
+	_check(await f.actions.attack_prop(f.units[0], rock) and f.units[2].hit_points == 12
 		and f.actions.get_props().is_empty(), "높이차2 파괴는 같은 칸의 유닛 충돌 피해보다 먼저 적용한다")
 
 
@@ -331,7 +331,7 @@ func _test_rock_interruptions() -> void:
 		_check(preview.get("cells") == [] and preview.get("reason") == "전투 종료",
 			"미리보기도 충돌/낙사로 전투가 끝나면 남은 굴림을 예측하지 않는다")
 		f.actions.dice = _dice_for([], []).then_seeded()
-		_check(f.actions.attack_prop(f.units[0], rock) and f.actions.is_over()
+		_check(await f.actions.attack_prop(f.units[0], rock) and f.actions.is_over()
 			and rock.cell == Vector2i(4, 5), "실제 충돌/낙사로 전투가 끝나면 바위의 남은 이동을 중단한다")
 	for change: String in ["reset", "unit_remove", "rock_remove", "rock_move", "over"]:
 		var f: Fixture = _fixture()
@@ -355,7 +355,7 @@ func _test_rock_interruptions() -> void:
 					f.actions.incapacitate(f.units[3])
 		f.actions.hit_landed.connect(callback)
 		f.actions.dice = _dice_for([], []).then_seeded()
-		var executed: bool = f.actions.attack_prop(f.units[0], rock)
+		var executed: bool = await f.actions.attack_prop(f.units[0], rock)
 		f.actions.hit_landed.disconnect(callback)
 		_check(executed and not f.actions.busy and f.hits.size() == 1
 			and rock.cell == (Vector2i(8, 8) if change == "rock_move" else Vector2i(4, 5)),
@@ -385,7 +385,7 @@ func _test_rock_interruptions() -> void:
 		f.actions.create_ground(f.units[3], target.cell, "poison")
 	f.actions.changed.connect(callback)
 	f.actions.dice = _dice_for([], []).then_seeded()
-	f.actions.attack_prop(f.units[0], rock)
+	await f.actions.attack_prop(f.units[0], rock)
 	f.actions.changed.disconnect(callback)
 	_check(reset[0] and target.hit_points == 12 and target.get_status_count("poison") == 0
 		and f.actions.get_props().size() == 1 and f.actions.grid.prop_at(Vector2i(1, 1)) != null,
@@ -402,7 +402,7 @@ func _test_rock_logs() -> void:
 	var record: Callable = func(message: String) -> void: messages.append(message)
 	f.actions.logged.connect(record)
 	f.actions.dice = _dice_for([], [])
-	f.actions.attack_prop(f.units[0], rock)
+	await f.actions.attack_prop(f.units[0], rock)
 	_check("바위 충돌: 피해4" in "\n".join(messages) and "전투 종료" in messages[-1]
 		and "피해4" in messages[-1],
 		"마지막 적을 쓰러뜨린 최종 정지 로그에도 충돌 피해4를 남긴다")
@@ -421,7 +421,7 @@ func _test_rock_logs() -> void:
 			stale[0] = true
 	f.actions.logged.connect(callback)
 	f.actions.dice = _dice_for([], [])
-	f.actions.attack_prop(f.units[0], rock)
+	await f.actions.attack_prop(f.units[0], rock)
 	f.actions.logged.disconnect(callback)
 	_check(moves[0] == 3 and not stale[0] and f.actions.grid.prop_at(Vector2i(1, 1)) != null,
 		"마지막 이동 로그의 초기화 callback 뒤 새 전투에 지난 정지 로그를 추가하지 않는다")
@@ -462,7 +462,7 @@ func _test_rock_pit_reset_callbacks() -> void:
 		if reset_at == "turn_changed":
 			old_turns.changed.connect(reset)
 		f.actions.dice = _dice_for([], []).then_seeded()
-		f.actions.attack_prop(f.units[0], rock)
+		await f.actions.attack_prop(f.units[0], rock)
 		f.actions.logged.disconnect(on_log)
 		f.actions.feedback.disconnect(on_feedback)
 		if reset_at == "turn_changed":
@@ -490,7 +490,7 @@ func _test_rock_landing_removal() -> void:
 			f.units.erase(target)
 	f.actions.changed.connect(callback)
 	f.actions.dice = _dice_for([], []).then_seeded()
-	f.actions.attack_prop(f.units[0], rock)
+	await f.actions.attack_prop(f.units[0], rock)
 	f.actions.changed.disconnect(callback)
 	_check(removed[0] and target.hit_points == 8 and other.hit_points == 14
 		and other.cell == Vector2i(4, 8) and rock.cell == Vector2i(4, 5) and f.hits.size() == 1,
@@ -508,7 +508,7 @@ func _test_rock_downhill_and_reentry() -> void:
 	var rock: CombatGrid.Prop = f.actions.create_prop(Vector2i(4, 5), "rock")
 	f.actions.dice = _dice_for([], [])
 	_check(f.actions.preview_rock(f.units[0], rock).cells.size() == 3
-		and f.actions.attack_prop(f.units[0], rock) and rock.cell == Vector2i(4, 8)
+		and await f.actions.attack_prop(f.units[0], rock) and rock.cell == Vector2i(4, 8)
 		and rock.hit_points == 6 and f.actions.get_grounds().size() == 2,
 		"높이 차1씩 내려가는 길과 물/장판은 바위를 바꾸지 않고3칸 진행을 허용한다")
 	f = _fixture()
@@ -517,10 +517,10 @@ func _test_rock_downhill_and_reentry() -> void:
 	var attempts: Array[bool] = []
 	var callback: Callable = func() -> void:
 		ScriptedDice.start_turn(f.units[0])
-		attempts.append(f.actions.attack_prop(f.units[0], rock))
+		attempts.append(await f.actions.attack_prop(f.units[0], rock))
 	f.actions.hit_landed.connect(callback)
 	f.actions.dice = _dice_for([], []).then_seeded()
-	f.actions.attack_prop(f.units[0], rock)
+	await f.actions.attack_prop(f.units[0], rock)
 	f.actions.hit_landed.disconnect(callback)
 	_check(attempts == [false] and f.units[2].hit_points == 8 and f.hits.size() == 1,
 		"충돌 기록은 callback 전에 남기고 자원을 다시 채운 재진입 호출도 busy로 막는다")
@@ -528,16 +528,16 @@ func _test_rock_downhill_and_reentry() -> void:
 	rock = f.actions.create_prop(Vector2i(4, 5), "rock")
 	f.actions.dice = _dice_for([], [])
 	f.units[0].is_stunned = true
-	_check(not f.actions.attack_prop(f.units[0], rock) and f.units[0].action_left == 1,
+	_check(not await f.actions.attack_prop(f.units[0], rock) and f.units[0].action_left == 1,
 		"기절한 유닛은 바위 공격을 시작하지 않는다")
 	f.units[0].is_stunned = false
 	f.actions.busy = true
-	_check(not f.actions.attack_prop(f.units[0], rock), "바쁜 동안 바위 공격을 시작하지 않는다")
+	_check(not await f.actions.attack_prop(f.units[0], rock), "바쁜 동안 바위 공격을 시작하지 않는다")
 	f.actions.busy = false
-	_check(not f.actions.attack_prop(f.units[1], rock), "현재 조작자가 아니면 바위 공격을 시작하지 않는다")
+	_check(not await f.actions.attack_prop(f.units[1], rock), "현재 조작자가 아니면 바위 공격을 시작하지 않는다")
 	f.actions.initialize(f.units, f.turns)
 	var replacement: CombatGrid.Prop = f.actions.create_prop(Vector2i(4, 5), "rock")
-	_check(not f.actions.attack_prop(f.units[0], rock) and replacement.cell == Vector2i(4, 5)
+	_check(not await f.actions.attack_prop(f.units[0], rock) and replacement.cell == Vector2i(4, 5)
 		and f.units[0].action_left == 1, "지난 전투 바위의 호출은 같은 칸의 새 바위를 굴리지 않는다")
 
 
@@ -553,7 +553,7 @@ func _test_rock_stun() -> void:
 		"기절 판정 전제: 전사의 민첩 가감과 방어 가산은 0")
 	# 바위는 3칸 굴러 대상을 3번 밀지만 내성굴림은 충돌 때 한 번만 굴린다. 준비값도 한 개뿐이다.
 	f.actions.dice = _dice_for([1], [target.get_ability_sides(agility)])
-	_check(f.actions.attack_prop(f.units[0], rock) and target.is_stunned and target.stun_source == f.units[0]
+	_check(await f.actions.attack_prop(f.units[0], rock) and target.is_stunned and target.stun_source == f.units[0]
 		and target.hit_points == before - 4 and target.cell == Vector2i(4, 9),
 		"살아남은 적은 민첩 내성에 실패하면 굴린 아군을 시전자로 기절하고 충돌 피해 뒤 밀린다")
 	var name: String = target.get_display_name()
@@ -578,7 +578,7 @@ func _test_rock_stun() -> void:
 	_check(archer.get_ability_modifier(agility) == 0 and archer.get_defense_bonus() == 0,
 		"성공 판정 전제: 궁수의 민첩 가감과 방어 가산은 0")
 	f.actions.dice = _dice_for([10], [archer.get_ability_sides(agility)])
-	_check(f.actions.attack_prop(f.units[0], rock) and not archer.is_stunned and archer.hit_points == before - 4
+	_check(await f.actions.attack_prop(f.units[0], rock) and not archer.is_stunned and archer.hit_points == before - 4
 		and archer.cell == Vector2i(4, 9), "민첩 내성에 성공한 적은 기절하지 않고 충돌 피해 뒤 밀린다")
 	_check(f.logs.find("%s: 버팀" % archer.get_display_name()) >= 0,
 		"민첩 내성 성공은 버팀 결과 줄을 남긴다")
@@ -589,7 +589,7 @@ func _test_rock_stun() -> void:
 	archer.cell = Vector2i(4, 6)
 	rock = f.actions.create_prop(Vector2i(4, 5), "rock")
 	f.actions.dice = _dice_for([9], [archer.get_ability_sides(agility)])
-	_check(f.actions.attack_prop(f.units[0], rock) and archer.is_stunned and archer.stun_source == f.units[0],
+	_check(await f.actions.attack_prop(f.units[0], rock) and archer.is_stunned and archer.stun_source == f.units[0],
 		"민첩 내성에 실패한 궁수는 굴린 아군을 시전자로 기절한다")
 
 	# 아군: 굴린 유닛 옆의 아군도 똑같이 내성굴림을 하고, 실패하면 굴린 유닛을 시전자로 기절하며 기절 팝업이 뜬다.
@@ -602,7 +602,7 @@ func _test_rock_stun() -> void:
 		if unit == ally:
 			popups.append(text))
 	f.actions.dice = _dice_for([1], [ally.get_ability_sides(agility)])
-	_check(f.actions.attack_prop(f.units[0], rock) and ally.is_stunned and ally.stun_source == f.units[0]
+	_check(await f.actions.attack_prop(f.units[0], rock) and ally.is_stunned and ally.stun_source == f.units[0]
 		and "기절" in popups, "민첩 내성에 실패한 아군도 굴린 유닛을 시전자로 기절하고 기절 팝업을 받는다")
 
 	# 보스: 고철로봇은 기절 면역이라 내성굴림을 하지 않는다. 준비값이 없어 굴리면 실패로 남는다.
@@ -614,7 +614,7 @@ func _test_rock_stun() -> void:
 	before = boss.hit_points
 	rock = f.actions.create_prop(Vector2i(4, 5), "rock")
 	f.actions.dice = _dice_for([], [])
-	_check(f.actions.attack_prop(f.units[0], rock) and not boss.is_stunned and boss.hit_points == before - 4,
+	_check(await f.actions.attack_prop(f.units[0], rock) and not boss.is_stunned and boss.hit_points == before - 4,
 		"보스는 충돌 피해만 받고 기절 내성굴림을 하지 않는다")
 
 	# 충돌 피해로 쓰러진 대상은 내성굴림을 하지 않는다.
@@ -624,7 +624,7 @@ func _test_rock_stun() -> void:
 	target.hit_points = 4
 	rock = f.actions.create_prop(Vector2i(4, 5), "rock")
 	f.actions.dice = _dice_for([], [])
-	_check(f.actions.attack_prop(f.units[0], rock) and target.hit_points == 0 and not target.is_stunned,
+	_check(await f.actions.attack_prop(f.units[0], rock) and target.hit_points == 0 and not target.is_stunned,
 		"충돌 피해로 쓰러진 대상은 내성굴림을 하지 않고 기절하지 않는다")
 
 
@@ -634,7 +634,7 @@ func _test_rock_stun_preview() -> void:
 	var target: CombatUnit = f.units[2]
 	target.cell = Vector2i(4, 6)
 	var rock: CombatGrid.Prop = f.actions.create_prop(Vector2i(4, 5), "rock")
-	var roll: CombatActions.RockRoll = f.actions.preview_rock(f.units[0], rock)
+	var roll: CombatProps.RockRoll = f.actions.preview_rock(f.units[0], rock)
 	var note: String = f.actions.rock_collision_note(roll, target)
 	_check(note == "기절 위험" and "%" not in note, "살아남는 적 전사의 미리보기 문구는 확률 없이 기절 위험만 보인다")
 	f.actions.grid.pits = [Vector2i(4, 7)]
@@ -762,19 +762,19 @@ func _test_crate_attack() -> void:
 	var actor: CombatUnit = f.units[0]
 	var crate: CombatGrid.Prop = f.actions.create_prop(Vector2i(4, 5), "crate")
 	f.actions.dice = _dice_for([4], [20])
-	_check(f.actions.can_attack_prop(actor, crate) and f.actions.attack_prop(actor, crate),
+	_check(f.actions.can_attack_prop(actor, crate) and await f.actions.attack_prop(actor, crate),
 		"기본 공격으로 인접 나무 상자를 자동 명중한다")
 	_check(crate.hit_points == 2 and actor.action_left == 0 and actor.bonus_action_left == 1
 		and actor.reaction_left == 1 and actor.movement_left == 4 and f.hits.size() == 1,
 		"상자는 힘 d20의4 피해를 받고 행동1만 소비한다")
-	_check(not f.actions.attack_prop(actor, crate) and crate.hit_points == 2,
+	_check(not await f.actions.attack_prop(actor, crate) and crate.hit_points == 2,
 		"행동이 없으면 상자를 다시 공격하거나 주사위를 굴리지 않는다")
 	ScriptedDice.start_turn(actor)
 	f.actions.dice = _dice_for([4], [20]).then_seeded()
-	_check(f.actions.attack_prop(actor, crate) and crate.hit_points == 0
+	_check(await f.actions.attack_prop(actor, crate) and crate.hit_points == 0
 		and f.actions.get_props().is_empty() and f.actions.can_move(actor, Vector2i(4, 5)),
 		"상자를 부수면 즉시 빈 칸이 되어 기존 이동 경로가 열린다")
-	_check(not f.actions.attack_prop(actor, crate) and f.units.size() == 4,
+	_check(not await f.actions.attack_prop(actor, crate) and f.units.size() == 4,
 		"파괴한 상자는 재공격/드랍/유닛 변경을 만들지 않는다")
 
 
@@ -790,7 +790,7 @@ func _test_crate_drop() -> void:
 	var crate: CombatGrid.Prop = f.actions.create_prop(Vector2i(4, 5), "crate")
 	# 피해 6으로 한 번에 부순다. 이어서 추첨 2(무기), 무기 수치 1막 범위 공격 2·피해 3.
 	f.actions.dice = _dice_for([6, 1, 2, 3], [20, 8, 2, 3])
-	_check(f.actions.attack_prop(actor, crate) and f.actions.get_props().is_empty(),
+	_check(await f.actions.attack_prop(actor, crate) and f.actions.get_props().is_empty(),
 		"내구도 6 상자를 한 번에 부순다")
 	var dropped: Dictionary = f.actions.floor_loot.item_at(Vector2i(4, 5))
 	_check(dropped.get("kind") == "weapon" and dropped.get("stats") == {"attack_bonus": 2, "damage_bonus": 3}
@@ -801,14 +801,14 @@ func _test_crate_drop() -> void:
 	var partial: Fixture = _fixture()
 	var other: CombatGrid.Prop = partial.actions.create_prop(Vector2i(4, 5), "crate")
 	partial.actions.dice = _dice_for([4], [20])
-	partial.actions.attack_prop(partial.units[0], other)
+	await partial.actions.attack_prop(partial.units[0], other)
 	_check(partial.actions.floor_loot.cells().is_empty(), "부서지기 전에는 아이템이 떨어지지 않는다")
 	# 막 번호가 수치 범위를 정한다.
 	var third: Fixture = _fixture()
 	third.actions.act_number = 3
 	var rock_crate: CombatGrid.Prop = third.actions.create_prop(Vector2i(4, 5), "crate")
 	third.actions.dice = _dice_for([6, 1, 5, 7], [20, 8, 7, 10])
-	third.actions.attack_prop(third.units[0], rock_crate)
+	await third.actions.attack_prop(third.units[0], rock_crate)
 	_check(third.actions.floor_loot.item_at(Vector2i(4, 5)).get("stats") == {"attack_bonus": 5, "damage_bonus": 7},
 		"3막 상자는 3막 수치 범위로 굴린다")
 
@@ -1036,29 +1036,29 @@ func _test_crate_boundaries() -> void:
 	var actor: CombatUnit = f.units[0]
 	f.actions.dice = _dice_for([], [])
 	actor.is_stunned = true
-	_check(not f.actions.attack_prop(actor, target) and actor.action_left == 1, "기절한 유닛은 상자 공격 비용을 쓰지 않는다")
+	_check(not await f.actions.attack_prop(actor, target) and actor.action_left == 1, "기절한 유닛은 상자 공격 비용을 쓰지 않는다")
 	actor.is_stunned = false
 	f.actions.busy = true
-	_check(not f.actions.attack_prop(actor, target), "바쁜 동안 상자 공격 거부")
+	_check(not await f.actions.attack_prop(actor, target), "바쁜 동안 상자 공격 거부")
 	f.actions.busy = false
-	_check(not f.actions.attack_prop(f.units[1], target), "현재 조작하지 않는 유닛의 상자 공격 거부")
+	_check(not await f.actions.attack_prop(f.units[1], target), "현재 조작하지 않는 유닛의 상자 공격 거부")
 	f.actions.grid.heights[target.cell] = 2
-	_check(not f.actions.attack_prop(actor, target) and target.hit_points == 6,
+	_check(not await f.actions.attack_prop(actor, target) and target.hit_points == 6,
 		"근접 공격은 높이 차2의 상자를 공격하지 않는다")
 	actor.kind = CombatUnit.Kind.ARCHER
 	f.actions.dice = _dice_for([2], [20])
-	_check(f.actions.attack_prop(actor, target) and target.hit_points == 4,
+	_check(await f.actions.attack_prop(actor, target) and target.hit_points == 4,
 		"원거리 공격은 높이 차2에서도 솜씨 d20의2+피해 보정0(#528)을 준다")
 	ScriptedDice.start_turn(actor)
 	f.actions.initialize(f.units, f.turns)
 	var replacement: CombatGrid.Prop = f.actions.create_prop(Vector2i(4, 5), "crate")
 	f.actions.dice = _dice_for([], [])
-	_check(not f.actions.attack_prop(actor, target) and replacement.hit_points == 6 and actor.action_left == 1,
+	_check(not await f.actions.attack_prop(actor, target) and replacement.hit_points == 6 and actor.action_left == 1,
 		"같은 칸에 새 상자가 있어도 지난 전투의 대상을 재사용하지 않는다")
 	var far: CombatGrid.Prop = f.actions.create_prop(Vector2i(9, 9), "crate")
-	_check(not f.actions.attack_prop(actor, far) and far.hit_points == 6 and actor.action_left == 1,
+	_check(not await f.actions.attack_prop(actor, far) and far.hit_points == 6 and actor.action_left == 1,
 		"원거리 기본 공격도 현재 사거리 밖의 상자를 공격하지 않는다")
-	_check(not f.actions.attack_prop(null, replacement) and not f.actions.attack_prop(actor, null),
+	_check(not await f.actions.attack_prop(null, replacement) and not await f.actions.attack_prop(actor, null),
 		"유효하지 않은 행위자나 환경 오브젝트를 거부한다")
 
 
@@ -1083,7 +1083,7 @@ func _test_crate_ai_path() -> void:
 	f.turns.end_turn()
 	await f.actions.move_to(ally, Vector2i(1, 0))
 	f.actions.dice = _dice_for([6], [20]).then_seeded()
-	_check(f.actions.attack_prop(ally, crate), "아군의 기본 공격으로 좁은 길의 상자를 부순다")
+	_check(await f.actions.attack_prop(ally, crate), "아군의 기본 공격으로 좁은 길의 상자를 부순다")
 	f.turns.end_turn()
 	# 빗나간 공격에 반격 창이 뜨지 않게 한다. 이 검사는 AI의 이동과 공격만 본다.
 	ally.reaction_left = 0
@@ -1101,7 +1101,7 @@ func _test_crate_callback_reset() -> void:
 		f.actions.create_prop(Vector2i(4, 5), "crate")
 	f.actions.hit_landed.connect(reset)
 	f.actions.dice = _dice_for([6], [20]).then_seeded()
-	var executed: bool = f.actions.attack_prop(f.units[0], crate)
+	var executed: bool = await f.actions.attack_prop(f.units[0], crate)
 	f.actions.hit_landed.disconnect(reset)
 	var replacement: CombatGrid.Prop = f.actions.grid.prop_at(Vector2i(4, 5))
 	_check(executed and crate.hit_points == 0 and replacement != null and replacement != crate
@@ -1110,28 +1110,70 @@ func _test_crate_callback_reset() -> void:
 		"명중 callback의 전투 초기화는 새 상자에 지난 피해를 다시 적용하지 않고 지난 상자의 아이템도 떨어뜨리지 않는다")
 
 
+func _test_prop_animation_hook() -> void:
+	var f: Fixture = _fixture()
+	var actor: CombatUnit = f.units[0]
+	var crate: CombatGrid.Prop = f.actions.create_prop(Vector2i(4, 5), "crate")
+	var observed: Array[Dictionary] = []
+	f.actions.prop_animation = func(hook_actor: CombatUnit, hook_prop: CombatGrid.Prop, hook_roll: CombatProps.RockRoll) -> void:
+		var reentry: bool = await f.actions.attack_prop(actor, crate)
+		observed.append({
+			"actor": hook_actor,
+			"prop": hook_prop,
+			"roll": hook_roll,
+			"busy": f.actions.busy,
+			"hp": crate.hit_points,
+			"action_left": actor.action_left,
+			"reentry": reentry,
+		})
+	f.actions.dice = _dice_for([4], [20])
+	var ok: bool = await f.actions.attack_prop(actor, crate)
+	f.actions.prop_animation = Callable()
+	_check(ok and observed.size() == 1 and observed[0]["actor"] == actor and observed[0]["prop"] == crate
+		and observed[0]["roll"] == null and observed[0]["busy"] and observed[0]["hp"] == 6
+		and observed[0]["action_left"] == 1 and not observed[0]["reentry"]
+		and crate.hit_points == 2 and actor.action_left == 0 and not f.actions.busy,
+		"prop_animation 중에는 busy=true이고 자원과 체력이 유지되며 재진입이 막힌다")
+	# 연출 도중 전투가 초기화되면 새 전투를 건드리지 않고 취소한다.
+	var g: Fixture = _fixture()
+	var g_actor: CombatUnit = g.units[0]
+	var g_crate: CombatGrid.Prop = g.actions.create_prop(Vector2i(4, 5), "crate")
+	g.actions.prop_animation = func(_a: CombatUnit, _p: CombatGrid.Prop, _r: CombatProps.RockRoll) -> void:
+		g.actions.initialize(g.units, g.turns)
+		g.actions.create_prop(Vector2i(4, 5), "crate")
+	g.actions.dice = _dice_for([], [])
+	var aborted: bool = await g.actions.attack_prop(g_actor, g_crate)
+	g.actions.prop_animation = Callable()
+	var replacement: CombatGrid.Prop = g.actions.grid.prop_at(Vector2i(4, 5))
+	_check(not aborted and not g.actions.busy and g_actor.action_left == 1
+		and g_crate.hit_points == 6 and replacement != null and replacement != g_crate
+		and replacement.hit_points == 6,
+		"prop_animation 중 전투가 초기화되면 공격을 중단하고 새 전투를 건드리지 않는다")
+
+
 func _run() -> void:
-	_test_rock_roll()
-	_test_rock_geometry()
-	_test_rock_collisions()
-	_test_rock_interruptions()
-	_test_rock_logs()
-	_test_rock_pit_reset_callbacks()
-	_test_rock_landing_removal()
-	_test_rock_downhill_and_reentry()
-	_test_rock_stun()
+	await _test_rock_roll()
+	await _test_rock_geometry()
+	await _test_rock_collisions()
+	await _test_rock_interruptions()
+	await _test_rock_logs()
+	await _test_rock_pit_reset_callbacks()
+	await _test_rock_landing_removal()
+	await _test_rock_downhill_and_reentry()
+	await _test_rock_stun()
 	_test_rock_stun_preview()
 	await _test_rock_scene_input()
 	_test_crate_creation()
 	_test_crate_blocks_routes()
-	_test_crate_attack()
-	_test_crate_drop()
+	await _test_crate_attack()
+	await _test_crate_drop()
 	await _test_floor_loot_pickup()
 	_test_floor_loot_forced_moves()
 	_test_crate_action_availability()
-	_test_crate_boundaries()
+	await _test_crate_boundaries()
 	await _test_crate_ai_path()
-	_test_crate_callback_reset()
+	await _test_crate_callback_reset()
+	await _test_prop_animation_hook()
 	_test_threat_cells()
 	_test_ally_range_cells()
 	await _test_crate_stage()
@@ -1177,7 +1219,7 @@ func _run() -> void:
 	await _test_pit_movement()
 	_test_pit_spawn()
 	_test_pit_forced_movement()
-	_test_forced_move_landing_preview()
+	await _test_forced_move_landing_preview()
 	await _test_height_opportunity()
 	_test_height_shove()
 	_test_height_pull()
@@ -2558,10 +2600,10 @@ func _test_forced_move_landing_preview() -> void:
 	target.cell = Vector2i(4, 6)
 	f.actions.grid.pits = [Vector2i(4, 7)]
 	var rock: CombatGrid.Prop = f.actions.create_prop(Vector2i(4, 5), "rock")
-	var roll: CombatActions.RockRoll = f.actions.preview_rock(f.units[0], rock)
+	var roll: CombatProps.RockRoll = f.actions.preview_rock(f.units[0], rock)
 	f.actions.dice = _dice_for([], []).then_seeded()
 	_check(f.actions.rock_landing(roll, target) == "낙사"
-		and f.actions.attack_prop(f.units[0], rock) and target.hit_points == 0,
+		and await f.actions.attack_prop(f.units[0], rock) and target.hit_points == 0,
 		"바위가 대상을 낭떠러지로 밀면 미리보기에 실제와 같은 낙사를 보인다")
 	f = _fixture()
 	target = f.units[2]
@@ -2571,7 +2613,7 @@ func _test_forced_move_landing_preview() -> void:
 	roll = f.actions.preview_rock(f.units[0], rock)
 	f.actions.dice = _dice_for([], []).then_seeded()
 	_check(f.actions.rock_landing(roll, target) == "낙사"
-		and f.actions.attack_prop(f.units[0], rock) and target.hit_points == 0 and target.cell == Vector2i(4, 8),
+		and await f.actions.attack_prop(f.units[0], rock) and target.hit_points == 0 and target.cell == Vector2i(4, 8),
 		"바위의 두 번째 밀기가 낭떠러지로 떨어뜨려도 미리보기에 낙사를 보인다")
 	f = _fixture()
 	target = f.units[2]
@@ -2582,7 +2624,7 @@ func _test_forced_move_landing_preview() -> void:
 	roll = f.actions.preview_rock(f.units[0], rock)
 	var before: int = target.hit_points
 	f.actions.dice = _dice_for([], []).then_seeded()
-	_check(f.actions.attack_prop(f.units[0], rock) and before - 4 > target.hit_points
+	_check(await f.actions.attack_prop(f.units[0], rock) and before - 4 > target.hit_points
 		and f.actions.rock_landing(roll, target) == "낙하 피해 %d" % (before - 4 - target.hit_points),
 		"바위 밀기 미리보기는 충돌 피해와 별도로 실제 낙하 피해를 보인다")
 

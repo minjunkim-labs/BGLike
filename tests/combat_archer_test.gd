@@ -206,12 +206,12 @@ func _test_aegisal() -> void:
 	var crate: CombatGrid.Prop = f.actions.create_prop(Vector2i(3, 3), "crate")
 	archer.action_left = 1
 	f.actions.dice = _dice([2, 4], [20, 20])
-	_check(f.actions.attack_prop(archer, crate) and crate.hit_points == 6 - 4 and archer.aegisal_left == 1,
+	_check(await f.actions.attack_prop(archer, crate) and crate.hit_points == 6 - 4 and archer.aegisal_left == 1,
 		"나무 상자 공격도 1발을 쓰고 피해 굴림 두 번 중 높은 값")
 	var rock: CombatGrid.Prop = f.actions.create_prop(Vector2i(2, 4), "rock")
 	archer.action_left = 1
 	f.actions.dice = _dice([], [])
-	_check(f.actions.attack_prop(archer, rock) and archer.aegisal_left == 0, "바위 공격은 굴림 없이 1발을 씀")
+	_check(await f.actions.attack_prop(archer, rock) and archer.aegisal_left == 0, "바위 공격은 굴림 없이 1발을 씀")
 	var plain: Fixture = _fixture()
 	plain.units[2].cell = Vector2i(5, 6)
 	plain.actions.dice = _dice([15, 7], [20, 20])
@@ -306,7 +306,7 @@ func _test_moving_shot() -> void:
 	var crate: Fixture = _fixture()
 	var prop: CombatGrid.Prop = crate.actions.create_prop(Vector2i(3, 2), "crate")
 	crate.actions.dice = _dice([2], [20])
-	crate.actions.attack_prop(crate.units[0], prop)
+	await crate.actions.attack_prop(crate.units[0], prop)
 	_check(crate.units[0].moving_shot_ready, "나무 상자 기본 공격 뒤에도 도약 가능")
 	var last: Fixture = _fixture()
 	last.actions.incapacitate(last.units[2])

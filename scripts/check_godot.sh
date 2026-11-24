@@ -5,7 +5,7 @@ set -euo pipefail
 tests=(
   "tests/combat_save_test.gd 0/2"
   "tests/combat_save_test.gd 1/2"
-  tests/combat_{hud,ai,turns,checks,actions,selection,progression,loot,capture,feedback,preparation_save,staging,dice_roll,warrior,archer,oil,sound,cover}_test.gd
+  tests/combat_{hud,ai,turns,checks,actions,selection,snapshot,progression,loot,capture,feedback,preparation_save,staging,dice_roll,warrior,archer,oil,sound,cover}_test.gd
   tests/{save,title,pause,continue,ui_theme,music}_test.gd
 )
 if [ "$#" -gt 0 ]; then

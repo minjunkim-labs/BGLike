@@ -216,7 +216,7 @@ func _check_prop_routes(stage: CombatStage, grid: CombatGrid, actor: CombatUnit,
 	var actions: CombatActions = CombatActions.new()
 	actions.grid = grid
 	actor.cell = stand
-	var roll: CombatActions.RockRoll = actions.preview_rock(actor, rock)
+	var roll: CombatProps.RockRoll = actions.preview_rock(actor, rock)
 	_check(not roll.collisions.is_empty() and not roll.destroyed,
 		label + " 실제 적 배치에 닿는 평지·내리막 굴림 각도")
 	actor.cell = stage.ally_cells[0]

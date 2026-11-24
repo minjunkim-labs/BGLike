@@ -278,10 +278,11 @@ func _test_battle_events() -> void:
 	actions.self_used.emit(ally, "stealth")
 	_expect("회복·방어막·함성(은신은 없음)", [&"heal", &"shield", &"shout"])
 	# 이동·점프.
+	var presentation: CombatPresentation = battle.get("presentation") as CombatPresentation
 	var cell: Vector2i = ally.cell
-	await battle.call("_animate_movement", ally, cell)
+	await presentation.animate_movement(ally, cell)
 	_expect("이동 한 칸의 발소리", [CombatSounds.step_cue(actions.grid, battle.stages[0], cell)])
-	await battle.call("_animate_jump", ally, cell)
+	await presentation.animate_jump(ally, cell)
 	_expect("점프와 착지", [&"jump", &"land"])
 	# 이어하기 재실행에서는 아무 소리도 나지 않는다.
 	battle.set("_replay_actions", 5)
@@ -290,7 +291,7 @@ func _test_battle_events() -> void:
 	actions.healed.emit(ally, 1)
 	actions.self_used.emit(ally, "holy_veil")
 	actions.critical_hit.emit(enemy)
-	await battle.call("_animate_movement", ally, cell)
+	await presentation.animate_movement(ally, cell)
 	_expect("재실행은 무음", [])
 	battle.set("_replay_actions", 0)
 	# 전투 불능, 전투 종료.
