@@ -1,11 +1,7 @@
 extends Node2D
 ## 전투 화면과 3막 진행. 적 묶음은 이니셔티브 순서대로 실행한다.
 
-const MOVE_STEP_TIME: float = 0.09
-const ARROW_FLIGHT_TIME: float = 0.16
 const ENEMY_PAUSE_TIME: float = 0.35
-## 근접 공격 뒤 기다리는 시간(기본값). 전체 속도 계수로 늘어난다.
-const MELEE_ATTACK_TIME: float = 1.0 / 6.0
 ## 적 턴에 Space를 누르고 있는 동안의 시간 배율. 규칙이 아니라 표시 속도다.
 const ENEMY_FAST_SPEED: float = 4.0
 ## 마지막 적 처치 시 전투 불능(사라짐) 애니메이션이 끝난 뒤 승리 화면을 띄우기 전 기다리는 게임 시간(초, #728).
@@ -55,6 +51,7 @@ var start_button: Button
 
 var hit_effects: CombatHitEffects
 var sounds: CombatSounds
+var presentation: CombatPresentation
 @onready var map: CombatMap = $Map
 @onready var camera: CombatCamera = $Camera
 @onready var hud: CombatTurnHud = $UI/TurnHud
@@ -107,82 +104,35 @@ func _ready() -> void:
 	pause_menu.give_up_confirmed.connect(_give_up)
 	actions.changed.connect(_on_actions_changed)
 	actions.logged.connect(hud.add_log)
-	actions.feedback.connect(func(unit: CombatUnit, text: String) -> void:
-		if not _replaying():
-			unit.show_feedback(text, hud.feedback_obstacles()))
-	actions.healed.connect(func(unit: CombatUnit, amount: int) -> void:
-		if not _replaying():
-			unit.show_feedback(str(amount), hud.feedback_obstacles(), CombatUnit.HEAL_COLOR)
-			sounds.play(&"heal")
-			hit_effects.play_heal(unit))
-	actions.damaged.connect(func(target: Object) -> void:
-		if not _replaying():
-			sounds.play_hit(target))
-	actions.critical_hit.connect(func(_target: CombatUnit) -> void:
-		if not _replaying():
-			sounds.play_critical())
-	actions.downed.connect(func(unit: CombatUnit) -> void:
-		if not _replaying():
-			sounds.play(&"downed")
-			hit_effects.play_down(unit, map.map_to_surface(unit.cell))
-			if is_processing() and not unit.is_ally and actions.is_over() and actions.is_victory():
-				_begin_victory_wait())
-	actions.self_used.connect(func(actor: CombatUnit, action: String) -> void:
-		if _replaying():
-			return
-		if action == "holy_veil":
-			sounds.play(&"shield")
-			hit_effects.play_shield(actor)
-		elif action == "battle_cry":
-			sounds.play(&"shout")
-			for unit: CombatUnit in units:
-				if unit.hit_points > 0 and unit.battle_cry_source == actor:
-					hit_effects.play_buff(unit))
-	actions.swept.connect(func(actor: CombatUnit, facing: Vector2i) -> void:
-		if not _replaying():
-			hit_effects.play_sweep(actor, map.map_to_local(facing) - map.map_to_local(actor.cell)))
-	actions.status_applied.connect(func(target: CombatUnit, kind: String) -> void:
-		if not _replaying():
-			hit_effects.play_status(map.map_to_surface(target.cell), kind))
-	actions.status_ticked.connect(func(unit: CombatUnit, kind: String, _amount: int) -> void:
-		if not _replaying():
-			hit_effects.play_status(map.map_to_surface(unit.cell), kind))
-	actions.oil_ignited.connect(func(cells: Array[Vector2i]) -> void:
-		if not _replaying():
-			for cell: Vector2i in cells:
-				hit_effects.play_ignite(map.map_to_surface(cell)))
 	hit_effects = CombatHitEffects.new()
 	hit_effects.name = "HitEffects"
 	hit_effects.z_index = 5
 	add_child(hit_effects)
-	actions.struck.connect(_on_struck)
+	presentation = CombatPresentation.new()
+	presentation.name = "Presentation"
+	add_child(presentation)
+	presentation.bind(actions, turns, map, hud, dice_view, sounds, hit_effects, {
+		"is_replaying": _replaying,
+		"is_waiting_for_start": func() -> bool: return waiting_for_start,
+		"get_units": func() -> Array[CombatUnit]: return units,
+		"get_stage": func() -> CombatStage: return stages[progress.stage_index],
+		"show_enemy_action": _show_enemy_action,
+		"follow_turn_tile": _follow_turn_tile,
+		"on_victory_downed": _on_victory_downed,
+	})
 	actions.reaction_requested.connect(_on_reaction_requested)
 	hud.reflex_selected.connect(_on_reflex_selected)
 	hud.reflex_previewed.connect(_on_reflex_previewed)
 	hud.reflex_label = _reflex_arrow
 	hud.grid = actions.grid
-	actions.movement_animation = _animate_movement
-	actions.jump_animation = _animate_jump
-	actions.attack_animation = _animate_attack
-	actions.cell_attack_animation = _animate_cell_attack
-	actions.roll_animation = _animate_roll
 	turns.changed.connect(_on_turn_changed)
-	turns.turn_started.connect(_on_turn_started_sound)
 	turns.order_rotated.connect(hud.prepare_order_rotation)
 	_start_stage(true)
 
 
-## 타격 섬광·히트스톱·빗나감 잔상(#559). 이어하기 재실행에서는 피해 팝업·피격음처럼 생략한다.
-func _on_struck(attacker: CombatUnit, target: CombatUnit, cell: Vector2i, hit: bool) -> void:
-	if _replaying():
-		return
-	if not hit:
-		sounds.play(&"miss")
-		hit_effects.play_miss(attacker, target)
-	elif target == null:
-		hit_effects.play_hit(attacker, null, map.map_to_surface(cell) + Vector2(0, -8))
-	else:
-		hit_effects.play_hit(attacker, target, target.position + Vector2(0, target.floor_offset_y - 14))
+func _on_victory_downed(unit: CombatUnit) -> void:
+	if is_processing() and not unit.is_ally and actions.is_over() and actions.is_victory():
+		_begin_victory_wait()
 
 
 ## 반응 확인 창을 띄운다. 반사신경이면 후보 칸을 맵에 보인다.
@@ -266,7 +216,7 @@ func start_battle() -> void:
 	_save_pending = true
 	get_viewport().gui_release_focus()
 	sounds.start_ambient(actions.grid)
-	_on_turn_started_sound(turns.current_unit)
+	presentation.on_turn_started(turns.current_unit)
 	_update_turn_ui()
 
 
@@ -281,9 +231,7 @@ func _build_stage() -> CombatStage:
 	for unit: CombatUnit in units:
 		if not unit.is_ally:
 			unit.free()
-	for child: Node in $Units.get_children():
-		if child is Label:
-			child.free()
+	presentation.clear_feedback()
 	units = party.duplicate()
 	map_size = stage.map_size
 	actions.grid.map_size = map_size
@@ -965,7 +913,7 @@ func _execute_command(actor: CombatUnit, command: CombatSelection.Command) -> vo
 			var prop: CombatGrid.Prop = command.prop
 			var generation: int = map.revision
 			actions.busy = true
-			await _animate_attack_at(actor, map.map_to_surface(prop.cell) + Vector2(0, -8))
+			await presentation.animate_attack_at(actor, map.map_to_surface(prop.cell) + Vector2(0, -8))
 			if generation != map.revision:
 				return
 			var origin: Vector2i = prop.cell
@@ -1005,12 +953,6 @@ func preview_enemy(target: CombatUnit) -> bool:
 	selection.preview_unit(target)
 	_update_turn_ui()
 	return true
-
-
-## 진영이 바뀌는 턴 시작 신호음. 전투 준비 중과 이어하기 재실행에서는 내지 않는다.
-func _on_turn_started_sound(unit: CombatUnit) -> void:
-	if not waiting_for_start and not _replaying():
-		sounds.turn_started(unit)
 
 
 func _on_actions_changed() -> void:
@@ -1065,96 +1007,6 @@ func _on_turn_changed() -> void:
 	_save_pending = true
 	selection.reset()
 	_update_turn_ui()
-
-
-func _animate_movement(unit: CombatUnit, cell: Vector2i) -> void:
-	var destination: Vector2 = map.map_to_local(cell)
-	# 다시 실행할 때도 방향은 저장하는 상태라 그대로 바꾼다.
-	if _replaying():
-		unit.face_toward(destination)
-		return
-	await _show_enemy_action()
-	unit.face_toward(destination)
-	sounds.play(CombatSounds.step_cue(actions.grid, stages[progress.stage_index], cell))
-	unit.is_moving = true
-	var tween: Tween = create_tween().set_parallel()
-	var step_time: float = CombatPresentation.duration(MOVE_STEP_TIME)
-	tween.tween_property(unit, "position", destination, step_time)
-	tween.tween_property(unit, "floor_offset_y", map.map_to_surface(cell).y - destination.y, step_time)
-	tween.tween_property(unit, "body_offset_y", -3.0, step_time / 2.0)
-	tween.tween_property(unit, "body_offset_y", 0.0, step_time / 2.0).from(-3.0).set_delay(step_time / 2.0)
-	await tween.finished
-	unit.position = destination
-	unit.body_offset_y = 0.0
-	unit.is_moving = false
-	_follow_turn_tile(unit, cell)
-
-
-func _animate_jump(unit: CombatUnit, cell: Vector2i) -> void:
-	var destination: Vector2 = map.map_to_local(cell)
-	if _replaying():
-		unit.face_toward(destination)
-		return
-	await _show_enemy_action()
-	var duration: float = CombatPresentation.duration(MOVE_STEP_TIME * 2.0)
-	var apex: float = -float(map.tile_set.tile_size.y)
-	unit.face_toward(destination)
-	sounds.play(&"jump")
-	unit.is_moving = true
-	var tween: Tween = create_tween().set_parallel()
-	tween.tween_property(unit, "position", destination, duration)
-	tween.tween_property(unit, "floor_offset_y", map.map_to_surface(cell).y - destination.y, duration)
-	tween.tween_property(unit, "body_offset_y", apex, duration / 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tween.tween_property(unit, "body_offset_y", 0.0, duration / 2.0).from(apex).set_delay(duration / 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-	await tween.finished
-	unit.position = destination
-	unit.body_offset_y = 0.0
-	unit.is_moving = false
-	_follow_turn_tile(unit, cell)
-	sounds.play(&"land")
-
-
-func _animate_attack(actor: CombatUnit, target: CombatUnit) -> void:
-	var destination: Vector2 = target.position + Vector2(0, target.floor_offset_y - 14)
-	if _replaying():
-		actor.face_toward(destination)
-		return
-	await _show_enemy_action()
-	await _animate_attack_at(actor, destination)
-
-
-## 아군이 굴릴 때만 보인다. 몬스터의 굴림과 이어하기로 다시 실행하는 굴림은 보이지 않는다.
-func _animate_roll(roll: CombatDiceRoll) -> void:
-	if _replaying() or not roll.roller.is_ally:
-		return
-	await dice_view.play(roll)
-
-
-## 빈 칸을 겨눈 화살 연출.
-func _animate_cell_attack(actor: CombatUnit, cell: Vector2i) -> void:
-	await _animate_attack_at(actor, map.map_to_surface(cell) + Vector2(0, -8))
-
-
-func _animate_attack_at(actor: CombatUnit, destination: Vector2) -> void:
-	actor.face_toward(destination)
-	actor.play_attack()
-	if actor.kind != CombatUnit.Kind.ARCHER:
-		await get_tree().create_timer(CombatPresentation.duration(MELEE_ATTACK_TIME), false).timeout
-		return
-	var arrow: Polygon2D = Polygon2D.new()
-	arrow.name = "Arrow"
-	arrow.polygon = PackedVector2Array([
-		Vector2(-4, -1), Vector2(4, -1), Vector2(4, 1), Vector2(-4, 1)
-	])
-	arrow.color = Color("efe4c8")
-	arrow.z_index = 1
-	arrow.position = actor.position + Vector2(-8 if actor.facing_left else 8, actor.floor_offset_y - 16)
-	arrow.rotation = (destination - arrow.position).angle()
-	add_child(arrow)
-	var tween: Tween = create_tween()
-	tween.tween_property(arrow, "position", destination, CombatPresentation.duration(ARROW_FLIGHT_TIME))
-	await tween.finished
-	arrow.queue_free()
 
 
 ## 발밑 칸 표시와 카메라가 따라가는 행동 유닛. 전투 시작 전·전투 끝·전투 불능이면 null이다.

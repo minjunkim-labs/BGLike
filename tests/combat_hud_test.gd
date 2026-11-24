@@ -1369,8 +1369,8 @@ func _test_log_and_status() -> void:
 		"불리 판정은 로그에 주사위 두 값을 모두 표시")
 	var parent: Node = units[2].get_parent()
 	var has_popup: bool = false
-	for child: Node in parent.get_children():
-		if child is Label and child.text == "빗나감":
+	for child: Label in (battle.get("presentation") as CombatPresentation).feedback_popups():
+		if child.text == "빗나감":
 			has_popup = true
 	_check(has_popup, "실제 빗나감 결과 팝업 연결")
 	_check(not _has_feedback(units[1], "공격 %d" % actions.last_attack.total),
@@ -1415,8 +1415,8 @@ func _test_hit_sound_mix() -> void:
 
 
 func _has_feedback(unit: CombatUnit, text: String) -> bool:
-	for child: Node in unit.get_parent().get_children():
-		if child is Label and child.text == text and child.get_meta("feedback_unit", 0) == unit.get_instance_id():
+	for child: Label in (battle.get("presentation") as CombatPresentation).feedback_popups():
+		if child.text == text and child.get_meta("feedback_unit", 0) == unit.get_instance_id():
 			return true
 	return false
 
@@ -1451,8 +1451,8 @@ func _test_roll_popups() -> void:
 	_check(actions.use_self(warrior, "potion"), "물약 실행")
 	var healed: String = str(warrior.hit_points - 1)
 	var heal_popup: Label = null
-	for child: Node in warrior.get_parent().get_children():
-		if child is Label and child.text == healed and child.get_meta("feedback_unit", 0) == warrior.get_instance_id():
+	for child: Label in (battle.get("presentation") as CombatPresentation).feedback_popups():
+		if child.text == healed and child.get_meta("feedback_unit", 0) == warrior.get_instance_id():
 			heal_popup = child
 	_check(heal_popup != null and heal_popup.get_theme_color("font_color") == CombatUnit.HEAL_COLOR,
 		"회복 팝업은 + 없는 수치를 초록색으로 표시")
@@ -1481,8 +1481,8 @@ func _test_roll_popups() -> void:
 	target.clear_unit_effects()
 	var popup_rects: Array[Rect2] = []
 	await process_frame
-	for child: Node in target.get_parent().get_children():
-		if child is Label and child.get_meta("feedback_unit", 0) == target.get_instance_id():
+	for child: Label in (battle.get("presentation") as CombatPresentation).feedback_popups():
+		if child.get_meta("feedback_unit", 0) == target.get_instance_id():
 			for rect: Rect2 in popup_rects:
 				_check(not rect.intersects(child.get_rect()), "같은 유닛의 숫자 팝업은 겹치지 않음")
 			popup_rects.append(child.get_rect())
@@ -3065,8 +3065,7 @@ func _test_camera() -> void:
 		actions.grid.props.assign(saved_props)
 		selection.clear_preview()
 		await _click(enemy_point)
-		units[2].show_feedback("-3", hud.feedback_obstacles())
-		var popup: Label = units[2].get_parent().get_child(-1) as Label
+		var popup: Label = (battle.get("presentation") as CombatPresentation).show_feedback(units[2], "-3", hud.feedback_obstacles())
 		var popup_rect: Rect2 = popup.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, popup.size)
 		var popup_anchor: Vector2 = units[2].get_global_transform_with_canvas() * Vector2(0, units[2].floor_offset_y - 10)
 		_check(popup_rect.size.y >= 2.0 * popup.size.y - 1.0 and popup_rect.get_center().distance_to(popup_anchor) <= 64.0,
@@ -4560,7 +4559,11 @@ func _test_turn_tile_steps() -> void:
 		var destination: Vector2i = Vector2i(4, 3) if not jump else Vector2i(4, 2)
 		var mover: CombatUnit = units[0]
 		var before: Array[Tween] = get_processed_tweens()
-		battle.call("_animate_jump" if jump else "_animate_movement", mover, destination)
+		var presentation: CombatPresentation = battle.get("presentation") as CombatPresentation
+		if jump:
+			presentation.animate_jump(mover, destination)
+		else:
+			presentation.animate_movement(mover, destination)
 		var tween: Tween = null
 		for candidate: Tween in get_processed_tweens():
 			if candidate not in before:
@@ -4584,7 +4587,7 @@ func _test_turn_tile_steps() -> void:
 	var other: CombatUnit = units[1]
 	var stay: Vector2 = _turn_tile_center(map)
 	var before_other: Array[Tween] = get_processed_tweens()
-	battle.call("_animate_movement", other, Vector2i(0, 1))
+	(battle.get("presentation") as CombatPresentation).animate_movement(other, Vector2i(0, 1))
 	for candidate: Tween in get_processed_tweens():
 		if candidate not in before_other:
 			candidate.pause()
@@ -4610,12 +4613,12 @@ func _test_presentation_move_time() -> void:
 	# 프레임 시간에 기대지 않고 이동 Tween을 멈춘 뒤 직접 진행시켜 길이를 잰다. 시간 재기는 CI의 긴 프레임에서 흔들린다.
 	var before: Array[Tween] = get_processed_tweens()
 	var finished: Array[bool] = [false]
-	battle.call("_animate_movement", units[0], Vector2i(4, 3))
+	(battle.get("presentation") as CombatPresentation).animate_movement(units[0], Vector2i(4, 3))
 	var tween: Tween = null
 	for candidate: Tween in get_processed_tweens():
 		if candidate not in before:
 			tween = candidate
-	var base: float = battle.MOVE_STEP_TIME
+	var base: float = CombatPresentation.MOVE_STEP_TIME
 	var expected: float = CombatPresentation.duration(base)
 	_check(tween != null, "한 칸 이동은 Tween으로 움직임")
 	if tween != null:
