@@ -80,6 +80,7 @@ import time
 
 tests = iter(sys.argv[2:])
 active = []
+failed = []
 status = 0
 lock = threading.Lock()
 def label(test):
@@ -158,6 +159,7 @@ try:
                 print(f"Godot script error during: --script {test}", file=sys.stderr)
                 result = 1
             if result:
+                failed.append(label(test))
                 status = result if result > 0 else 128 - result
             active.remove(item)
         if active:
@@ -187,5 +189,7 @@ finally:
     for _, _, reader, _, _ in active:
         if reader.is_alive():
             reader.join(timeout=1)
+if failed:
+    print(f"Failed Godot tests: {', '.join(failed)}", file=sys.stderr)
 sys.exit(status)
 PY
