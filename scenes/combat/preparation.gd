@@ -20,14 +20,29 @@ const PANEL_COLOR: Color = Color("21223d")
 const CELL_COLOR: Color = Color("18292d")
 const UNIT_FRAME: String = "res://scenes/combat/art/units/%s/idle/right/000.png"
 
-var loot: CombatLoot
-var party: Array[CombatUnit] = []
-var rewards: Array[Dictionary] = []
+var state: CombatPreparationState = CombatPreparationState.new()
+var loot: CombatLoot:
+	get: return state.loot
+	set(value): state.loot = value
+var party: Array[CombatUnit]:
+	get: return state.party
+	set(value): state.party = value
+var rewards: Array[Dictionary]:
+	get: return state.rewards
+	set(value): state.rewards = value
 ## 승리 때 줍지 않아 사라진 상자 아이템 수. 보상 확인 단계에서 알린다.
-var lost_floor_items: int = 0
-var maintaining: bool = false
-var final_stage: bool = false
-var last_in_act: bool = false
+var lost_floor_items: int:
+	get: return state.lost_floor_items
+	set(value): state.lost_floor_items = value
+var maintaining: bool:
+	get: return state.maintaining
+	set(value): state.maintaining = value
+var final_stage: bool:
+	get: return state.final_stage
+	set(value): state.final_stage = value
+var last_in_act: bool:
+	get: return state.last_in_act
+	set(value): state.last_in_act = value
 var title_label: Label
 var hint_label: Label
 var enable_button: Button
@@ -151,15 +166,8 @@ func open_rewards(
 	model: CombatLoot, allies: Array[CombatUnit], drops: Array[Dictionary],
 	is_final: bool, is_last_in_act: bool, is_maintaining: bool = false, lost_drops: int = 0
 ) -> void:
-	if visible:
+	if visible or not state.open(model, allies, drops, is_final, is_last_in_act, is_maintaining, lost_drops):
 		return
-	loot = model
-	party = allies
-	rewards = drops
-	final_stage = is_final
-	last_in_act = is_last_in_act
-	maintaining = is_maintaining
-	lost_floor_items = lost_drops
 	show()
 	_render()
 	continue_button.grab_focus()
@@ -168,20 +176,18 @@ func open_rewards(
 func _continue() -> void:
 	if not visible or discard_dialog.visible:
 		return
-	if not maintaining:
-		maintaining = true
+	if state.begin_maintenance():
 		_render()
 		continue_button.grab_focus()
+	elif not state.needs_finish_confirmation(_confirm_finish):
+		_finish()
 	else:
-		if rewards.is_empty() or not _confirm_finish:
-			_finish()
-		else:
-			discard_dialog.title = tr("정비 종료 확인")
-			discard_dialog.ok_button_text = tr("마치기")
-			discard_dialog.dialog_text = tr("받지 않은 아이템이 있습니다. 마치시겠습니까?")
-			skip_confirmation.button_pressed = false
-			skip_confirmation.show()
-			_show_confirmation()
+		discard_dialog.title = tr("정비 종료 확인")
+		discard_dialog.ok_button_text = tr("마치기")
+		discard_dialog.dialog_text = tr("받지 않은 아이템이 있습니다. 마치시겠습니까?")
+		skip_confirmation.button_pressed = false
+		skip_confirmation.show()
+		_show_confirmation()
 
 
 func _show_confirmation() -> void:
@@ -214,8 +220,7 @@ func _confirm() -> void:
 		return
 	var index: int = _discard_index
 	_hide_discard()
-	if index < loot.bag.size():
-		loot.bag.remove_at(index)
+	state.discard_bag_item(index)
 	_render()
 	continue_button.grab_focus()
 
@@ -231,15 +236,15 @@ func _finish() -> void:
 	if not visible or not maintaining:
 		return
 	_hide_discard()
-	var missing: int = loot.bag.size() + rewards.size() - int(loot.data["bag_limit"])
+	var missing: int = state.bag_shortage()
 	if missing > 0:
 		bag_notice.text = tr_n("가방 공간이 %d칸 부족합니다.\n장착·물약 분배 또는 가방 아이템의 ‘버리기’로 공간을 확보합니다.",
 			"가방 공간이 %d칸 부족합니다.\n장착·물약 분배 또는 가방 아이템의 ‘버리기’로 공간을 확보합니다.", missing) % missing
 		bag_notice.show()
 		continue_button.grab_focus()
 		return
-	loot.bag.append_array(rewards)
-	rewards.clear()
+	if not state.finish():
+		return
 	hide()
 	finished.emit()
 
@@ -394,10 +399,7 @@ func _render_detail() -> void:
 		_link_detail_focus([])
 		return
 	var owner_unit: CombatUnit = null if _selected_kind in ["reward", "bag"] else party[_selected_index]
-	var item: Dictionary = (rewards[_selected_index] if _selected_kind == "reward"
-		else loot.bag[_selected_index] if _selected_kind == "bag"
-		else _slot_potion(owner_unit, _selected_slot) if _selected_kind == "potion"
-		else owner_unit.weapon if _selected_kind == "weapon" else owner_unit.armor)
+	var item: Dictionary = state.item_at(_selected_kind, _selected_index, _selected_slot)
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	detail.add_child(row)
@@ -497,7 +499,7 @@ func _transfer_button(parent: Node, source: int, slot: int, target: int) -> void
 
 ## 이 캐릭터의 `slot`번 물약 칸의 물약류 항목. 빈 칸이면 빈 Dictionary다.
 func _slot_potion(unit: CombatUnit, slot: int) -> Dictionary:
-	return loot.potion_definition(unit.potions[slot]) if slot >= 0 and slot < unit.potions.size() else {}
+	return state.slot_potion(unit, slot)
 
 
 ## 상세 패널의 장착·물약 받기 버튼과 지금 장비 비교.
@@ -506,8 +508,7 @@ func _receive_button(parent: Node, item: Dictionary, index: int, ally: int, from
 	var potion: bool = item["kind"] == "potion"
 	var button: Button = _button(parent, _receive_label(unit, item),
 		"Ally%d" % ally)
-	var full: bool = (potion and unit.potions.size() >= int(loot.data["potion_limit"])) if from_bag \
-		else not loot.can_receive(unit, item)
+	var full: bool = not state.can_receive(ally, item, from_bag)
 	button.tooltip_text = "" if not full else (tr("물약을 더 가질 수 없습니다.") if potion
 		else tr("공용 가방에 빈 칸이 없어 지금 장비를 보관할 수 없습니다."))
 	button.disabled = full
@@ -562,28 +563,25 @@ func _process(_delta: float) -> void:
 
 
 func _receive(index: int, ally: int) -> void:
-	if not visible or not maintaining or discard_dialog.visible or index < 0 or index >= rewards.size():
-		return
-	if loot.receive(party[ally], rewards[index]):
-		rewards.remove_at(index)
+	if visible and not discard_dialog.visible and state.receive_reward(index, ally):
 		_render()
 		continue_button.grab_focus()
 
 
 func _receive_bag(index: int, ally: int) -> void:
-	if visible and maintaining and not discard_dialog.visible and loot.receive_from_bag(party[ally], index):
+	if visible and not discard_dialog.visible and state.receive_from_bag(index, ally):
 		_render()
 		continue_button.grab_focus()
 
 
 func _unequip_armor(ally: int) -> void:
-	if visible and maintaining and not discard_dialog.visible and loot.unequip_armor(party[ally]):
+	if visible and not discard_dialog.visible and state.unequip_armor(ally):
 		_render()
 		continue_button.grab_focus()
 
 
 func _transfer(source: int, target: int, slot: int = -1) -> void:
-	if visible and maintaining and not discard_dialog.visible and loot.transfer_potion(party[source], party[target], slot):
+	if visible and not discard_dialog.visible and state.transfer_potion(source, target, slot):
 		_render()
 		continue_button.grab_focus()
 
@@ -599,10 +597,9 @@ func _drag_slot(control: Control, kind: String, index: int, slot: int = -1) -> v
 
 
 func _drag_item(control: Control, kind: String, index: int, slot: int = -1) -> Variant:
-	if not visible or not maintaining or discard_dialog.visible:
+	if not visible or not maintaining or discard_dialog.visible or kind == "weapon":
 		return null
-	var item: Dictionary = (rewards[index] if kind == "reward" else loot.bag[index] if kind == "bag"
-		else party[index].armor if kind == "armor" else _slot_potion(party[index], slot) if kind == "potion" else {})
+	var item: Dictionary = state.item_at(kind, index, slot)
 	if item.is_empty():
 		return null
 	var preview: TextureRect = TextureRect.new()
@@ -616,50 +613,26 @@ func _drag_item(control: Control, kind: String, index: int, slot: int = -1) -> V
 
 
 func _can_drop_item(data: Variant, kind: String, index: int) -> bool:
-	if not visible or not maintaining or discard_dialog.visible or not data is Dictionary \
+	if not visible or discard_dialog.visible or not data is Dictionary \
 		or data.get("owner") != get_instance_id() or not data.get("index") is int \
 		or not data.get("kind") is String or not data.get("item") is Dictionary:
 		return false
-	var source: String = data.get("kind", "")
-	var at: int = data.index
-	if source in ["reward", "bag"]:
-		var items: Array[Dictionary] = rewards if source == "reward" else loot.bag
-		if at < 0 or at >= items.size() or data.get("item") != items[at]:
-			return false
-		var item: Dictionary = items[at]
-		if kind == "empty_bag":
-			return source == "reward" and loot.bag.size() < int(loot.data["bag_limit"])
-		return kind in [item.kind, "ally"] and index >= 0 and index < party.size() and (
-			loot.can_receive(party[index], item) if source == "reward" else
-			party[index].potions.size() < int(loot.data["potion_limit"]) if item.kind == "potion" else true)
-	if at < 0 or at >= party.size():
-		return false
-	if source == "armor":
-		return kind == "empty_bag" and data.get("item") == party[at].armor \
-			and loot.armor_unequip_blocker(party[at]).is_empty()
-	# 끌기 시작 때의 칸이 그대로 그 물약일 때만 넘긴다.
-	return (source == "potion" and kind in ["potion", "ally"] and index >= 0 and index < party.size()
-		and data.get("slot") is int and data.item == _slot_potion(party[at], data.slot) and not data.item.is_empty()
-		and at != index and party[index].potions.size() < int(loot.data["potion_limit"]))
+	return state.can_drop(data.kind, data.index, data.item, kind, index, data.get("slot"))
 
 
 func _drop_item(data: Variant, kind: String, index: int) -> void:
 	if not _can_drop_item(data, kind, index):
 		return
-	match data.kind:
-		"reward":
-			if kind == "empty_bag":
-				loot.bag.append(rewards.pop_at(data.index))
-				_render()
-				continue_button.grab_focus()
-			else:
-				_receive(data.index, index)
-		"bag": _receive_bag(data.index, index)
-		"armor": _unequip_armor(data.index)
-		"potion": _transfer(data.index, index, data.slot)
+	if state.apply_drop(data.kind, data.index, data.item, kind, index, data.get("slot")):
+		_render()
+		continue_button.grab_focus()
 
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_VISIBILITY_CHANGED:
+		if not visible:
+			state.close()
+		return
 	if what not in [NOTIFICATION_DRAG_BEGIN, NOTIFICATION_DRAG_END] or not is_inside_tree():
 		return
 	if what == NOTIFICATION_DRAG_BEGIN:
