@@ -149,6 +149,12 @@ class GodotCheckTests(unittest.TestCase):
         result, calls = self.run_check("combat_hud_test", broken_exit="3")
         self.assertEqual(result.returncode, 3)
         self.assertTrue(any("combat_hud_test" in call for call in calls))
+        self.assertIn("Failed Godot tests: combat_hud_test", result.stderr)
+
+    def test_clean_run_omits_failure_summary(self):
+        result, _ = self.run_check(selected=("tests/combat_ai_test.gd",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("Failed Godot tests:", result.stderr)
 
     def test_save_and_hud_run_concurrently_after_import(self):
         with tempfile.TemporaryDirectory() as directory:
