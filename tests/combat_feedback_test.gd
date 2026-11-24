@@ -214,19 +214,19 @@ func _test_crowded_feedback() -> void:
 	battle.call("_update_turn_ui")
 	_check(turns.current_unit == attacker and attacker.kind == CombatUnit.Kind.SPIDERLING
 		and archer.kind == CombatUnit.Kind.ARCHER, "밀집 팝업 전제조건: 새끼 거미 차례, 궁수 대상")
-	var parent: Node2D = battle.get_node("Units") as Node2D
+	var presentation: CombatPresentation = battle.get("presentation") as CombatPresentation
 	var placed: Array[Dictionary] = []
 	var recorded: Array[int] = []
 	var record: Callable = func(unit: CombatUnit, text: String) -> void:
-		for child: Node in parent.get_children():
-			if (child is Label and child.text == text and child.get_meta("feedback_unit", 0) == unit.get_instance_id()
+		for child: Label in presentation.feedback_popups():
+			if (child.text == text and child.get_meta("feedback_unit", 0) == unit.get_instance_id()
 				and child.get_instance_id() not in recorded):
 				recorded.append(child.get_instance_id())
-				var canvas: Transform2D = parent.get_global_transform_with_canvas()
+				var canvas: Transform2D = presentation.get_global_transform_with_canvas()
 				var scale: float = absf(canvas.get_scale().x)
-				placed.append({"unit": unit, "text": text, "rect": canvas * (child as Label).get_rect(),
+				placed.append({"unit": unit, "text": text, "rect": canvas * child.get_rect(),
 					"origin": canvas * (unit.position + Vector2(-16, unit.floor_offset_y + unit.get_status_label_y() - 5)),
-					"padding": 2.0 * scale, "near": CombatUnit.FEEDBACK_NEAR * scale})
+					"padding": 2.0 * scale, "near": CombatPresentation.FEEDBACK_NEAR * scale})
 	actions.feedback.connect(record)
 	_check(await actions.attack(attacker, archer), "밀집 배치에서 새끼 거미 공격 실행")
 	attacker.refill_turn_resources()
@@ -637,11 +637,7 @@ func _wait_for(predicate: Callable, seconds: float) -> bool:
 
 
 func _popups() -> Array[Label]:
-	var result: Array[Label] = []
-	for child: Node in battle.get_node("Units").get_children():
-		if child is Label and child.has_meta("feedback_unit"):
-			result.append(child)
-	return result
+	return (battle.get("presentation") as CombatPresentation).feedback_popups()
 
 
 func _monitor() -> void:
