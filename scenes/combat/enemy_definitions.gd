@@ -3,13 +3,13 @@ extends RefCounted
 ## 몬스터의 고정 수치와 사용 동작. 아군 직업 수치와 따로 관리한다.
 
 static var NOVICE_BARBARIAN: Dictionary = {
-	"abilities": [10, 6, 4, 4, 4, 4], "defense_bonus": 0,
+	"abilities": [10, 6, 8, 4, 4, 4], "defense_bonus": 0,
 	"name": TranslationServer.tr("풋내기 야만인"), "max_hit_points": 33, "armor_class": 6,
 	"attack_bonus": 3, "damage_bonus": 4, "attack_range": 1,
 	"actions": ["attack", "second_wind"]
 }
 static var NOVICE_ARCHER: Dictionary = {
-	"abilities": [4, 10, 4, 4, 4, 4], "defense_bonus": 0,
+	"abilities": [4, 10, 8, 4, 4, 4], "defense_bonus": 0,
 	"name": TranslationServer.tr("풋내기 궁수"), "max_hit_points": 21,
 	"attack_bonus": 2, "damage_bonus": 4, "attack_range": 8,
 	"actions": ["attack", "disengage"]
@@ -36,21 +36,21 @@ static var SCRAP_ROBOT_3000: Dictionary = {
 	"actions": ["attack", "pull", "spin"]
 }
 static var SPIDERLING: Dictionary = {
-	"abilities": [4, 4, 4, 4, 4, 4], "defense_bonus": 0,
+	"abilities": [4, 4, 8, 4, 4, 4], "defense_bonus": 0,
 	"name": TranslationServer.tr("새끼 거미"), "max_hit_points": 1, "poison_immune": true,
 	"movement": 12, "armor_class": 4,
 	"attack_bonus": 3, "damage_bonus": 4, "attack_range": 1,
 	"actions": ["attack"]
 }
 static var MOTHER_SPIDER: Dictionary = {
-	"abilities": [8, 6, 4, 4, 6, 8], "defense_bonus": 1,
+	"abilities": [8, 6, 8, 4, 6, 8], "defense_bonus": 1,
 	"name": TranslationServer.tr("엄마 거미"), "max_hit_points": 30, "poison_immune": true,
 	"movement": 6,
 	"attack_bonus": 3, "damage_bonus": 5, "attack_range": 1,
 	"actions": ["attack", "spawn"]
 }
 static var FOG_SPIDER: Dictionary = {
-	"abilities": [6, 6, 4, 4, 4, 8], "defense_bonus": 0,
+	"abilities": [6, 6, 8, 4, 4, 8], "defense_bonus": 0,
 	"name": TranslationServer.tr("독안개 거미"), "max_hit_points": 18, "poison_immune": true,
 	"movement": 6,
 	"attack_bonus": 3, "damage_bonus": 4, "attack_range": 1,
