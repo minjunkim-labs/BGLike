@@ -261,11 +261,11 @@ func get_armor_class() -> int:
 	return armor_class
 
 
-## 아군은 (건강 면 수 ÷ 2) × (레벨 + 1) + 5다 (능력치 기획서 4-9).
+## 아군은 (건강 면 수 ÷ 2) × (레벨 + 1) + 5에 장비 최대 HP를 더하며 하한은 1이다 (능력치 기획서 4-6·4-9).
 func get_max_hit_points() -> int:
 	if not is_ally:
-		return int(CombatEnemyDefinitions.for_kind(kind)["max_hit_points"])
-	return get_ability_sides(Ability.HEALTH) / 2 * (dice_level + 1) + 5 + _equipment_stat("max_hit_points")
+		return maxi(1, int(CombatEnemyDefinitions.for_kind(kind)["max_hit_points"]))
+	return maxi(1, get_ability_sides(Ability.HEALTH) / 2 * (dice_level + 1) + 5 + _equipment_stat("max_hit_points"))
 
 
 func get_attack_bonus() -> int:

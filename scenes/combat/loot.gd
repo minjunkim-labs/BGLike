@@ -11,15 +11,17 @@ static var STAT_NAMES: Dictionary = {
 	"finesse_modifier": TranslationServer.tr("솜씨 가감"), "intelligence_modifier": TranslationServer.tr("지능 가감"),
 	"will_modifier": TranslationServer.tr("의지 가감"), "health_modifier": TranslationServer.tr("건강 가감")
 }
-## 음수 범위를 허용하는 수치: 능력치 가감과 최대 이동. 나머지는 0 이상이다 (아이템 기획 폼 3장).
-const SIGNED_STATS: Array[String] = ["max_movement"] + CombatUnit.ABILITY_MODIFIER_KEYS
+## 음수 범위를 허용하는 장비 수치: 수치 가감 전체 (아이템 기획 폼 3장).
+const SIGNED_STATS: Array[String] = ["attack_bonus", "damage_bonus", "defense_bonus",
+	"max_hit_points", "max_movement"] + CombatUnit.ABILITY_MODIFIER_KEYS
 
 var data: Dictionary
 var bag: Array[Dictionary] = []
 
 
-func _init() -> void:
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(DATA_PATH))
+func _init(source_data: Variant = null) -> void:
+	var parsed: Variant = (source_data if source_data != null
+		else JSON.parse_string(FileAccess.get_file_as_string(DATA_PATH)))
 	assert(parsed is Dictionary, "아이템 데이터 JSON을 읽을 수 없습니다.")
 	data = parsed
 	assert(int(data.get("bag_limit", 0)) > 0, "가방 한도는 양수여야 합니다.")
@@ -50,9 +52,14 @@ func _init() -> void:
 			var act_ranges: Array = item["stats"][stat]
 			assert(act_ranges.size() == 3, "장비 수치는 막별 범위3개가 필요합니다.")
 			for bounds: Array in act_ranges:
-				assert(bounds.size() == 2 and (stat in SIGNED_STATS or int(bounds[0]) >= 0)
-					and int(bounds[0]) <= int(bounds[1]), "장비 범위는 최소·최대입니다. 가감이 아닌 수치는 0 이상입니다.")
+				assert(is_valid_stat_bounds(stat, bounds),
+					"장비 범위는 최소·최대입니다. 음수를 허용하지 않는 수치는 0 이상입니다.")
 	assert(total_weight > 0)
+
+
+static func is_valid_stat_bounds(stat: String, bounds: Array) -> bool:
+	return (bounds.size() == 2 and (stat in SIGNED_STATS or int(bounds[0]) >= 0)
+		and int(bounds[0]) <= int(bounds[1]))
 
 
 func roll_rewards(monster_count: int, dice: CombatDice, act_number: int) -> Array[Dictionary]:
