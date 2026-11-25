@@ -174,7 +174,7 @@ func _shield_bar(warrior: CombatUnit) -> void:
 	_check(used and shield > 0 and warrior.shield_turns > 0, "성스러운 장막 사용: 방어막 %d, %d턴" % [shield, warrior.shield_turns])
 	_check(bar.y > 0.0 and bar.x + bar.y <= 1.0001,
 		"HP 바에 방어막 구간이 생김: HP %.3f + 방어막 %.3f" % [bar.x, bar.y])
-	_check("방어막 %d (%d턴)" % [shield, warrior.shield_turns] in hud.resource_label.get_parsed_text(), "유닛 패널 상태 줄에 방어막과 남은 기간")
+	_check("방어막 %d (%d턴)" % [shield, warrior.shield_turns] in hud.status_text(), "유닛 패널 상태 줄에 방어막과 남은 기간")
 	await _capture("shield-on")
 	log_lines.clear()
 	var hp: int = warrior.hit_points
@@ -192,7 +192,7 @@ func _shield_bar(warrior: CombatUnit) -> void:
 	_check(warrior.shield_points == 0 and warrior.shield_turns == 0 and warrior.get_bar_fractions().y == 0.0,
 		"방어막 소진: 구간이 사라짐")
 	_check(warrior.hit_points == hp - 1, "초과분 1만 HP가 받음")
-	_check("방어막" not in hud.resource_label.get_parsed_text(), "방어막 소진: 상태 줄에서도 사라짐")
+	_check("방어막" not in hud.status_text(), "방어막 소진: 상태 줄에서도 사라짐")
 	await _capture("shield-gone")
 
 
@@ -204,8 +204,11 @@ func _number_colors(warrior: CombatUnit, archer: CombatUnit) -> void:
 	hud.show_unit(warrior)
 	var good: String = hud.resource_label.text
 	var parsed: String = hud.resource_label.get_parsed_text()
+	var phalanx_buttons: Array[Button] = hud.status_buttons().filter(func(button: Button) -> bool: return button.text == "팔랑크스 AC +1")
+	var phalanx_rich: RichTextLabel = phalanx_buttons[0].get_node_or_null("ColoredLabel") as RichTextLabel if not phalanx_buttons.is_empty() else null
 	_check(good.contains("[color=#70c76d]+2[/color]") and "공격 +2" in parsed, "이로움: 공격 +2가 초록이고 부호 유지")
-	_check(good.contains("AC [color=#70c76d]+1[/color]") and "팔랑크스 AC +1" in parsed, "이로움: 팔랑크스 AC +1이 초록이고 부호 유지")
+	_check(phalanx_rich != null and phalanx_rich.text.contains("AC [color=#70c76d]+1[/color]") and phalanx_rich.get_parsed_text() == "팔랑크스 AC +1",
+		"이로움: 팔랑크스 AC +1이 초록이고 부호 유지")
 	await _capture("number-good")
 	hud.show_unit(archer)
 	var bad: String = hud.resource_label.text

@@ -554,13 +554,13 @@ func _test_scene() -> void:
 	_check(actions.use_self(enemy_archer, "disengage") and enemy_archer.disengaged,
 		"적 턴에 풋내기 궁수의 물러서며 쏘기로 기회 공격 면제 부여")
 	hud.show_unit(enemy_archer)
-	_check("기회 공격 면제" in hud.resource_label.text, "적 턴 중 풋내기 궁수 상태 줄에 기회 공격 면제 표시")
+	_check("기회 공격 면제" in hud.status_text(), "적 턴 중 풋내기 궁수 상태 줄에 기회 공격 면제 표시")
 	turns.end_turn()
 	_check(enemy_archer.disengaged, "적 묶음 확정 전에는 기회 공격 면제 유지")
 	turns.end_turn()
 	hud.show_unit(enemy_archer)
 	_check(turns.current_unit.is_ally and not enemy_archer.disengaged
-		and "기회 공격 면제" not in hud.resource_label.text,
+		and "기회 공격 면제" not in hud.status_text(),
 		"적 턴 묶음 확정 후 아군 턴에서 풋내기 궁수 상태 줄에 기회 공격 면제 미표시")
 	battle.queue_free()
 	await process_frame

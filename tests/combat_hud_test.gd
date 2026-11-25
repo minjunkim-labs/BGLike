@@ -71,6 +71,7 @@ func _run() -> void:
 	await _test_layout()
 	await _test_portrait_card_names()
 	await _test_guidance()
+	await _test_unit_panel_status_hover()
 	_test_high_ground_guidance()
 	_test_water_guidance()
 	await _test_mouse_controls_and_inspection()
@@ -873,7 +874,7 @@ func _test_warrior() -> void:
 	var costs: Dictionary = hud.get("_costs")
 	var titles: Array = hud.get("_titles")
 	_check(hud.unit_label.text == "아군 전사" and "HP 11 / 11" in hud.resource_label.get_parsed_text()
-		and "AC 6" in hud.resource_label.get_parsed_text() and "팔랑크스 AC +1" in hud.resource_label.get_parsed_text()
+		and "AC 6" in hud.resource_label.get_parsed_text() and "팔랑크스 AC +1" in hud.status_text()
 		and "이동" not in hud.resource_label.get_parsed_text(),
 		"현재 유닛 정보: HP·AC(민첩 d8 표준값 5 + 인접 궁수 팔랑크스 1) 표시, 남은 이동 제거")
 	_check(hud.health_bar.value == 11, "현재 유닛 HP 바")
@@ -939,7 +940,7 @@ func _test_resources() -> void:
 	_check((titles[0] as Label).text == "행동 ○" and (titles[1] as Label).text == "보조 행동 △"
 		and units[0].shield_points == 7 and units[0].shield_turns == CombatActionRules.SHIELD_TURNS,
 		"성스러운 장막은 보조 행동 기호 한 개만 쓰고 건강 굴림값만큼 방어막")
-	_check("방어막 7 (3턴)" in hud.resource_label.get_parsed_text(), "유닛 정보에 방어막 값과 남은 턴 표시")
+	_check("방어막 7 (3턴)" in hud.status_text(), "유닛 정보에 방어막 값과 남은 턴 표시")
 	_check((buttons["holy_veil"] as Button).disabled, "보조 행동 소진 비활성화")
 	units[0].clear_unit_effects()
 	units[0].movement_left = 0
@@ -1284,16 +1285,16 @@ func _test_log_and_status() -> void:
 	units[2].hit_points = 5
 	battle.call("_update_turn_ui")
 	hud.show_unit(units[2])
-	_check("기절" in hud.resource_label.get_parsed_text() and "◎" not in hud.resource_label.get_parsed_text(),
+	_check("기절" in hud.status_text() and "◎" not in hud.status_text(),
 		"기절은 유닛 정보에 반영하고 표식(#528 삭제)은 없음")
 	_check(hud.health_bar.value == 5, "대상 HP 갱신")
 	units[2].fallen = true
 	hud.show_unit(units[2])
-	_check("넘어짐" in hud.resource_label.get_parsed_text(), "넘어짐은 유닛 정보 상태 줄에 보임(#500 2a)")
+	_check("넘어짐" in hud.status_text(), "넘어짐은 유닛 정보 상태 줄에 보임(#500 2a)")
 	units[2].fallen = false
 	units[2].stealthed = true
 	hud.show_unit(units[2])
-	_check("은신" in hud.resource_label.get_parsed_text() and "은신" in units[2].get_status_text(),
+	_check("은신" in hud.status_text() and "은신" in units[2].get_status_text(),
 		"은신은 유닛 정보 상태 줄과 유닛 위 상태 글자에 보임")
 	units[2].stealthed = false
 	# 넘어진 아군은 턴 종료 위의 일어나기 버튼으로 이동력 절반을 내고 일어난다(#500 2a 설계 결정 5).
@@ -1325,16 +1326,17 @@ func _test_log_and_status() -> void:
 	actions.apply_status(units[1], units[2], "burn")
 	actions.apply_status(units[0], units[2], "poison")
 	hud.show_unit(units[2])
-	_check("화상2" in hud.resource_label.get_parsed_text() and "독1" in hud.resource_label.get_parsed_text()
-		and "기절" in hud.resource_label.get_parsed_text(),
+	_check("화상2" in hud.status_text() and "독1" in hud.status_text()
+		and "기절" in hud.status_text(),
 		"기존 상태 정보에 화상/독 중첩 수를 함께 표시")
 	await process_frame
-	_check(hud.get_viewport_rect().encloses(hud.resource_label.get_global_rect()),
+	_check(hud.get_viewport_rect().encloses(hud.resource_label.get_global_rect())
+		and hud.get_viewport_rect().encloses(hud.status_row.get_global_rect()),
 		"기절/화상/독의 상태 정보를 함께 표시해도 화면 안에 배치")
 	units[2].begin_stage(false)
 	units[1].aegisal_left = 2
 	hud.show_unit(units[1])
-	_check("애기살 2발" in hud.resource_label.get_parsed_text(), "애기살 남은 발수를 상태 줄에 표시")
+	_check("애기살 2발" in hud.status_text(), "애기살 남은 발수를 상태 줄에 표시")
 	units[1].aegisal_left = 0
 	battle.call("_update_turn_ui")
 	# 실제 동작의 판정 로그와 숫자 팝업 연결. 마지막 적이 아닌 대상에 확정 명중.
@@ -1524,7 +1526,7 @@ func _test_layout() -> void:
 			await process_frame
 			var area: Rect2 = hud.get_global_rect()
 			for control: Control in [hud.order_bar, hud.action_bar, hud.message_label,
-				hud.end_button, hud.resource_label, hud.actor_label,
+				hud.end_button, hud.resource_label, hud.status_row, hud.actor_label,
 				hud.preview_label, hud.round_label, hud.progress_label]:
 				_check(area.encloses(control.get_global_rect()), "%s: 화면 안 %s" % [size, control.name])
 			_check(not hud.round_label.get_global_rect().intersects(hud.progress_label.get_global_rect()),
@@ -1608,10 +1610,10 @@ func _test_layout() -> void:
 	hud.preview_label.text = "명중률 37.5% · 유리\n고지대, 기절한 대상, 애기살, 옆에 적"
 	await process_frame
 	await process_frame
-	_check(hud.unit_label.text == units[2].get_display_name() and "기절" in hud.resource_label.get_parsed_text()
-		and "화상1" in hud.resource_label.get_parsed_text() and "독1" in hud.resource_label.get_parsed_text()
-		and "과부하" in hud.resource_label.get_parsed_text() and "애기살 12발" in hud.resource_label.get_parsed_text(),
-		"긴 유닛 정보 fixture: 대상의 상태 줄 표시: " + hud.resource_label.get_parsed_text().replace("\n", " | "))
+	_check(hud.unit_label.text == units[2].get_display_name() and "기절" in hud.status_text()
+		and "화상1" in hud.status_text() and "독1" in hud.status_text()
+		and "과부하" in hud.status_text() and "애기살 12발" in hud.status_text(),
+		"긴 유닛 정보 fixture: 대상의 상태 줄 표시: " + hud.status_text())
 	_check(not (hud.get_node("UnitDetails") as Control).get_global_rect().intersects(
 		(hud.get_node("CombatLog") as Control).get_global_rect()),
 		"긴 상태·공격 예측의 유닛 정보와 가장 높은 로그는 겹치지 않음: %s / %s" % [
@@ -2166,6 +2168,148 @@ func _test_tooltip_column(buttons: Dictionary) -> void:
 	await _hover(hud.end_button)
 
 
+# 유닛 패널 상태 줄 14종 개별 호버·포커스 설명, 없음 제외, 클릭 무동작, 왼쪽 열 배치·비겹침(#796).
+func _test_unit_panel_status_hover() -> void:
+	_reset_units()
+	var tooltip: PanelContainer = hud.get("_tooltip") as PanelContainer
+	var tooltip_label: RichTextLabel = tooltip.get("_label") as RichTextLabel
+	var selection: CombatSelection = battle.get("selection") as CombatSelection
+	var order_scroll: Control = hud.get_node("OrderScroll") as Control
+	var combat_log: Control = hud.get_node("CombatLog") as Control
+	var skills_panel: Control = hud.get_node("Skills") as Control
+	# 상태가 없을 때의 `없음`은 호버·포커스 대상에서 제외한다.
+	hud.show_unit(units[2])
+	await process_frame
+	_check(hud.status_text() == "상태: 없음" and hud.status_buttons().is_empty(),
+		"#796: 상태가 없으면 `상태: 없음`이고 호버 버튼이 없음: " + hud.status_text())
+	# 팔랑크스(인접한 기절하지 않은 전사 효과)는 기절 전 상태에서 검증한다.
+	var ally: CombatUnit = units[0]
+	var saved_cells: Array[Vector2i] = [units[0].cell, units[1].cell]
+	units[0].cell = Vector2i(4, 9)
+	units[1].cell = Vector2i(5, 9)
+	hud.show_unit(ally)
+	await process_frame
+	var phalanx_buttons: Array[Button] = hud.status_buttons().filter(
+		func(button: Button) -> bool: return button.text == "팔랑크스 AC +1")
+	_check(phalanx_buttons.size() == 1 and "인접한 전사 효과로 AC +1" in phalanx_buttons[0].tooltip_text,
+		"#796: 팔랑크스 AC +1 호버 문구 확인")
+	# 나머지 아군·적 상태 11종(기절·넘어짐·은신·화상·독·만능팔 대기·애기살·기회 공격 면제·방어막·전투의 함성·산만함)을 검사한다.
+	ally.is_stunned = true
+	ally.fallen = true
+	ally.stealthed = true
+	ally.status_effects.append(CombatUnit.StatusEffect.new("burn", units[2], 2))
+	ally.status_effects.append(CombatUnit.StatusEffect.new("burn", units[2], 1))
+	ally.status_effects.append(CombatUnit.StatusEffect.new("poison", units[2], 4, 4))
+	ally.pull_cooldown = 1
+	ally.aegisal_left = 2
+	ally.disengaged = true
+	ally.shield_points = 7
+	ally.shield_turns = 3
+	ally.battle_cry_bonus = 3
+	ally.battle_cry_turns = 2
+	ally.distracted_turns = 2
+	hud.show_unit(ally)
+	await process_frame
+	var by_label: Dictionary[String, Button] = {}
+	for button: Button in hud.status_buttons():
+		by_label[button.text] = button
+	var expected_snippets: Dictionary[String, String] = {
+		"기절": "행동·이동·반응을 쓸 수 없고",
+		"넘어짐": "민첩 내성굴림이 불리",
+		"은신": "대상으로 지정할 수 없습니다",
+		"화상2": "중첩당 1d4 피해",
+		"독1": "건강 내성(DC 4)",
+		"만능팔 대기": "만능팔을 쓸 수 없습니다",
+		"애기살 2발": "피해 주사위를 2번",
+		"기회 공격 면제": "기회 공격을 받지 않습니다",
+		"방어막 7 (3턴)": "최대 7까지 대신 받습니다",
+		"전투의 함성 명중 +3 (2턴)": "모든 명중굴림에 +3",
+		"산만함 2턴": "내성굴림·명중굴림 불리"
+	}
+	_check(by_label.size() == expected_snippets.size(),
+		"#796: 화상·독을 분리해 11개 개별 호버 항목이 HFlowContainer에 배치됨: %s" % [by_label.keys()])
+	for label: String in expected_snippets:
+		var button: Button = by_label.get(label) as Button
+		_check(button != null and button.get_parent() == hud.status_row
+			and expected_snippets[label] in button.tooltip_text,
+			"#796: 상태 항목 %s 문구 확인: %s" % [label, "" if button == null else button.tooltip_text])
+	# 산만함 2턴 마우스 호버: 왼쪽 열(턴 순서 바 아래, 초상 호버와 같은 자리), HoverTooltip.headed() 형식, 클릭 무동작.
+	var distracted_button: Button = by_label["산만함 2턴"]
+	var before_action: int = ally.action_left
+	var before_bonus: int = ally.bonus_action_left
+	var before_selected: String = selection.selected_action
+	distracted_button.pressed.emit()
+	_check(ally.action_left == before_action and ally.bonus_action_left == before_bonus
+		and selection.selected_action == before_selected,
+		"#796: 상태 항목을 클릭해도 전투 동작을 실행하지 않음")
+	await _hover(distracted_button)
+	var screen: Vector2 = hud.get_global_rect().size
+	var hover_rect: Rect2 = tooltip.get_global_rect()
+	_check(tooltip.visible and _has_tooltip(root, distracted_button.tooltip_text)
+		and "내성굴림·명중굴림 불리" in tooltip_label.get_parsed_text()
+		and tooltip_label.text == HoverTooltip.headed(distracted_button.tooltip_text)
+		and _in_left_column(hover_rect, screen)
+		and is_equal_approx(hover_rect.position.y, order_scroll.get_global_rect().end.y + 4.0)
+		and not hover_rect.intersects(combat_log.get_global_rect())
+		and not hover_rect.intersects(skills_panel.get_global_rect()),
+		"#796: 산만함 2턴 마우스 호버는 왼쪽 열(턴 순서 바 아래)에 headed 형식으로 표시: %s" % hover_rect)
+	await _hover(hud.end_button)
+	# 독(기간 없음)과 보스 전용 2종(과부하 대기/켜짐·기절 면역)도 검증한다.
+	var boss: CombatUnit = CombatUnit.new()
+	boss.is_ally = false
+	boss.kind = CombatUnit.Kind.SCRAP_ROBOT_1000
+	boss.hit_points = boss.get_max_hit_points()
+	boss.status_effects.append(CombatUnit.StatusEffect.new("poison", ally, 0, CombatGrounds.POISON_DC))
+	hud.show_unit(boss)
+	await process_frame
+	var boss_buttons: Dictionary[String, Button] = {}
+	for button: Button in hud.status_buttons():
+		boss_buttons[button.text] = button
+	_check("독1(기간 없음)" in boss_buttons and "과부하 대기(HP 20 이하)" in boss_buttons and "기절 면역" in boss_buttons,
+		"#796: 보스 상태 줄에 독(기간 없음)·과부하 대기·기절 면역 표시: %s" % [boss_buttons.keys()])
+	var overload_wait_btn: Button = boss_buttons["과부하 대기(HP 20 이하)"]
+	_check(overload_wait_btn.tooltip_text == CombatActionRules.overload_text(boss),
+		"#796: 과부하 대기 설명은 CombatActionRules.overload_text()를 재사용")
+	_check("기절 상태에 걸리지 않습니다" in boss_buttons["기절 면역"].tooltip_text,
+		"#796: 기절 면역 설명 포함")
+	# 키보드·컨트롤러 포커스로도 같은 위치에 설명을 띄우고, 6개 해상도에서 화면 안·C/로그 비겹침을 확인한다.
+	boss.hit_points = boss.overload_threshold()
+	hud.show_unit(boss)
+	await process_frame
+	var active_overload_btn: Button = hud.status_buttons().filter(
+		func(button: Button) -> bool: return button.text == "과부하")[0]
+	_check(active_overload_btn.tooltip_text == CombatActionRules.overload_text(boss),
+		"#796: 과부하 켜짐 설명도 CombatActionRules.overload_text()를 재사용")
+	for size: Vector2i in [Vector2i(1280, 720), Vector2i(1920, 1080), Vector2i(1440, 900),
+		Vector2i(2560, 1600), Vector2i(2560, 1080), Vector2i(1366, 768)]:
+		root.size = size
+		await process_frame
+		await process_frame
+		active_overload_btn.grab_focus()
+		await create_timer(0.6).timeout
+		var view: Rect2 = hud.get_global_rect()
+		var tip_rect: Rect2 = tooltip.get_global_rect()
+		_check(tooltip.visible and tooltip_label.text == HoverTooltip.headed(active_overload_btn.tooltip_text)
+			and view.encloses(tip_rect) and _in_left_column(tip_rect, view.size)
+			and is_equal_approx(tip_rect.position.y, order_scroll.get_global_rect().end.y + 4.0)
+			and not tip_rect.intersects(combat_log.get_global_rect())
+			and not tip_rect.intersects((hud.get_node("UnitDetails") as Control).get_global_rect()),
+			"#796 %s: 과부하 포커스 툴팁이 화면 안·왼쪽 열·C/로그/유닛패널 비겹침: %s" % [size, tip_rect])
+		hud.end_button.grab_focus()
+		await process_frame
+	root.size = Vector2i(1280, 720)
+	await process_frame
+	boss.free()
+	ally.status_effects.clear()
+	ally.fallen = false
+	ally.stealthed = false
+	ally.pull_cooldown = 0
+	ally.disengaged = false
+	units[0].cell = saved_cells[0]
+	units[1].cell = saved_cells[1]
+	_reset_units()
+
+
 # 맵 중앙 영역 C(#555): 맵 기준점 F(화면 가운데에서 위로 20)를 가운데로 한 128×64.
 func _center_area(screen: Vector2) -> Rect2:
 	return Rect2(Vector2(screen.x / 2.0 - 64.0, screen.y / 2.0 - 20.0 - 32.0), Vector2(128, 64))
@@ -2327,7 +2471,7 @@ func _test_mouse_controls_and_inspection() -> void:
 	units[1].is_stunned = true
 	battle.call("_update_turn_ui")
 	await _click((portraits[units[1]] as Button).get_global_rect().get_center())
-	_check(turns.current_unit == units[0] and "기절" in hud.resource_label.get_parsed_text(),
+	_check(turns.current_unit == units[0] and "기절" in hud.status_text(),
 		"기절한 아군은 정보만 표시하고 조작 전환 거부")
 	units[1].is_stunned = false
 	actions.busy = true
@@ -3695,14 +3839,14 @@ func _test_overload_and_water_guidance() -> void:
 	battle.call("_update_turn_ui")
 	await process_frame
 	hud.show_unit(robot)
-	_check("상태: 과부하 대기(HP 20 이하)" in hud.resource_label.get_parsed_text(),
+	_check("상태: 과부하 대기(HP 20 이하)" in hud.status_text(),
 		"켜지기 전 로봇 조회의 상태 줄에 과부하 조건")
 	robot.hit_points = 20
 	hud.show_unit(robot)
-	var status: String = hud.resource_label.get_parsed_text()
+	var status: String = hud.status_text()
 	_check("상태: 기절 면역" not in status and "과부하, 기절 면역" in status and "과부하 대기" not in status,
 		"켜진 뒤 로봇 상태 줄은 지금처럼 과부하")
-	# 가장 긴 상태 줄도 상태 사이에서만 줄을 바꾼다(자동 줄바꿈이 `기절 면/역`처럼 단어를 끊지 않음).
+	# 가장 긴 상태 줄도 HFlowContainer에서 상태 항목 사이에서만 줄을 바꾼다(단어 중간을 끊지 않음).
 	robot.hit_points = robot.get_max_hit_points()
 	robot.overloaded = false
 	for kind_name: String in ["burn", "poison"]:
@@ -3710,16 +3854,20 @@ func _test_overload_and_water_guidance() -> void:
 	robot.pull_cooldown = 1
 	hud.show_unit(robot)
 	await process_frame
-	var long_status: String = hud.resource_label.get_parsed_text()
-	_check("기절 면역" in long_status and ",\n" in long_status
-		and hud.resource_label.get_line_count() == long_status.count("\n") + 1,
-		"가장 긴 상태 줄은 상태 사이에서 줄바꿈: " + long_status.replace("\n", " | "))
+	var long_status: String = hud.status_text()
+	var robot_status_buttons: Array[Button] = hud.status_buttons()
+	var status_row_rect: Rect2 = hud.status_row.get_global_rect()
+	var wrapped_cleanly: bool = robot_status_buttons.size() == 5 and robot_status_buttons.all(
+		func(button: Button) -> bool: return status_row_rect.encloses(button.get_global_rect()))
+	_check("기절 면역" in long_status and wrapped_cleanly,
+		"가장 긴 상태 줄은 HFlowContainer 항목 단위로 줄바꿈: " + long_status)
 	robot.status_effects.clear()
 	robot.pull_cooldown = 0
 	robot.hit_points = 20
 	hud.show_unit(units[0])
-	_check("상태: 없음" in hud.resource_label.get_parsed_text() and "과부하" not in hud.resource_label.get_parsed_text(),
-		"아군 상태 줄에는 과부하 글이 없음")
+	_check("상태: 없음" in hud.status_text() and "과부하" not in hud.status_text()
+		and hud.status_buttons().is_empty(),
+		"아군 상태 줄에는 과부하 글이 없고 없음은 호버 대상에서 제외")
 	robot.hit_points = robot.get_max_hit_points()
 	robot.overloaded = false
 	battle.call("_update_turn_ui")
@@ -4227,7 +4375,7 @@ func _test_whistle_input() -> void:
 	_check(units[2].distracted_turns == 2 and actor.action_left == 0 and actor.whistle_left == 0 and units[0].distracted_turns == 0
 		and selection.selected_action == "attack", "같은 칸을 다시 좌클릭하면 실행: 띠 안의 적만 산만함, 아군 제외")
 	hud.show_unit(units[2])
-	_check("산만함 2턴" in hud.resource_label.get_parsed_text(), "유닛 패널 상태 줄에 산만함 2턴: " + hud.resource_label.get_parsed_text())
+	_check("산만함 2턴" in hud.status_text(), "유닛 패널 상태 줄에 산만함 2턴: " + hud.status_text())
 	actions.dice = saved_dice
 	# 인접하지 않은 칸을 누르면 미리보기만 지운다. 적이 없는 방향도 안내와 함께 고를 수 있다.
 	actor.action_left = 1
