@@ -159,6 +159,25 @@ Godot 리소스 경로는 앞에 `res://`를 붙인다.
 
 방패 둘(성스러운 장막은 방패 하나), 쥔 주먹(밀치기는 편 손바닥), 화살과 호(점프는 장화)로 스킬 아이콘과 구분한다. 1280×720(배율 2)과 1920×1080(배율 3)의 실제 HUD 캡처는 [passive_icons_hud.png](images/passive_icons_hud.png)에 있다.
 
+## 능력치 아이콘 (#795)
+
+[#795](https://github.com/minjunkim-labs/BGLike/issues/795), 2026-11-25: [능력치와 주사위 판정 기획서 3-4절](combat/ability.md#3-4-대표-색과-아이콘)의 능력치 6종 아이콘을 `scenes/combat/art/icons/abilities/<ability_id>.png`에 둔다. 48×48 RGBA 원본을 0.25배(12 논리px)로 표시하며 sharp bilinear 셰이더(`pixel_art.tres`)를 적용한다. 1차 적용 자리는 유닛 패널 능력치 줄(3열 2줄, `[아이콘] d20` + 호버·포커스 이름)과 주사위 굴림 연출(`CombatDiceRollView`, 주사위 왼쪽) 두 곳이다. 호버 설명과 전투 로그의 작은 글씨는 대비비 원칙에 따라 제외한다.
+
+`scenes/combat/art/sources/icons/draw_ability_icons.py`가 Python 표준 라이브러리만으로 64px 설계 격자를 48px 캔버스에 찍어 결정론적으로 같은 바이트를 만든다(2px `#120d16` 어두운 윤곽, 왼쪽 위 광원, 안티앨리어싱·축소·생성 모델 없음). 규격은 `ability_icon_generation.json`에 기록한다.
+
+```sh
+python3 scenes/combat/art/sources/icons/draw_ability_icons.py scenes/combat/art/icons/abilities
+```
+
+| 능력치 | 파일 | 대표 색 | 그림 |
+|---|---|---|---|
+| 힘 | `strength.png` | `#EF4444` | 굽힌 팔 근육 |
+| 민첩 | `agility.png` | `#10B981` | 공중제비 |
+| 솜씨 | `finesse.png` | `#FBBF24` | 반장갑을 낀 손 |
+| 지능 | `intelligence.png` | `#06B6D4` | 뇌 |
+| 의지 | `will.png` | `#8B5CF6` | 연꽃 |
+| 건강 | `health.png` | `#EA0CC1` | 하트 |
+
 ## 아이템 아이콘
 
 [#224](https://github.com/minjunkim-labs/BGLike/issues/224): 임시 아이템 아이콘은48×48 RGBA 원본을 0.5배로 쓴다. 표시 크기는 [표시 크기](#표시-크기-362)를 따른다. 유닛 프레임과 같은 팔레트·어두운2px(논리1px) 윤곽·왼쪽 위 광원을 쓴다. 도형은 64px 설계 격자에 두고 48px 캔버스의 픽셀 중심에서 찍는다. 그림은 가운데44×44 안에 둔다.

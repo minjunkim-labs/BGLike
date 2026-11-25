@@ -294,7 +294,7 @@ func _slip_roll(unit: CombatUnit) -> bool:
 	unit.oil_slipped = true
 	var saved: CombatChecks.RollResult = CombatChecks.saving_throw(sides, unit.get_defense_bonus(), SLIP_DC,
 		CombatActionRules.save_mode(unit, ability), _host.dice, unit.get_ability_modifier(ability))
-	_host._show_roll_in_background(CombatDiceRoll.save(unit, sides, saved, saved.added(), tr("DC"), SLIP_DC))
+	_host._show_roll_in_background(CombatDiceRoll.save(unit, sides, saved, saved.added(), tr("DC"), SLIP_DC, ability))
 	var slip_reason: String = _host._save_reason(unit, ability)
 	_host.logged.emit(tr("%s 미끌거림(솜씨 내성%s): 솜씨 d%d %s %+d = %d / DC %d · %s") % [unit.get_display_name(),
 		"" if slip_reason.is_empty() else " · " + slip_reason, sides, str(saved.rolls), saved.added(), saved.total, SLIP_DC, _host._save_outcome(saved)])
@@ -350,7 +350,8 @@ func apply_fog(unit: CombatUnit, entering: bool) -> void:
 	var health_sides: int = unit.get_ability_sides(CombatUnit.Ability.HEALTH)
 	var saved: CombatChecks.RollResult = CombatChecks.saving_throw(health_sides, unit.get_defense_bonus(),
 		fogs[0].dc, CombatActionRules.save_mode(unit, CombatUnit.Ability.HEALTH), _host.dice, unit.get_ability_modifier(CombatUnit.Ability.HEALTH))
-	_host._show_roll_in_background(CombatDiceRoll.save(unit, health_sides, saved, saved.added(), tr("DC"), fogs[0].dc))
+	_host._show_roll_in_background(CombatDiceRoll.save(unit, health_sides, saved, saved.added(), tr("DC"), fogs[0].dc,
+		CombatUnit.Ability.HEALTH))
 	var fog_reason: String = _host._save_reason(unit, CombatUnit.Ability.HEALTH)
 	_host.logged.emit(tr("%s 독안개(건강 내성%s): 건강 d%d %s %+d = %d / DC %d · %s") % [unit.get_display_name(),
 		"" if fog_reason.is_empty() else " · " + fog_reason, health_sides, str(saved.rolls), saved.added(), saved.total, fogs[0].dc, _host._save_outcome(saved)])
