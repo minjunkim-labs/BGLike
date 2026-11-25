@@ -63,6 +63,8 @@ static var PASSIVE_EFFECTS: Dictionary[String, String] = {
 }
 ## 과부하 고철로봇의 턴 시작 자기 피해. 실제 처리와 표시(#503)가 같은 값을 쓴다.
 const OVERLOAD_SELF_DAMAGE: int = 2
+## 독 중첩 하나가 대상 실제 턴 시작에 주는 피해. 독 장판과 독안개가 같은 값을 쓴다.
+const POISON_TICK_DAMAGE: int = 3
 
 
 ## 유닛 패널 상태 줄의 과부하 글(#503). 켜진 뒤는 전처럼 `과부하`다.
