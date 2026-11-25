@@ -65,6 +65,8 @@ static var PASSIVE_EFFECTS: Dictionary[String, String] = {
 const OVERLOAD_SELF_DAMAGE: int = 2
 ## 독 중첩 하나가 대상 실제 턴 시작에 주는 피해. 독 장판과 독안개가 같은 값을 쓴다.
 const POISON_TICK_DAMAGE: int = 3
+## 맵 전체에서 동시에 살아 있을 수 있는 새끼 거미 수. 시작 배치 수도 포함하고, 가득 차면 엄마 거미는 새끼를 낳지 못한다(2026-11-25 기획자 결정, #702).
+const MAX_SPIDERLINGS: int = 10
 
 
 ## 유닛 패널 상태 줄의 과부하 글(#503). 켜진 뒤는 전처럼 `과부하`다.
