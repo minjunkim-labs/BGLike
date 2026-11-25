@@ -403,8 +403,12 @@ static func details(actor: CombatUnit, action: String, units: Array[CombatUnit] 
 				TranslationServer.tr("피해: 지능 d%d 굴림 값(명중하면)") % actor.get_ability_sides(CombatUnit.Ability.INTELLIGENCE),
 				TranslationServer.tr("판정: %s 대 AC, 속성은 명중과 무관") % CombatUnit.ability_name(hit_ability(actor, action))]
 		"firework_arrow":
+			var firework_ability: CombatUnit.Ability = damage_ability(actor, action)
+			var firework_modifier: int = actor.get_ability_modifier(firework_ability)
 			lines = [TranslationServer.tr("사거리: 0~%d칸 곡사, 반경 1") % aim_range(actor, action),
-				TranslationServer.tr("피해: 솜씨 d%d 두 번의 합") % actor.get_ability_sides(CombatUnit.Ability.FINESSE),
+				TranslationServer.tr("피해: 솜씨 d%d 두 번의 합%s") % [
+					actor.get_ability_sides(firework_ability),
+					"" if firework_modifier == 0 else " %+d" % firework_modifier],
 				TranslationServer.tr("판정: 대상의 민첩 내성 대 DC %d, 성공하면 피해 절반") % save_dc(actor, action)]
 		"whistle":
 			lines = [TranslationServer.tr("사거리: 상하좌우 한 방향의 세 줄 띠"),
