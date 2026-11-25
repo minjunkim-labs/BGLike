@@ -188,9 +188,6 @@ func _ready() -> void:
 			# 곱셈 색은 채도를 빼지 못해 어둡게 눌러 회색 배경에 묻는다. 반투명으로 하면 윤곽이 배경에 묻혀 불투명으로 둔다(#517).
 			button.add_theme_color_override("icon_disabled_color", Color("8a939b"))
 			button.accessibility_name = CombatActionRules.NAMES[action]
-			# 반사신경·은신은 아이콘이 생기기 전까지 이름 첫 글자를 보인다.
-			if button.icon == null and action in ["reflex", "stealth"]:
-				button.text = CombatActionRules.NAMES[action].left(1)
 			# 반응은 표시용이다. 자기 턴의 입력에는 연결하지 않는다.
 			if index != 2:
 				button.pressed.connect(func() -> void: action_selected.emit(action))

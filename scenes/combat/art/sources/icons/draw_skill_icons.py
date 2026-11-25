@@ -357,6 +357,57 @@ def whistle(x, y):
     return None
 
 
+def reflex(x, y):
+    px, py = x + 0.5, y + 0.5
+    # Bold brass lightning bolt on the upper left: instant reflex reaction.
+    bolt = [(24, 5), (38, 5), (27, 20), (37, 20), (17, 40), (22, 26), (11, 26)]
+    if inside(px, py, bolt):
+        if px + py < 35 and py < 25:
+            return WHITE
+        if px + py < 48:
+            return BRASS[2]
+        return BRASS[1] if px + py < 56 else BRASS[0]
+    # Sweeping white evasive dash arrow curving to the right: sidestepping 1 tile out of danger.
+    if inside(px, py, [(44, 30), (60, 42), (44, 54)]):
+        return WHITE if py < 43 else STEEL[3]
+    ring = math.hypot((px - 44) / 28, (py - 59) / 21)
+    if 0.68 <= ring <= 1.0 and 22 <= px <= 46 and py <= 55:
+        return WHITE if ring >= 0.84 else STEEL[3]
+    # Two trailing teal/steel speed streaks behind the sidestep.
+    for segment, color in (((7, 51, 18, 48), TEAL[1]), ((12, 58, 25, 55), STEEL[3])):
+        if near_segment(px, py, segment, 2.0):
+            return color
+    return None
+
+
+def stealth(x, y):
+    px, py = x + 0.5, y + 0.5
+    # Pointed hooded cloak silhouette: archer's teal cloak draped over deep indigo shadow.
+    cloak = [(32, 6), (45, 13), (50, 27), (56, 40), (55, 56), (44, 58), (32, 55), (20, 58), (9, 56), (8, 40), (14, 27), (19, 13)]
+    if not inside(px, py, cloak):
+        return None
+    # Deep shadowed face recess inside the hood with two glowing eyes peering out.
+    recess = math.hypot((px - 32) / 10.5, (py - 26.5) / 11.5) <= 1 and py >= 15
+    if recess:
+        for ex in (27, 37):
+            eye = math.hypot((px - ex) / 2.8, (py - 27.5) / 1.6)
+            if eye <= 1:
+                return WHITE if py <= 27.5 else BRASS[2]
+        return INDIGO[0]
+    # Brass cloak clasp at the throat.
+    if math.hypot(px - 32, py - 41.5) <= 3.8:
+        return BRASS[2] if px + py < 73 else BRASS[1]
+    # Cloak shading with upper-left light and a dark centre fold below the clasp.
+    inner_hood = [(32, 11), (42, 17), (45, 29), (49, 41), (48, 53), (32, 51), (16, 53), (15, 41), (19, 29), (22, 17)]
+    if not inside(px, py, inner_hood):
+        if px < 32 and py < 30 and px + py < 36:
+            return STEEL[3]
+        return TEAL[1] if px + py < 66 else TEAL[0] if px + py < 84 else INDIGO[1]
+    if py > 44 and abs(px - 32) <= 1.8:
+        return INDIGO[0]
+    return TEAL[1] if px + py < 68 else TEAL[0] if px + py < 84 else INDIGO[1]
+
+
 def fitted(draw):
     """Shrink a full-canvas drawing about the centre so it and its outline fit the item margin (asserted below)."""
     scale = 31.5 / 28
@@ -368,7 +419,7 @@ ICONS = {"attack": attack, "second_wind": fitted(second_wind), "sweep": fitted(s
          "opportunity": fitted(opportunity), "counter": fitted(counter), "aegisal": fitted(aegisal),
          "bow_bash": fitted(bow_bash), "shove": fitted(shove), "jump": fitted(jump), "potion": potion,
          "oil_throw": oil_throw, "trick_arrow": fitted(trick_arrow), "firework_arrow": fitted(firework_arrow),
-         "whistle": fitted(whistle)}
+         "whistle": fitted(whistle), "reflex": fitted(reflex), "stealth": fitted(stealth)}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -692,8 +692,6 @@ func _test_skill_icons() -> void:
 		var icon: Texture2D = CombatActionRules.icon_of(action)
 		if action in ["spawn", "pull", "spin", "disengage"]:
 			_check(icon == null, "적 전용 스킬은 아이콘 범위 밖: " + action)
-		elif action in ["reflex", "stealth"]:
-			_check(icon == null, "반사신경·은신은 아이콘 자산 전까지 이름 첫 글자를 보임(아이콘은 후속): " + action)
 		else:
 			_check(icon != null and icon.get_size() == Vector2(48, 48), "#362 스킬 아이콘 48px 원본: " + action)
 	_test_skill_icon_pixels()
@@ -1001,13 +999,15 @@ func _test_archer_and_enemy() -> void:
 	_check((containers[2] as PanelContainer).visible and (buttons["reflex"] as Button).visible
 		and not (buttons["opportunity"] as Button).visible and not (buttons["counter"] as Button).visible,
 		"궁수 반응 컨테이너는 반사신경 버튼만 표시")
-	_check((buttons["reflex"] as Button).text == "반" and "반응 1 + 이동력 1" in (buttons["reflex"] as Button).tooltip_text,
-		"반사신경은 아이콘이 없어 이름 첫 글자를 보이고 호버에 비용: " + (buttons["reflex"] as Button).tooltip_text)
+	_check((buttons["reflex"] as Button).text.is_empty() and (buttons["reflex"] as Button).icon == CombatActionRules.icon_of("reflex")
+		and (buttons["reflex"] as Button).icon != null and "반응 1 + 이동력 1" in (buttons["reflex"] as Button).tooltip_text,
+		"반사신경은 아이콘을 보이고 호버에 비용: " + (buttons["reflex"] as Button).tooltip_text)
 	for action: String in ["attack", "aegisal", "bow_bash", "jump", "stealth"]:
 		_check((buttons[action] as Button).visible, "궁수 스킬 표시: " + action)
-	_check((buttons["stealth"] as Button).text == "은" and "전투마다 1회 · 1회 남음" in (buttons["stealth"] as Button).tooltip_text
+	_check((buttons["stealth"] as Button).text.is_empty() and (buttons["stealth"] as Button).icon == CombatActionRules.icon_of("stealth")
+		and (buttons["stealth"] as Button).icon != null and "전투마다 1회 · 1회 남음" in (buttons["stealth"] as Button).tooltip_text
 		and (buttons["stealth"] as Button).tooltip_text.begins_with("은신\n"),
-		"은신은 아이콘이 없어 이름 첫 글자를 보이고 호버에 횟수: " + (buttons["stealth"] as Button).tooltip_text)
+		"은신은 아이콘을 보이고 호버에 횟수: " + (buttons["stealth"] as Button).tooltip_text)
 	_check(not (buttons["cross_slash"] as Button).visible and not (buttons["disengage"] as Button).visible,
 		"궁수 스킬만 표시")
 	_check(battle.call("preview_enemy", units[2]), "적 미리보기 연결")
@@ -1839,8 +1839,7 @@ func _test_guidance() -> void:
 	for action: String in buttons:
 		var icon_button: Button = buttons[action] as Button
 		var ally_action: bool = CombatActionRules.belongs_to(units[0], action) or CombatActionRules.belongs_to(units[1], action)
-		var icon_text: String = {"reflex": "반", "stealth": "은"}.get(action, "")
-		_check(icon_button.text == icon_text and (icon_button.icon != null or not ally_action or action in ["reflex", "stealth"])
+		_check(icon_button.text.is_empty() and (icon_button.icon != null or not ally_action)
 			and icon_button.icon == CombatActionRules.icon_of(action)
 			and icon_button.accessibility_name == CombatActionRules.NAMES[action],
 			"스킬 버튼은 이름 대신 아이콘 표시: " + action)
