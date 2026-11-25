@@ -8,6 +8,7 @@ class Fixture extends RefCounted:
 	var logs: Array[String] = []
 
 
+const MonsterBaseline = preload("res://tests/monster_baseline.gd")
 const ScriptedDice = preload("res://tests/scripted_dice.gd")
 
 var _checks: int = 0
@@ -16,6 +17,7 @@ var _created: Array[CombatUnit] = []
 
 
 func _initialize() -> void:
+	MonsterBaseline.apply()
 	create_timer(30.0).timeout.connect(func() -> void:
 		push_error("Combat archer: test timeout")
 		quit(1)

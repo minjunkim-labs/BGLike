@@ -11,10 +11,12 @@ var checks: int = 0
 var failures: int = 0
 var fixtures: Array[Fixture] = []
 var ai: CombatEnemyAi = CombatEnemyAi.new()
+const MonsterBaseline = preload("res://tests/monster_baseline.gd")
 const ScriptedDice = preload("res://tests/scripted_dice.gd")
 
 
 func _initialize() -> void:
+	MonsterBaseline.apply()
 	create_timer(90.0).timeout.connect(func() -> void:
 		push_error("Combat AI: test timeout")
 		quit(1)

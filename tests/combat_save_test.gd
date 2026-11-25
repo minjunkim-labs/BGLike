@@ -3,6 +3,7 @@ extends SceneTree
 ## 새 전투에 복원해 상태가 같은지, 이어서 같은 입력을 주면 같은 굴림과 상태가 이어지는지 검사한다.
 
 ## 스테이지마다 진행할 입력 단계 수. 보스 스테이지도 여러 라운드를 지난다.
+const MonsterBaseline = preload("res://tests/monster_baseline.gd")
 const MAX_STEPS: int = 140
 const STAGE_COUNT: int = 9
 ## 저장 한 번(상태 수집과 파일 쓰기)의 평균 허용 시간. 60fps 한 프레임이다.
@@ -26,6 +27,7 @@ var shard_count: int = 1
 
 
 func _initialize() -> void:
+	MonsterBaseline.apply()
 	var args: PackedStringArray = OS.get_cmdline_user_args()
 	if not args.is_empty():
 		var parts: PackedStringArray = args[0].split("/")

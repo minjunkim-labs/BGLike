@@ -1,6 +1,7 @@
 extends SceneTree
 ## 드랍 모델과 실제 보상·정비 입력을 검사한다.
 
+const MonsterBaseline = preload("res://tests/monster_baseline.gd")
 const ScriptedDice = preload("res://tests/scripted_dice.gd")
 
 class ScriptedLoot extends CombatLoot:
@@ -14,6 +15,7 @@ var failures: int = 0
 
 
 func _initialize() -> void:
+	MonsterBaseline.apply()
 	_run.call_deferred()
 
 

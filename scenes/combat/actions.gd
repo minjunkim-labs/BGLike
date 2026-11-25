@@ -589,7 +589,7 @@ func _on_turn_started(unit: CombatUnit) -> void:
 			if saved.success:
 				unit.status_effects.erase(effect)
 				continue
-		var amount: int = dice.roll(4) if effect.kind == "burn" else CombatActionRules.POISON_TICK_DAMAGE
+		var amount: int = dice.roll(4) if effect.kind == "burn" else CombatActionRules.poison_tick_damage
 		_damage(unit, amount)
 		logged.emit(tr("%s %s: %d · HP %d") % [unit.get_display_name(), name, amount, unit.hit_points])
 		feedback.emit(unit, "%s %d" % [name, amount])

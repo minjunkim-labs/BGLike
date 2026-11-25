@@ -9,6 +9,7 @@ class Fixture extends RefCounted:
 	var rolls: Array[CombatDiceRoll] = []
 
 
+const MonsterBaseline = preload("res://tests/monster_baseline.gd")
 const ScriptedDice = preload("res://tests/scripted_dice.gd")
 
 var _checks: int = 0
@@ -18,6 +19,7 @@ var _fixtures: Array[Fixture] = []
 
 
 func _initialize() -> void:
+	MonsterBaseline.apply()
 	create_timer(60.0).timeout.connect(func() -> void:
 		push_error("Combat dice roll: test timeout")
 		quit(1)

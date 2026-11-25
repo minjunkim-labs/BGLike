@@ -1,6 +1,7 @@
 extends SceneTree
 ## M1 3단계의 판정 수학, 상태 조건과 실제 클릭 경로를 검사한다.
 
+const MonsterBaseline = preload("res://tests/monster_baseline.gd")
 const ScriptedDice = preload("res://tests/scripted_dice.gd")
 
 var _checks: int = 0
@@ -9,6 +10,7 @@ var _created_units: Array[CombatUnit] = []
 
 
 func _initialize() -> void:
+	MonsterBaseline.apply()
 	create_timer(30.0).timeout.connect(func() -> void:
 		push_error("Combat checks: test timeout")
 		quit(1)

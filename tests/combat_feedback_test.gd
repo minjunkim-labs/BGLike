@@ -2,6 +2,7 @@ extends SceneTree
 
 ## 실제 전투 피드백의 이동 경로와 상태 표시 겹침을 매 프레임 검사한다.
 
+const MonsterBaseline = preload("res://tests/monster_baseline.gd")
 const ScriptedDice = preload("res://tests/scripted_dice.gd")
 const CaptureObserver = preload("res://tests/capture_observer.gd")
 
@@ -20,6 +21,7 @@ var finished: bool = false
 
 
 func _initialize() -> void:
+	MonsterBaseline.apply()
 	_run.call_deferred()
 
 
@@ -195,16 +197,21 @@ func _test_crowded_feedback() -> void:
 	battle.call("_start_stage", true)
 	battle.call("start_battle")
 	var units: Array[CombatUnit] = battle.get("units")
-	_check(units.size() == 7, "밀집 팝업 전제조건: 3-1 유닛 7개")
-	if units.size() != 7:
+	_check(units.size() == 11, "밀집 팝업 전제조건: 3-1 유닛 11개(아군 2, 새끼 거미 6, 엄마 거미 1, 독안개 거미 2)")
+	if units.size() != 11:
 		return
 	var archer: CombatUnit = units[1]
 	var attacker: CombatUnit = units[2]
 	# 위쪽 HUD와 떨어진 자리라 같은 대상의 팝업을 위로 쌓을 공간이 있다.
 	var cells: Array[Vector2i] = [Vector2i(7, 8), Vector2i(8, 7), Vector2i(8, 6), Vector2i(9, 7), Vector2i(7, 7),
 		Vector2i(8, 8), Vector2i(9, 6)]
-	for index: int in range(units.size()):
+	for index: int in range(cells.size()):
 		units[index].cell = cells[index]
+		units[index].reaction_left = 0
+	# 7명 밀집 배치만 보는 검사라 나머지 새끼 거미·독안개 거미는 멀리 비켜 둔다(#702로 3-1이 11유닛이 됨).
+	var far_cells: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)]
+	for index: int in range(cells.size(), units.size()):
+		units[index].cell = far_cells[index - cells.size()]
 		units[index].reaction_left = 0
 	ScriptedDice.arrange_turns(turns, units, [attacker])
 	var actions: CombatActions = battle.get("actions") as CombatActions

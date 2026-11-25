@@ -3,7 +3,7 @@
 > 11/23 난이도 진단 전에 세운 **가설 초안**입니다. 플레이로 확인한 값이 아니며, 11/23 진단 결과로 고친 뒤 11/24에 몬스터 문서와 [능력치 기획서 7장](../design/combat/ability.md#7-몬스터-시험값)에 반영합니다.
 >
 > - 작성일: 2026-11-22
-> - 관련 문서: [기획 일정 11/23~11/24](schedule-2026-q4.md#11-23--11-27-몬스터-1차와-검수-5일) · [몬스터 디자인 기획서](../design/monsters/README.md) · [스테이지 배치](../design/stages/README.md) · [#205](https://github.com/minjunkim-labs/BGLike/issues/205)
+> - 관련 문서: [기획 일정 11/23~11/24](schedule-2026-q4.md#1123--1127-몬스터-1차와-검수-5일) · [몬스터 디자인 기획서](../design/monsters/README.md) · [스테이지 배치](../design/stages/README.md) · [#205](https://github.com/minjunkim-labs/BGLike/issues/205)
 
 ---
 
