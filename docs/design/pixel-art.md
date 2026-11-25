@@ -109,7 +109,7 @@ Godot 리소스 경로는 앞에 `res://`를 붙인다.
 
 ## 스킬 아이콘
 
-스킬 아이콘은 아군 스킬과 공용 동작11종이다. [#225](https://github.com/minjunkim-labs/BGLike/issues/225)의 임시 도형 아이콘을 [#384](https://github.com/minjunkim-labs/BGLike/issues/384)에서 도트 이미지로 다시 그렸다. 런타임 파일은 `scenes/combat/art/icons/skills/<동작 id>.png`다. 동작 id는 `CombatActionRules.NAMES`의 키다. `CombatActionRules.icon_of(id)`로 찾는다. 적 전용 스킬은 아이콘이 없어 null을 돌려준다. HUD 배치는 [#226](https://github.com/minjunkim-labs/BGLike/issues/226)에서 한다.
+스킬 아이콘은 아군 스킬과 공용 동작용으로 현재 `scenes/combat/art/icons/skills/`에 18개 파일이 있다(`aegisal`, `attack`, `battle_cry`, `bow_bash`, `counter`, `cross_slash`, `firework_arrow`, `holy_veil`, `jump`, `oil_throw`, `opportunity`, `potion`, `second_wind`, `shove`, `steel_charge`, `sweep`, `trick_arrow`, `whistle`). 반사신경(`reflex.png`)과 은신(`stealth.png`)은 아직 미제작이다([#700](https://github.com/minjunkim-labs/BGLike/issues/700)). [#225](https://github.com/minjunkim-labs/BGLike/issues/225)의 초기 11종 임시 도형 아이콘을 [#384](https://github.com/minjunkim-labs/BGLike/issues/384)에서 도트 이미지로 다시 그렸고 이후 스킬 추가에 맞춰 늘렸다. 런타임 파일은 `scenes/combat/art/icons/skills/<동작 id>.png`다. 동작 id는 `CombatActionRules.NAMES`의 키다. `CombatActionRules.icon_of(id)`로 찾으며, 스킬 아이콘이 없는 물약류(`oil_bottle`)는 `items/<동작 id>.png`를 쓴다(#576). 해당 동작의 아이콘 파일이 없으면 null을 돌려준다(적 전용 스킬도 `second_wind`처럼 파일이 있으면 텍스처를 돌려준다). HUD 배치는 [#226](https://github.com/minjunkim-labs/BGLike/issues/226)에서 한다.
 
 48×48 RGBA 원본을 0.5배로 쓴다. 유닛과 같은 2배 원본 규칙이다. 표시 크기는 아래 [표시 크기](#표시-크기-362)를 따른다. 테두리에 비용 자원 색을 넣지 않는다. 배경은 투명하다.
 
@@ -133,7 +133,7 @@ Godot 리소스 경로는 앞에 `res://`를 붙인다.
 
 아이콘별 설명은 `skill_icon_generation.json`에 기록한다. [#528](https://github.com/minjunkim-labs/BGLike/issues/528)의 궁수 재디자인으로 표식·충격 화살·물러서며 쏘기 아이콘을 지우고 애기살 급조·활 후려치기를 더했다(풋내기 궁수의 물러서며 쏘기는 적 전용이라 아이콘이 없다). 아래 두 그림은 #384 당시의 11종이다.
 
-2026-11-15 현재 아이콘 파일은 18개다(위 표의 12종과 공격·물약, 기름병 던지기, 장난스러운 화살, 폭죽 화살, 효시). 숨 고르기는 #528 뒤 풋내기 야만인 전용이 되었지만 파일을 남긴다. [#560](https://github.com/minjunkim-labs/BGLike/issues/560), 2026-11-15: 적 동작을 HUD에 보일 때 다시 쓰므로 지우지 않는다. 대안은 적 전용 아이콘을 모두 지우는 것이다. [#560](https://github.com/minjunkim-labs/BGLike/issues/560), 2026-11-15: 궁수의 기름병 던지기는 전용 아이콘(기름이 흐르는 병과 바닥의 기름 얼룩)을 그린다. `oil_throw.png`로 그렸고 물약 아이콘 대체(`CombatActionRules.ICON_ALIASES`)는 지웠다. 기름병 아이템(#500 4단계)도 같은 그림을 쓴다. 근거는 동작마다 아이콘이 하나라는 이 절의 원칙이다. 대안은 물약 아이콘을 계속 쓰는 것이다.
+2026-11-15 현재 아이콘 파일은 18개다(위 표의 13종과 공격·물약·장난스러운 화살·폭죽 화살·효시. 반사신경 `reflex.png`·은신 `stealth.png`은 미제작 [#700](https://github.com/minjunkim-labs/BGLike/issues/700)). 숨 고르기는 #528 뒤 풋내기 야만인 전용이 되었지만 파일을 남긴다. [#560](https://github.com/minjunkim-labs/BGLike/issues/560), 2026-11-15: 적 동작을 HUD에 보일 때 다시 쓰므로 지우지 않는다. 대안은 적 전용 아이콘을 모두 지우는 것이다. [#560](https://github.com/minjunkim-labs/BGLike/issues/560), 2026-11-15: 궁수의 기름병 던지기는 전용 아이콘(기름이 흐르는 병과 바닥의 기름 얼룩)을 `skills/oil_throw.png`로 그렸고 물약 아이콘 대체(`CombatActionRules.ICON_ALIASES`)는 지웠다. 기름병 아이템과 스킬 바의 기름병 사용(`oil_bottle`)은 별도 아이템 아이콘 `items/oil_bottle.png`(작은 아이콘 `items/oil_bottle_pip.png`)를 쓴다(#576). 근거는 동작마다 아이콘이 하나라는 이 절의 원칙이다. 대안은 물약 아이콘을 계속 쓰는 것이다.
 
 스킬 아이콘은 32×32 유닛과 같은 배율의 칸에서 읽히도록 윤곽색 `#120d16`이 아닌 불투명 픽셀이 48×48의 10% 이상이다([#517](https://github.com/minjunkim-labs/BGLike/issues/517)). 공격은 장비 검 그림 그대로이고, 십자 베기·기회 공격·반격은 공격과 실루엣이 갈린다. `tests/combat_hud_test.gd`가 칠 비율, 공격·십자 베기·기회 공격·반격의 마스크 겹침(0.5 이하), 공격과 장비 검의 같음을 검사한다. 칸의 면·비용 기호·배지는 [스킬 바](combat/combat.md)를 따른다. 아이콘 생성기는 Pillow가 필요하며 `python3 scenes/combat/art/sources/icons/draw_skill_icons.py scenes/combat/art/icons/skills`로 같은 그림을 다시 만든다(Pillow 버전이 다르면 PNG 바이트가 달라도 픽셀은 같다). 바꾸기 전·후 화면(1280×720)과 바꾼 뒤 화면(1920×1080. 바꾸기 전 캡처는 없다)은 아래와 같다. 둘 다 Linux llvmpipe 화면 밖 캡처다.
 
@@ -163,7 +163,7 @@ Godot 리소스 경로는 앞에 `res://`를 붙인다.
 
 [#224](https://github.com/minjunkim-labs/BGLike/issues/224): 무기 아이템은 하나이고 직업 제한은 보류다. 그래서 같은 무기에 공용·전사 `sword`와 궁수 `bow`를 연결한다. 대안인 직업 전용 무기 아이템은 아이템 규칙을 바꾸므로 택하지 않았다. 제작은 생성 모델 대신 코드로 픽셀을 찍는다. 같은 결과를 다시 만들 수 있고 외부 권리 조건이 없다. 대안인 내장 `image_gen`은 이 작업 환경에 없었다.
 
-아이콘은 `scenes/combat/art/icons/items/<icon_id>.png`에 둔다. 무기는 `sword`(공용·전사)와 `bow`(궁수), 방어구는 `armor`, 회복 물약은 `potion`이다. `item_data.json`의 `icon`과 `unit_icons`가 파일을 정한다. `CombatLoot.icon_path(item, unit_id)`로 경로를 얻는다. 정비 화면은 장착 칸에 `unit.get_art_id()`를 넘기고 보상·가방 칸은 소유자 없이 부른다([정비 화면 배치](growth/items-loot.md#정비-화면-배치)).
+아이콘은 `scenes/combat/art/icons/items/<icon_id>.png`에 둔다. 무기는 `sword`(공용·전사)와 `bow`(궁수), 방어구는 `armor`, 회복 물약은 `potion`, 기름병은 `oil_bottle`이다(물약류 작은 아이콘은 `potion_pip`, `oil_bottle_pip`). `item_data.json`의 `icon`과 `unit_icons`가 파일을 정한다. `CombatLoot.icon_path(item, unit_id)`로 경로를 얻는다. 정비 화면은 장착 칸에 `unit.get_art_id()`를 넘기고 보상·가방 칸은 소유자 없이 부른다([정비 화면 배치](growth/items-loot.md#정비-화면-배치)).
 
 생성 모델 대신 `sources/icons/draw_item_icons.py`가 설명문대로 픽셀을 찍는다. 같은 명령은 같은 파일을 만든다. 설명문·팔레트·규격은 `sources/icons/item_icon_generation.json`에 기록한다. 유닛 시트처럼 축소하지 않으므로 별도 정규화 단계가 없다. 원본 폴더는 Godot 가져오기에서 제외한다.
 
