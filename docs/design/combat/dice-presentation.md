@@ -99,7 +99,7 @@
 [#488](https://github.com/minjunkim-labs/BGLike/issues/488)에서 정했다([결정 기록](https://github.com/minjunkim-labs/BGLike/issues/488#issuecomment-6738857891)).
 
 - 카메라는 움직이지 않는다는 #488 결정은 2026-11-11 프로젝트 소유자 결정(주사위는 유닛 위에 띄우고 카메라 이동을 허용한다)으로 바뀌었다. 2026-11-16 [#516 명세](combat-ui.md#턴-강조카메라전체-속도-516)는 카메라가 행동 유닛이 C 밖에 있을 때 따라가도록 정했다. #516 명세는 굴림 때문에 카메라를 옮기지 않는다. 화면 밖 주사위는 카메라가 아니라 화면 안의 정해진 자리에 보인다([#625](https://github.com/minjunkim-labs/BGLike/issues/625), 아래 [유닛 위 표시](#유닛-위-표시-625)). 정수 배율([ADR 0002](../../adr/0002-resolution.md))은 그대로다. 구현 상태: 행동 유닛이 맵 중앙 영역 C 밖에 있으면 카메라가 따라간다([#624](https://github.com/minjunkim-labs/BGLike/issues/624), [전투 화면](combat-ui.md#턴-강조카메라전체-속도-516)). 주사위를 유닛 위에 띄우는 것은 [#625](https://github.com/minjunkim-labs/BGLike/issues/625)에서 구현했다.
-- 슬로모션은 넣지 않는다. 적 턴 4배속이 `Engine.time_scale`을 쓰므로 전역 시간을 바꾸지 않는다(절대면 외 자연스럽게 어울리는 순간의 별도 검토는 [#729](https://github.com/minjunkim-labs/BGLike/issues/729)).
+- 굴림 연출에는 슬로모션을 넣지 않는다. 적 턴 4배속이 `Engine.time_scale`을 쓰므로 주사위 굴림 중에는 전역 시간을 바꾸지 않는다(굴림이 끝난 뒤 마지막 적 처치 순간의 별도 슬로우모션은 [전투 시스템 기획서 9-8](combat.md#9-8-마지막-적-처치-슬로우모션), [#799](https://github.com/minjunkim-labs/BGLike/issues/799)).
 - 아군의 명중굴림에서 절대면이 나오면 결과 표시 시간만 일반 0.8초에서 약 1.1초로 늘린다([#727](https://github.com/minjunkim-labs/BGLike/issues/727)에서 0.5초·0.9초를 늘림). 기본값(아래 [속도](#속도))이며 플레이 피드백으로 조정한다. 구현은 [#491](https://github.com/minjunkim-labs/BGLike/issues/491)·[#727](https://github.com/minjunkim-labs/BGLike/issues/727)이다.
 - 독 제거·회전회오리·만능팔 내성의 절대면은 위 「결과 표시」의 강조만 쓴다.
 - 지금 절대성공에 붙는 공통 추가 이점은 없다([#322](https://github.com/minjunkim-labs/BGLike/issues/322)에서 치명타 전역 규칙을 만들지 않기로 함). 그래서 위 강도를 전역으로 다시 보지 않는다. 어떤 스킬이 절대성공 추가 효과를 가지면 그 스킬 기획에서 연출을 함께 정한다([질문 4 정리](https://github.com/minjunkim-labs/BGLike/issues/488#issuecomment-6765872690)).
