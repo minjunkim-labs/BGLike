@@ -26,6 +26,7 @@ func _run() -> void:
 	_test_refill_split()
 	_test_reaction_across_sides()
 	_test_movement_zero_restored_on_confirm()
+	_test_disengaged_cleared_on_confirm()
 	_test_overload_extra_action_boundary()
 	_test_start_is_full()
 	_test_available_actions()
@@ -263,6 +264,18 @@ func _test_movement_zero_restored_on_confirm() -> void:
 	turns.end_turn()
 	turns.end_turn()
 	_check(units[0].movement_left == units[0].get_movement(), "0이 된 이동력은 자기 묶음 확정 때 복구")
+
+
+func _test_disengaged_cleared_on_confirm() -> void:
+	var units: Array[CombatUnit] = _make_units()
+	var turns: CombatTurns = _ordered_fixture(units, [3, 2, 0, 1])
+	units[3].disengaged = true
+	turns.end_turn()
+	_check(turns.current_unit == units[2] and units[3].disengaged,
+		"묶음 확정 전에는 이번 턴형 효과(disengaged)를 유지")
+	turns.end_turn()
+	_check(turns.current_unit == units[0] and not units[3].disengaged,
+		"묶음 확정 때 이번 턴형 효과(disengaged)를 해제")
 
 
 func _test_overload_extra_action_boundary() -> void:
@@ -535,5 +548,19 @@ func _test_scene() -> void:
 	_check(turns.current_unit == current, "실행 가능한 동작이 없어도 자동 종료 없음")
 	hud.end_button.pressed.emit()
 	_check(turns.current_unit != current or turns.round_number != old_round, "턴 종료 버튼의 신호가 실제 모델에 연결됨")
+	var actions: CombatActions = battle.get("actions") as CombatActions
+	var enemy_archer: CombatUnit = scene_units[3]
+	ScriptedDice.arrange_turns(turns, scene_units, [enemy_archer, scene_units[2], scene_units[0], scene_units[1]])
+	_check(actions.use_self(enemy_archer, "disengage") and enemy_archer.disengaged,
+		"적 턴에 풋내기 궁수의 물러서며 쏘기로 기회 공격 면제 부여")
+	hud.show_unit(enemy_archer)
+	_check("기회 공격 면제" in hud.resource_label.text, "적 턴 중 풋내기 궁수 상태 줄에 기회 공격 면제 표시")
+	turns.end_turn()
+	_check(enemy_archer.disengaged, "적 묶음 확정 전에는 기회 공격 면제 유지")
+	turns.end_turn()
+	hud.show_unit(enemy_archer)
+	_check(turns.current_unit.is_ally and not enemy_archer.disengaged
+		and "기회 공격 면제" not in hud.resource_label.text,
+		"적 턴 묶음 확정 후 아군 턴에서 풋내기 궁수 상태 줄에 기회 공격 면제 미표시")
 	battle.queue_free()
 	await process_frame
