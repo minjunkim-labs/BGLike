@@ -65,6 +65,7 @@ func _run() -> void:
 	await _test_bow_bash()
 	await _test_moving_shot()
 	_test_reflex_rules()
+	_test_reaction_unavailable_reason()
 	await _test_reflex_dodge()
 	await _test_reflex_conditions()
 	await _test_reflex_movement()
@@ -984,6 +985,43 @@ func _test_reflex_rules() -> void:
 		and not CombatActionRules.belongs_to(f.units[3], "reflex"), "반사신경은 아군 궁수만")
 	_check(CombatActionRules.resource_of("reflex") == CombatUnit.TurnResource.REACTION, "반사신경은 반응 묶음")
 	_check(CombatActionRules.cost_text("reflex") == "비용: 반응 1 + 이동력 1", "호버 비용: " + CombatActionRules.cost_text("reflex"))
+
+
+## 반응 스킬 호버의 넘어짐·반사신경 이동력 부족 사유와 기존 우선순위(#784).
+func _test_reaction_unavailable_reason() -> void:
+	var f: Fixture = _fixture([2, 0, 1, 3])
+	var archer: CombatUnit = f.units[0]
+	var warrior: CombatUnit = f.units[1]
+	_check(f.actions.unavailable_reason(archer, "reflex") == ""
+		and f.actions.unavailable_reason(warrior, "opportunity") == ""
+		and f.actions.unavailable_reason(warrior, "counter") == "",
+		"적 턴에도 반응 자원과 조건이 충족되면 사용 불가 사유가 비어 있음")
+	archer.movement_left = 0
+	warrior.movement_left = 0
+	_check(f.actions.unavailable_reason(archer, "reflex") == "이동력을 이미 씀",
+		"반사신경은 이동력이 0이면 이동력 부족 사유를 반환함")
+	_check(f.actions.unavailable_reason(warrior, "opportunity") == ""
+		and f.actions.unavailable_reason(warrior, "counter") == "",
+		"이동력이 0이어도 기회 공격·반격은 사용 가능함")
+	archer.movement_left = archer.get_movement()
+	archer.fallen = true
+	warrior.fallen = true
+	_check(f.actions.unavailable_reason(archer, "reflex") == "넘어짐: 일어난 뒤에 쓸 수 있음"
+		and f.actions.unavailable_reason(warrior, "opportunity") == "넘어짐: 일어난 뒤에 쓸 수 있음"
+		and f.actions.unavailable_reason(warrior, "counter") == "넘어짐: 일어난 뒤에 쓸 수 있음",
+		"넘어짐 상태에서는 반사신경·기회 공격·반격 모두 넘어짐 사유를 반환함")
+	archer.movement_left = 0
+	_check(f.actions.unavailable_reason(archer, "reflex") == "넘어짐: 일어난 뒤에 쓸 수 있음",
+		"넘어짐 상태에서는 이동력 0보다 넘어짐 사유가 먼저임")
+	archer.is_stunned = true
+	_check(f.actions.unavailable_reason(archer, "reflex") == "기절 상태",
+		"기절 상태는 넘어짐·이동력 0보다 먼저임")
+	archer.hit_points = 0
+	_check(f.actions.unavailable_reason(archer, "reflex") == "전투 불능",
+		"전투 불능은 기절·넘어짐·이동력 0보다 먼저임")
+	archer.reaction_left = 0
+	_check(f.actions.unavailable_reason(archer, "reflex") == "자원을 이미 씀",
+		"반응 자원 소진은 기존 순서대로 먼저임")
 
 
 ## 야만인(3,3)이 궁수(3,4)를 노린다. 야만인 차례. 확인 창은 answer로 답한다(Vector2i는 칸, bool은 넘기기/첫 칸).
