@@ -49,6 +49,7 @@ func _run() -> void:
 			"추가 드랍 굴림 0.35는 35% 실패")
 		_test_items(loot, dice)
 		_test_modifier_items(loot)
+		_test_signed_stats_and_max_hp_floor(loot)
 		_test_floor_loot(loot)
 		_test_roll_item(loot)
 		_test_victory_pickups(loot)
@@ -383,6 +384,97 @@ func _test_modifier_items(loot: CombatLoot) -> void:
 	_check(CombatLoot.describe(rolled).contains("민첩 가감+2") and CombatLoot.describe(rolled).contains("최대 이동-1"),
 		"설명은 수치에서 자동 생성: " + CombatLoot.describe(rolled))
 	loot.data["items"].erase(definition)
+
+
+## 수치 가감 전체(공격·피해·방어·최대 HP 포함) 음수 범위 검증과 최대 HP 하한 1 보정(#786).
+func _test_signed_stats_and_max_hp_floor(loot: CombatLoot) -> void:
+	for stat: String in CombatLoot.STAT_NAMES:
+		_check(stat in CombatLoot.SIGNED_STATS, "수치 가감은 음수 범위 허용: " + stat)
+		_check(CombatLoot.is_valid_stat_bounds(stat, [-5, -1]), "음수 범위 검증 통과: " + stat)
+		_check(not CombatLoot.is_valid_stat_bounds(stat, [1, -1]), "역전 범위는 거부: " + stat)
+	_check(not CombatLoot.is_valid_stat_bounds("unsigned_stat", [-1, 0]), "미등록 비음수 수치는 음수 거부")
+	var penalty_data: Dictionary = {
+		"bag_limit": 12,
+		"potion_limit": 3,
+		"extra_drop_chance": 0.0,
+		"items": [
+			{
+				"id": "penalty_weapon",
+				"name": "페널티 무기",
+				"kind": "weapon",
+				"icon": "sword",
+				"weight": 1,
+				"stats": {
+					"attack_bonus": [[-3, -1], [-2, -1], [-1, 0]],
+					"damage_bonus": [[-4, -2], [-3, -1], [-2, 0]]
+				}
+			},
+			{
+				"id": "penalty_armor",
+				"name": "페널티 방어구",
+				"kind": "armor",
+				"icon": "armor",
+				"weight": 1,
+				"stats": {
+					"defense_bonus": [[-3, -1], [-2, -1], [-1, 0]],
+					"max_hit_points": [[-20, -15], [-14, -10], [-9, -5]]
+				}
+			}
+		]
+	}
+	var custom_loot: CombatLoot = CombatLoot.new(penalty_data)
+	var rolled_weapon: Dictionary = penalty_data["items"][0].duplicate(true)
+	rolled_weapon["stats"] = {"attack_bonus": -2, "damage_bonus": -3}
+	_check(custom_loot.is_valid_item(rolled_weapon), "음수 공격·피해 가산 무기는 유효")
+	var rolled_armor: Dictionary = penalty_data["items"][1].duplicate(true)
+	rolled_armor["stats"] = {"defense_bonus": -2, "max_hit_points": -20}
+	_check(custom_loot.is_valid_item(rolled_armor), "음수 방어·최대 HP 방어구는 유효")
+	var invalid_armor: Dictionary = penalty_data["items"][1].duplicate(true)
+	invalid_armor["stats"] = {"defense_bonus": -2, "max_hit_points": -21}
+	_check(not custom_loot.is_valid_item(invalid_armor), "범위 밖 음수 최대 HP 방어구는 무효")
+
+	var unit: CombatUnit = CombatUnit.new()
+	unit.hit_points = unit.get_max_hit_points()
+	var cursed_armor: Dictionary = {"kind": "armor", "name": "저주받은 방어구",
+		"stats": {"max_hit_points": -20}}
+	loot.receive(unit, cursed_armor)
+	_check(unit.get_max_hit_points() == 1 and unit.hit_points == 1,
+		"음수 최대 HP 방어구 장착 시 계산된 최대 HP 하한 1 및 현재 HP 1 보정")
+	unit.armor = {}
+	_check(unit.get_max_hit_points() == 11 and unit.hit_points == 11,
+		"만피에서 음수 최대 HP 방어구 해제 시 원래 최대·현재 HP 복구")
+	unit.hit_points = 6
+	loot.receive(unit, cursed_armor)
+	_check(unit.get_max_hit_points() == 1 and unit.hit_points == 1,
+		"피해 입은 상태에서 음수 최대 HP 방어구 장착 시 1/1로 보정")
+	unit.armor = {}
+	_check(unit.get_max_hit_points() == 11 and unit.hit_points == 6,
+		"음수 최대 HP 방어구 해제 시 기존 잃은 HP 5 유지(무료 회복 방지)")
+	unit.hit_points = 0
+	loot.receive(unit, cursed_armor)
+	_check(unit.get_max_hit_points() == 1 and unit.hit_points == 0,
+		"전투 불능 상태에서 음수 최대 HP 방어구 장착 시 최대 HP 1, 부활하지 않음")
+	unit.begin_stage(true)
+	_check(unit.get_max_hit_points() == 1 and unit.hit_points == 1,
+		"막 복구는 하한 1 보정된 최대 HP까지 회복")
+	unit.armor = {}
+	unit.weapon = {"kind": "weapon", "name": "무딘 대검", "stats": {"damage_bonus": -5}}
+	var target: CombatUnit = CombatUnit.new()
+	target.is_ally = false
+	target.hit_points = target.get_max_hit_points()
+	var actions: CombatActions = CombatActions.new()
+	actions.grid.units = [unit, target]
+	actions.dice = ScriptedDice.new([2, 2], [20, 20])
+	actions.last_damage_rolls.clear()
+	actions._deal_damage(unit, target, "attack", false)
+	_check(actions.last_damage == 1 and target.hit_points == target.get_max_hit_points() - 1,
+		"음수 피해 보정 무기 공격도 대상당 피해 하한 1 유지")
+	actions.last_damage_rolls.clear()
+	actions._deal_damage(unit, target, "sweep", false)
+	_check(actions.last_damage == 1 and target.hit_points == target.get_max_hit_points() - 2,
+		"음수 피해 보정 휩쓸기도 대상당 피해 하한 1 유지")
+	target.free()
+	unit.free()
 
 
 func _test_armor_hit_points(loot: CombatLoot) -> void:

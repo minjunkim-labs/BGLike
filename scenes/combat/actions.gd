@@ -1770,10 +1770,11 @@ func _deal_damage(actor: CombatUnit, target: CombatUnit, action: String, halved:
 	if not best_of_two:
 		for rolled: int in last_damage_rolls:
 			rolled_total += rolled
+	rolled_total = maxi(1, rolled_total)
 	if action == "sweep":
 		# 휩쓸기 고유 규칙: ⌈굴림값 ÷ 2⌉ + 기타 가산치. 굴림값은 눈 + 주사위 레벨이라 레벨을 따로 더하지 않는다.
 		# #407 질문 4의 답(레벨은 한 번만, 전사 문서 휩쓸기)과 같은 식이다. 파티 레벨은 #477에서 오른다.
-		last_damage = ceili(last_damage_rolls[0] / 2.0) + damage_bonus
+		last_damage = maxi(1, ceili(last_damage_rolls[0] / 2.0) + damage_bonus)
 	else:
 		last_damage = CombatChecks.halve_damage(rolled_total) if halved else rolled_total
 	_damage(target, last_damage)
