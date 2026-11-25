@@ -665,7 +665,7 @@ func _status_entries(unit: CombatUnit, phalanx: int) -> Array[Dictionary]:
 	if unit.is_stunned:
 		entries.append({
 			"label": tr("기절"),
-			"tooltip": tr("기절\n행동·이동·반응을 쓸 수 없고 나를 겨눈 공격이 유리합니다.\n다음 내 턴이 끝날 때 풀립니다.")
+			"tooltip": tr("기절\n행동·이동·반응을 쓸 수 없고 나를 겨눈 공격이 유리합니다.\n시전자의 다음 턴 시작에 풀립니다.")
 		})
 	if unit.fallen:
 		var cost: int = CombatActionRules.standing_cost(unit.get_movement())
@@ -707,7 +707,7 @@ func _status_entries(unit: CombatUnit, phalanx: int) -> Array[Dictionary]:
 	if unit.disengaged:
 		entries.append({
 			"label": tr("기회 공격 면제"),
-			"tooltip": tr("기회 공격 면제\n이번 턴의 남은 이동에서 기회 공격을 받지 않습니다.\n다음 내 턴 시작에 풀립니다.")
+			"tooltip": tr("기회 공격 면제\n이번 턴의 남은 이동에서 기회 공격을 받지 않습니다.\n이번 턴 묶음이 끝나면 풀립니다.")
 		})
 	if unit.shield_points > 0:
 		entries.append({
