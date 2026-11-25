@@ -4,35 +4,35 @@ extends RefCounted
 
 static var NOVICE_BARBARIAN: Dictionary = {
 	"abilities": [10, 6, 8, 4, 4, 4], "defense_bonus": 0,
-	"name": TranslationServer.tr("풋내기 야만인"), "max_hit_points": 33, "armor_class": 6,
-	"attack_bonus": 3, "damage_bonus": 4, "attack_range": 1,
+	"name": TranslationServer.tr("풋내기 야만인"), "max_hit_points": 44, "armor_class": 7,
+	"attack_bonus": 3, "damage_bonus": 6, "attack_range": 1,
 	"actions": ["attack", "second_wind"]
 }
 static var NOVICE_ARCHER: Dictionary = {
 	"abilities": [4, 10, 8, 4, 4, 4], "defense_bonus": 0,
-	"name": TranslationServer.tr("풋내기 궁수"), "max_hit_points": 21,
-	"attack_bonus": 2, "damage_bonus": 4, "attack_range": 8,
+	"name": TranslationServer.tr("풋내기 궁수"), "max_hit_points": 28, "armor_class": 7,
+	"attack_bonus": 2, "damage_bonus": 6, "attack_range": 8,
 	"actions": ["attack", "disengage"]
 }
 static var SCRAP_ROBOT_1000: Dictionary = {
-	"abilities": [12, 4, 8, 4, 12, 4], "defense_bonus": 2,
-	"name": TranslationServer.tr("고철로봇-1000"), "boss": true, "max_hit_points": 120,
+	"abilities": [12, 4, 8, 4, 12, 4], "defense_bonus": 3,
+	"name": TranslationServer.tr("고철로봇-1000"), "boss": true, "max_hit_points": 160,
 	"movement": 6,
-	"attack_bonus": 3, "damage_bonus": 5, "attack_range": 1,
+	"attack_bonus": 3, "damage_bonus": 8, "attack_range": 1,
 	"actions": ["attack"]
 }
 static var SCRAP_ROBOT_2000: Dictionary = {
-	"abilities": [12, 4, 8, 4, 12, 4], "defense_bonus": 3,
-	"name": TranslationServer.tr("고철로봇-2000"), "boss": true, "max_hit_points": 135,
+	"abilities": [12, 4, 8, 4, 12, 4], "defense_bonus": 4,
+	"name": TranslationServer.tr("고철로봇-2000"), "boss": true, "max_hit_points": 180,
 	"movement": 6,
-	"attack_bonus": 3, "damage_bonus": 5, "attack_range": 1,
+	"attack_bonus": 3, "damage_bonus": 8, "attack_range": 1,
 	"actions": ["attack", "pull"]
 }
 static var SCRAP_ROBOT_3000: Dictionary = {
-	"abilities": [12, 4, 8, 4, 12, 4], "defense_bonus": 4,
-	"name": TranslationServer.tr("고철로봇-3000"), "boss": true, "max_hit_points": 150,
+	"abilities": [12, 4, 8, 4, 12, 4], "defense_bonus": 5,
+	"name": TranslationServer.tr("고철로봇-3000"), "boss": true, "max_hit_points": 200,
 	"movement": 6,
-	"attack_bonus": 3, "damage_bonus": 5, "attack_range": 1,
+	"attack_bonus": 3, "damage_bonus": 8, "attack_range": 1,
 	"actions": ["attack", "pull", "spin"]
 }
 static var SPIDERLING: Dictionary = {
@@ -44,16 +44,16 @@ static var SPIDERLING: Dictionary = {
 }
 static var MOTHER_SPIDER: Dictionary = {
 	"abilities": [8, 6, 8, 4, 6, 8], "defense_bonus": 1,
-	"name": TranslationServer.tr("엄마 거미"), "max_hit_points": 30, "poison_immune": true,
+	"name": TranslationServer.tr("엄마 거미"), "max_hit_points": 40, "armor_class": 6, "poison_immune": true,
 	"movement": 6,
-	"attack_bonus": 3, "damage_bonus": 5, "attack_range": 1,
+	"attack_bonus": 3, "damage_bonus": 7, "attack_range": 1,
 	"actions": ["attack", "spawn"]
 }
 static var FOG_SPIDER: Dictionary = {
 	"abilities": [6, 6, 8, 4, 4, 8], "defense_bonus": 0,
-	"name": TranslationServer.tr("독안개 거미"), "max_hit_points": 18, "poison_immune": true,
+	"name": TranslationServer.tr("독안개 거미"), "max_hit_points": 24, "armor_class": 5, "poison_immune": true,
 	"movement": 6,
-	"attack_bonus": 3, "damage_bonus": 4, "attack_range": 1,
+	"attack_bonus": 3, "damage_bonus": 6, "attack_range": 1,
 	"actions": ["attack", "fog"]
 }
 
