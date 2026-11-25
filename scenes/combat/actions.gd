@@ -983,10 +983,16 @@ func unavailable_reason(actor: CombatUnit, action: String) -> String:
 	if reaction:
 		if actor.hit_points <= 0:
 			return tr("전투 불능")
-		return tr("기절 상태") if actor.is_stunned else ""
+		if actor.is_stunned:
+			return tr("기절 상태")
+		if actor.fallen:
+			return tr("넘어짐: 일어난 뒤에 쓸 수 있음")
+		if action == "reflex" and actor.movement_left == 0:
+			return tr("이동력을 이미 씀")
+		return ""
 	if action in ["second_wind", "potion"] and actor.hit_points == actor.get_max_hit_points():
 		return tr("HP가 이미 최대")
-	if actor.fallen and not reaction:
+	if actor.fallen:
 		return tr("넘어짐: 일어난 뒤에 쓸 수 있음")
 	if not can_use(actor, action):
 		return tr("이동이 없거나 이미 효과 적용 중") if action == "disengage" else tr("사거리 또는 대상 조건을 확인")
