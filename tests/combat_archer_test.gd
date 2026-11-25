@@ -84,6 +84,7 @@ func _run() -> void:
 	await _test_help_dc_basis()
 	_test_firework_uses_and_save()
 	_test_firework_effect_dc()
+	_test_firework_details_damage()
 	await _test_tree_burn()
 	_test_stage_reset()
 	_test_save_state()
@@ -947,6 +948,31 @@ func _test_firework_effect_dc() -> void:
 		_check("민첩 내성(DC %d)" % dc in effect, "폭죽 화살 효과 줄이 실제 DC %d를 보임(레벨 %d): %s" % [dc, level, effect])
 	_check(CombatActionRules.save_dc(archer, "firework_arrow") != 4 and "DC 4" not in CombatActionRules.effect(archer, "firework_arrow"),
 		"레벨 5 궁수의 효과 줄에 DC 4가 고정으로 남지 않음: " + CombatActionRules.effect(archer, "firework_arrow"))
+
+
+## 폭죽 화살 호버 피해 줄은 실제 계산과 같이 레벨과 솜씨 가감 합을 한 번 반영한다(장비 피해 가산 제외).
+func _test_firework_details_damage() -> void:
+	var archer: CombatUnit = CombatUnit.new()
+	_created.append(archer)
+	archer.kind = CombatUnit.Kind.ARCHER
+	archer.is_ally = true
+	archer.dice_level = 0
+	var base: String = CombatActionRules.details(archer, "firework_arrow")
+	_check("피해: 솜씨 d20 두 번의 합\n" in base, "가감이 0이면 +0을 붙이지 않음: " + base)
+	archer.dice_level = 2
+	var leveled: String = CombatActionRules.details(archer, "firework_arrow")
+	_check("피해: 솜씨 d20 두 번의 합 +2\n" in leveled, "레벨 2는 +2로 보임: " + leveled)
+	archer.dice_level = 1
+	archer.weapon = {"stats": {"finesse_modifier": 2, "damage_bonus": 5}}
+	var combined: String = CombatActionRules.details(archer, "firework_arrow")
+	_check("피해: 솜씨 d20 두 번의 합 +3\n" in combined, "레벨과 솜씨 가감을 합쳐 보이고 피해 가산은 제외: " + combined)
+	archer.dice_level = 0
+	archer.weapon = {"stats": {"finesse_modifier": -2}}
+	var negative: String = CombatActionRules.details(archer, "firework_arrow")
+	_check("피해: 솜씨 d20 두 번의 합 -2\n" in negative, "음수 솜씨 가감은 -2로 보임: " + negative)
+	archer.dice_level = 2
+	var cancelled: String = CombatActionRules.details(archer, "firework_arrow")
+	_check("피해: 솜씨 d20 두 번의 합\n" in cancelled, "레벨과 솜씨 가감이 상쇄되어 0이면 생략: " + cancelled)
 
 
 func _test_firework_uses_and_save() -> void:

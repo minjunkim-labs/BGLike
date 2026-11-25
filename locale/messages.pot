@@ -2072,7 +2072,7 @@ msgid "사거리: 0~%d칸 곡사, 반경 1"
 msgstr ""
 
 #: scenes/combat/action_rules.gd:306
-msgid "피해: 솜씨 d%d 두 번의 합"
+msgid "피해: 솜씨 d%d 두 번의 합%s"
 msgstr ""
 
 #: scenes/combat/action_rules.gd:307
