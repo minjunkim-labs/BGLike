@@ -79,6 +79,7 @@ func _run() -> void:
 	await _test_fog_spider_aim()
 	await _test_fog_spider_fallbacks()
 	await _test_warrior()
+	await _test_fallen_enemy()
 	await _test_ground_paths()
 	await _test_poison_immunity()
 	await _test_jump_attack()
@@ -803,6 +804,38 @@ func _test_spiderling() -> void:
 	_check(await reacting.actions.move_to(reacting.units[0], Vector2i(6, 4))
 		and reacting.units[0].hit_points == 9 and reacting.units[0].cell == Vector2i(6, 4)
 		and reacting.units[2].reaction_left == 0, "새끼 거미도 아군 이동에 기회 공격을 하고, 이동은 멈추지 않음")
+
+
+func _oil_ring(f: Fixture, center: Vector2i) -> void:
+	for cell: Vector2i in CombatGrid.neighbors(center):
+		f.actions.grounds.add(f.units[0], cell, "oil")
+
+
+## 이동 중 기름에서 넘어진 적은 남은 이동력이 비용 이상이면 일어나 공격하고, 모자라면 그 자리에서 턴을 끝낸다 (#699).
+func _test_fallen_enemy() -> void:
+	var f: Fixture = _fixture()
+	var enemy: CombatUnit = f.units[2]
+	enemy.cell = Vector2i(2, 4)
+	f.units[0].hit_points = 100
+	f.units[1].cell = Vector2i(9, 9)
+	_oil_ring(f, f.units[0].cell)
+	f.actions.dice = ScriptedDice.new([1], [enemy.get_ability_sides(CombatUnit.Ability.FINESSE)]).then_seeded()
+	var life: int = f.units[0].hit_points
+	await ai.play_turn(enemy, f.actions)
+	_check(not enemy.fallen and enemy.cell == Vector2i(4, 4) and f.logs.any(func(message: String) -> bool: return "일어남" in message),
+		"이동 중 넘어진 적은 남은 이동력으로 일어남 %s %s %s" % [enemy.cell, enemy.fallen, f.logs])
+	_check(f.units[0].hit_points < life or f.logs.any(func(message: String) -> bool: return "빗나" in message or "공격" in message),
+		"일어난 적은 같은 턴에 공격함 %s" % [f.logs])
+	var short: Fixture = _fixture()
+	var tired: CombatUnit = short.units[2]
+	tired.cell = Vector2i(2, 4)
+	short.units[1].cell = Vector2i(9, 9)
+	_oil_ring(short, short.units[0].cell)
+	short.actions.dice = ScriptedDice.new([1], [tired.get_ability_sides(CombatUnit.Ability.FINESSE)]).then_seeded()
+	tired.movement_left = 2
+	await ai.play_turn(tired, short.actions)
+	_check(tired.fallen and tired.action_left == 1,
+		"이동력이 모자라면 일어나지 못하고 공격 없이 턴을 끝냄 %s %s" % [tired.fallen, short.logs])
 
 
 func _test_warrior() -> void:
