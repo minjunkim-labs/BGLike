@@ -457,6 +457,23 @@ func _test_signed_stats_and_max_hp_floor(loot: CombatLoot) -> void:
 	unit.begin_stage(true)
 	_check(unit.get_max_hit_points() == 1 and unit.hit_points == 1,
 		"막 복구는 하한 1 보정된 최대 HP까지 회복")
+	unit.armor = {}
+	unit.weapon = {"kind": "weapon", "name": "무딘 대검", "stats": {"damage_bonus": -5}}
+	var target: CombatUnit = CombatUnit.new()
+	target.is_ally = false
+	target.hit_points = target.get_max_hit_points()
+	var actions: CombatActions = CombatActions.new()
+	actions.grid.units = [unit, target]
+	actions.dice = ScriptedDice.new([2, 2], [20, 20])
+	actions.last_damage_rolls.clear()
+	actions._deal_damage(unit, target, "attack", false)
+	_check(actions.last_damage == 1 and target.hit_points == target.get_max_hit_points() - 1,
+		"음수 피해 보정 무기 공격도 대상당 피해 하한 1 유지")
+	actions.last_damage_rolls.clear()
+	actions._deal_damage(unit, target, "sweep", false)
+	_check(actions.last_damage == 1 and target.hit_points == target.get_max_hit_points() - 2,
+		"음수 피해 보정 휩쓸기도 대상당 피해 하한 1 유지")
+	target.free()
 	unit.free()
 
 
