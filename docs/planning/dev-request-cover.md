@@ -5,7 +5,7 @@
 > - 작성일: 2026-11-21
 > - 규칙 기준: [은/엄폐 기획서](../design/combat/cover.md)(결정 기록과 4장). 이 문서와 충돌하면 기획서가 우선합니다.
 > - 개발 Issue: [#358](https://github.com/minjunkim-labs/BGLike/issues/358). 이 Issue의 "이 Issue로 현재 동작을 바꾸지 않습니다" 문장은 이 요청서로 구현 범위가 바뀝니다.
-> - 상태: **개발 담당에게 전달 전.**
+> - 상태: **구현 완료·기획 직접 검수 대기.** [#358](https://github.com/minjunkim-labs/BGLike/issues/358)에서 전엄폐 판정(`scenes/combat/cover.gd`), 궁수·풋내기 궁수 기본 공격 직사 전환, 적 원거리 AI, UI 미리보기와 회귀 검사(`tests/combat_cover_test.gd`)를 구현했습니다([은/엄폐 기획서](../design/combat/cover.md)). 7장의 기획 직접 검수는 사람이 진행합니다.
 > - 배경: [2026년 4분기 일정](schedule-2026-q4.md)의 은/엄폐 · [M7까지 남은 작업 지도](https://github.com/minjunkim-labs/BGLike/issues/200)
 
 ---
@@ -85,7 +85,7 @@
 
 ## 7. 기획 검수 기준
 
-기획 담당이 아래 상황을 직접 만들어 확인합니다. 아래 체크박스는 사람의 직접 기획 검수용이며 에이전트의 자동 검사·실행 검수 결과로 대신 체크하지 않습니다.
+[#358](https://github.com/minjunkim-labs/BGLike/issues/358) 구현과 회귀 검사(`tests/combat_cover_test.gd`)는 완료되었으며, 기획 담당의 직접 검수를 기다리고 있습니다. 기획 담당이 아래 상황을 직접 만들어 확인합니다. 아래 체크박스는 사람의 직접 기획 검수용이며 에이전트의 자동 검사·실행 검수 결과로 대신 체크하지 않습니다.
 
 ### 판정
 
