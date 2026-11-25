@@ -86,7 +86,6 @@
 | 문서 | 상태 | 삭제 시점 |
 |---|---|---|
 | [schedule-2026-q4.md](planning/schedule-2026-q4.md) | 현역 | 2026-12-24 이후 |
-| [dev-request-ability.md](planning/dev-request-ability.md) | 현역 | 구현이 끝났을 때 |
 
 ### 3-5. 이미지
 
