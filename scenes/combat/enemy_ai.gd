@@ -289,13 +289,6 @@ func _move_to(actor: CombatUnit, actions: CombatActions, destination: Vector2i) 
 		await actions.move_to(actor, destination)
 	else:
 		await actions.jump_to(actor, destination)
-	_stand_if_fallen(actor, actions)
-
-
-## 이동 중 기름에서 넘어졌으면 남은 이동력으로 바로 일어난다. 일어나지 못하면 그대로 둔다 (전투 기획서 7장, #699).
-func _stand_if_fallen(actor: CombatUnit, actions: CombatActions) -> void:
-	if _active(actor, actions) and actor.fallen:
-		actions.stand_up(actor)
 
 
 ## 지정할 수 있는 상대. 은신 유닛은 후보에서 뺀다 (전투 기획서 7장).
