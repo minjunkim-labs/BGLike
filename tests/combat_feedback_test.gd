@@ -592,7 +592,6 @@ func _test_last_kill_slowmo() -> void:
 	allies = units.filter(func(u: CombatUnit) -> bool: return u.is_ally)
 	enemies = units.filter(func(u: CombatUnit) -> bool: return not u.is_ally)
 	ScriptedDice.arrange_turns(turns, units, allies)
-	battle.set_process(true)
 	for index: int in range(1, enemies.size()):
 		enemies[index].hit_points = 0
 	var burn_enemy: CombatUnit = enemies[0]
@@ -600,6 +599,8 @@ func _test_last_kill_slowmo() -> void:
 	actions.apply_status(allies[0], burn_enemy, "burn")
 	actions.dice = ScriptedDice.new([1], [4]).then_seeded()
 	battle.set("_enemy_turn_running", true)
+	await process_frame
+	battle.set_process(true)
 	turns.turn_started.emit(burn_enemy)
 	await process_frame
 	_check(actions.is_over() and actions.is_victory() and battle.get("_last_kill_slowmo")

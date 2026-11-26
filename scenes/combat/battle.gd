@@ -6,6 +6,8 @@ const ENEMY_PAUSE_TIME: float = 0.35
 const ENEMY_FAST_SPEED: float = 4.0
 ## 마지막 적 처치 슬로우모션 길이(실제 초, #799). 일시정지 메뉴를 열면 함께 멈춘다.
 const LAST_KILL_SLOWMO_DURATION: float = 1.0
+## 한 프레임 지연으로 슬로우모션 전체가 건너뛰어지지 않도록 한 프레임에 줄이는 최대 실제 시간(초, #799).
+const LAST_KILL_SLOWMO_MAX_STEP: float = 0.1
 ## 마지막 적 처치 슬로우모션 배율(#799). 적 턴 4배속보다 우선해 0.2배속으로 고정한다.
 const LAST_KILL_SLOWMO_SCALE: float = 0.2
 ## 마지막 적 처치 시 전투 불능(사라짐) 애니메이션이 끝난 뒤 승리 화면을 띄우기 전 기다리는 게임 시간(초, #728).
@@ -51,6 +53,7 @@ var _turn_tile_unit: CombatUnit
 var _victory_waiting: bool = false
 ## 마지막 적 처치 슬로우모션이 진행 중인지(#799).
 var _last_kill_slowmo: bool = false
+var _last_kill_slowmo_left: float = 0.0
 var _victory_revision: int = 0
 var staging: HBoxContainer
 var start_button: Button
@@ -366,7 +369,12 @@ func _finish_preparation() -> void:
 	_start_stage(progress.starts_act())
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _last_kill_slowmo:
+		var unscaled_delta: float = delta / Engine.time_scale if Engine.time_scale > 0.0 else delta
+		_last_kill_slowmo_left = maxf(0.0, _last_kill_slowmo_left - minf(unscaled_delta, LAST_KILL_SLOWMO_MAX_STEP))
+		if _last_kill_slowmo_left <= 0.0:
+			_last_kill_slowmo = false
 	if _save_pending and GameSave.autosave and _can_save():
 		_autosave(combat_state())
 	_sync_time_scale()
@@ -880,13 +888,14 @@ func _begin_victory_wait() -> void:
 	var revision: int = _victory_revision
 	_victory_waiting = true
 	_last_kill_slowmo = true
+	_last_kill_slowmo_left = LAST_KILL_SLOWMO_DURATION
 	_sync_time_scale()
 	var victory_timer: SceneTreeTimer = get_tree().create_timer(
 		CombatHitEffects.down_duration() + VICTORY_DELAY, false)
-	await get_tree().create_timer(LAST_KILL_SLOWMO_DURATION, false, false, true).timeout
+	while _last_kill_slowmo and is_inside_tree() and revision == _victory_revision:
+		await get_tree().process_frame
 	if not is_inside_tree() or revision != _victory_revision:
 		return
-	_last_kill_slowmo = false
 	_sync_time_scale()
 	if victory_timer.time_left > 0.0:
 		await victory_timer.timeout
@@ -900,6 +909,7 @@ func _cancel_victory_wait() -> void:
 	_victory_revision += 1
 	_victory_waiting = false
 	_last_kill_slowmo = false
+	_last_kill_slowmo_left = 0.0
 	_sync_time_scale()
 
 
