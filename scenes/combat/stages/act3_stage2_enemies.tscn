@@ -16,3 +16,12 @@ start_cell = Vector2i(10, 10)
 kind = 1
 is_ally = false
 start_cell = Vector2i(13, 4)
+
+[node name="NoviceBarbarian3" parent="." instance=ExtResource("1_unit")]
+is_ally = false
+start_cell = Vector2i(11, 8)
+
+[node name="NoviceArcher2" parent="." instance=ExtResource("1_unit")]
+kind = 1
+is_ally = false
+start_cell = Vector2i(13, 9)

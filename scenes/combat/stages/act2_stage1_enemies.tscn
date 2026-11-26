@@ -28,3 +28,13 @@ start_cell = Vector2i(9, 11)
 kind = 3
 is_ally = false
 start_cell = Vector2i(11, 1)
+
+[node name="Spiderling5" parent="." instance=ExtResource("1_unit")]
+kind = 2
+is_ally = false
+start_cell = Vector2i(9, 2)
+
+[node name="Spiderling6" parent="." instance=ExtResource("1_unit")]
+kind = 2
+is_ally = false
+start_cell = Vector2i(12, 10)

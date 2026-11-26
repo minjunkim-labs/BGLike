@@ -1,6 +1,7 @@
 extends SceneTree
 ## 턴 계약과 실제 전투 장면의 버튼 연결을 Godot에서 검사한다.
 
+const MonsterBaseline = preload("res://tests/monster_baseline.gd")
 const ScriptedDice = preload("res://tests/scripted_dice.gd")
 
 var _failures: int = 0
@@ -9,6 +10,7 @@ var _created_units: Array[CombatUnit] = []
 
 
 func _initialize() -> void:
+	MonsterBaseline.apply()
 	# GDScript 런타임 오류로 _run이 중단돼도 CI는 기다리다 성공하지 않는다.
 	create_timer(30.0).timeout.connect(_on_timeout)
 	_run.call_deferred()

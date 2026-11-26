@@ -282,7 +282,7 @@ func _on_turn_started(unit: CombatUnit) -> void:
 			var poison_reason: String = _save_reason(unit, CombatUnit.Ability.HEALTH)
 			logged.emit(tr("%s 독 제거(건강 내성%s): 건강 d%d %s %+d = %d / DC %d · %s") % [unit.get_display_name(),
 				"" if poison_reason.is_empty() else " · " + poison_reason, health_sides, str(saved.rolls), saved.added(), saved.total, effect.dc, _save_outcome(saved)])
-			# 실패는 뒤따르는 `독 1` 틱 팝업이 효과 이름을 보인다.
+			# 실패는 뒤따르는 독 틱 팝업이 효과 이름을 보인다.
 			if saved.success:
 				feedback.emit(unit, tr("독 제거"))
 			if unit.hit_points <= 0 or is_over():
@@ -292,7 +292,7 @@ func _on_turn_started(unit: CombatUnit) -> void:
 			if saved.success:
 				unit.status_effects.erase(effect)
 				continue
-		var amount: int = dice.roll(4) if effect.kind == "burn" else 1
+		var amount: int = dice.roll(4) if effect.kind == "burn" else CombatActionRules.poison_tick_damage
 		_damage(unit, amount)
 		logged.emit(tr("%s %s: %d · HP %d") % [unit.get_display_name(), name, amount, unit.hit_points])
 		feedback.emit(unit, "%s %d" % [name, amount])
@@ -916,7 +916,8 @@ func can_use(actor: CombatUnit, action: String) -> bool:
 				and not grid.opponents_in_area(actor, 1).is_empty())
 		"spawn":
 			return (CombatActionRules.has_uses(actor, action) and actor.action_left > 0
-				and actor in turns.ordered_units and not grid.empty_neighbors(actor.cell).is_empty())
+				and actor in turns.ordered_units and not grid.empty_neighbors(actor.cell).is_empty()
+				and living_spiderling_count() < CombatActionRules.MAX_SPIDERLINGS)
 		"jump":
 			return not jump_cells(actor).is_empty()
 		"moving_shot":
@@ -1261,6 +1262,15 @@ func spin(actor: CombatUnit) -> bool:
 			await _perform_save(actor, target, "spin", dc)
 	_finish()
 	return true
+
+
+## 지금 살아 있는 적 새끼 거미 수. 엄마 거미의 새끼 낳기 상한(CombatActionRules.MAX_SPIDERLINGS)이 쓴다.
+func living_spiderling_count() -> int:
+	var count: int = 0
+	for unit: CombatUnit in units:
+		if not unit.is_ally and unit.kind == CombatUnit.Kind.SPIDERLING and unit.hit_points > 0:
+			count += 1
+	return count
 
 
 func spawn_spiderling(actor: CombatUnit) -> bool:

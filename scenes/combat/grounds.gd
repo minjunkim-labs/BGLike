@@ -287,8 +287,10 @@ func enter_oil(unit: CombatUnit) -> void:
 	_slip_roll(unit)
 
 
-## 솜씨 내성굴림(DC 4). 실패하면 넘어진다. 굴림은 성공과 무관하게 이번 턴의 기름 1회로 쓴다. 참이면 제자리를 지킨 것이다.
+## 솜씨 내성굴림(DC 4). 실패하면 넘어진다. 보스는 면역이다. 굴림은 성공과 무관하게 이번 턴의 기름 1회로 쓴다. 참이면 제자리를 지킨 것이다.
 func _slip_roll(unit: CombatUnit) -> bool:
+	if unit.is_boss():
+		return true  # 보스는 넘어짐에 면역이다. 굴림 없이 제자리를 지킨다.
 	var ability: CombatUnit.Ability = CombatUnit.Ability.FINESSE
 	var sides: int = unit.get_ability_sides(ability)
 	unit.oil_slipped = true
@@ -438,7 +440,7 @@ func hazard_cells_for(actor: CombatUnit) -> Array[Vector2i]:
 
 ## 걷기 경로(출발 칸 제외)에서 미끌거림을 굴리게 되면 그 DC 안내. 굴림은 턴마다 한 번이라 안내도 한 줄이다.
 func slip_note(unit: CombatUnit, path: Array[Vector2i]) -> String:
-	if not is_instance_valid(unit) or path.is_empty() or unit.oil_slipped:
+	if not is_instance_valid(unit) or unit.is_boss() or path.is_empty() or unit.oil_slipped:
 		return ""
 	var leaving: bool = oil_at(unit.cell) != null
 	if not leaving and not path.any(func(cell: Vector2i) -> bool: return oil_at(cell) != null):
