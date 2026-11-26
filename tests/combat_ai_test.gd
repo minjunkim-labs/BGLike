@@ -1074,6 +1074,23 @@ func _test_oil_stand_up() -> void:
 		and leaver.action_left == 0 and leave_oil.units[0].hit_points < 5,
 		"기름 칸을 떠나다 넘어진 적도 남은 이동력이 충분하면 일어나서 사거리 안 대상을 공격")
 
+	# 전사: 남은 이동력이 일어서기 비용(4)과 정확히 같아도 일어나서 사거리 안 대상을 공격한다.
+	var exact_move: Fixture = _fixture()
+	var exact_warrior: CombatUnit = exact_move.units[2]
+	exact_warrior.cell = Vector2i.ZERO
+	exact_warrior.movement_left = 5
+	exact_move.units[0].cell = Vector2i(2, 0)
+	exact_move.units[1].cell = Vector2i(3, 0)
+	exact_move.units[3].cell = Vector2i(4, 0)
+	exact_move.actions.grid.map_size = Vector2i(5, 1)
+	exact_move.actions.grounds.add(exact_move.units[0], Vector2i(1, 0), "oil")
+	exact_move.actions.dice = _oil_dice(exact_warrior, [1, 10, 1], true)
+	await ai.play_turn(exact_warrior, exact_move.actions)
+	_check(exact_warrior.cell == Vector2i(1, 0) and not exact_warrior.fallen and exact_warrior.movement_left == 0
+		and exact_warrior.action_left == 0 and exact_move.units[0].hit_points < exact_move.units[0].get_max_hit_points()
+		and exact_move.logs.any(func(line: String) -> bool: return "일어남: 이동력 4" in line),
+		"남은 이동력이 일어서기 비용과 정확히 같으면 일어나서 사거리 안 대상을 공격")
+
 	# 전사: 남은 이동력이 일어서기 비용(4)보다 적으면 일어나지 못하고 턴을 끝낸다.
 	var low_move: Fixture = _fixture()
 	var slow: CombatUnit = low_move.units[2]
