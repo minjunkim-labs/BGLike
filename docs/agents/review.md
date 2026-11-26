@@ -30,11 +30,11 @@ Standards와 Spec은 작성자와 분리한 각각의 컨텍스트에서 수행�
 
 실행 권한이 있는 리뷰어가 검사나 변이(mutation) 검사를 직접 실행하면 `git worktree add --detach <path> <head_sha>`로 만든 리뷰어 전용 worktree에서 실행합니다. 작성자나 다른 리뷰어의 worktree에서 실행하지 않습니다. 이미 다른 worktree가 PR 브랜치를 쓰고 있을 때 충돌을 피하려면 `gh pr checkout` 대신 `git fetch origin pull/<PR>/head` 뒤 `FETCH_HEAD`가 전달받은 `<head_sha>`와 일치하는지 확인하고 `git checkout --detach <head_sha>`를 씁니다(다르면 검사를 중단하고 새 head의 입력 SHA와 근거를 갱신합니다). 수정 커밋을 올릴 때는 PR의 head 저장소 remote를 확인해 `git push <head_remote> HEAD:<작업 브랜치>`를 씁니다(fork PR은 직접 checkout·push하지 않습니다). 설치된 Godot은 `GODOT`에 실행 파일 경로를 지정해 재사용합니다. stash·branch·tag는 모든 worktree가 공유하므로 만들지 않습니다. 변이는 `git status`로 확인합니다. 변이는 `git restore`로 되돌립니다. 끝나면 `git worktree remove --force <path>`로 그 worktree를 삭제합니다. 수정·커밋하는 리뷰어는 [지적 처리](#지적-처리와-최종-검증) 1·3단계를 따릅니다.
 
-## 스킬 위임 (matt-skills)
+## 스킬 위임
 
-이 저장소는 repo-baseline matt-skills 프로필을 씁니다. Standards와 Spec 리뷰를 맡기는 절차는 repo-baseline 클론의 `profiles/matt-skills/README.md` 「리뷰」를 그대로 따릅니다. Security 리뷰는 맡기지 않습니다. 이 저장소에서 다른 점은 기준 문서뿐입니다.
+Standards와 Spec 리뷰는 repo-baseline `prompts/review.md` 4단계대로 저장소의 `code-review` 스킬(`.claude/skills/code-review/`)에 맡깁니다. Security 리뷰는 맡기지 않습니다. 이 저장소에서 다른 점은 기준 문서뿐입니다.
 
-- 프로필의 「코딩 기준」 자리에는 [코딩 규칙](../process/coding-standards.md)을 넘깁니다. 이 저장소의 REVIEW.md에는 「코딩 기준」 절이 없습니다. REVIEW.md 「실패로 보는 것」·「심각도」도 함께 넘깁니다.
+- 기준 문서로 REVIEW.md 「이 저장소의 실패 기준」과 「코딩 기준」([코딩 규칙](../process/coding-standards.md))을 함께 넘깁니다.
 - Spec 축에는 PR 본문의 `완료 기준:`과 함께 위 표의 Issue 합격 기준도 넘깁니다.
 
 ## 지적 처리와 최종 검증
@@ -64,7 +64,7 @@ Standards와 Spec은 작성자와 분리한 각각의 컨텍스트에서 수행�
 
 병합은 머지 큐로 한다. 큐는 `main`과 합친 결과에서 필수 CI를 다시 돌리고 squash로 병합한다. 그래서 PR 브랜치에 `main`을 합치지 않는다. 큐에 들어간 PR의 브랜치에는 push할 수 없다. 큐의 CI가 실패하면 PR이 큐에서 빠진다. 고친 뒤에는 다시 리뷰한다.
 
-에이전트는 [AGENTS.md](../../AGENTS.md#하지-않는-것)의 병합 줄을 모두 만족할 때만 큐에 넣는다. 자동 병합은 쓰지 않는다. 저장소 `Allow auto-merge`는 Off다. `.claude/settings.json`의 거부 규칙이 `gh pr merge`와 `main` push를 막고, 큐에 넣는 `gh api`는 확인을 받는다. 이것은 습관이지 보안 경계가 아니다.
+에이전트는 [AGENTS.md](../../AGENTS.md#병합)의 상시 지시대로 문서·쉬움 PR만 `python3 -I .baseline/baseline.py enqueue <PR> <리뷰한 head>`로 큐에 넣는다. `enqueue`는 어려움 PR을 넣지 않는다. 어려움 PR은 소유자가 넣는다. 자동 병합은 쓰지 않는다. 저장소 `Allow auto-merge`는 Off다. `.claude/settings.json`의 거부 규칙이 `gh pr merge`, `main` push, 큐에 넣는 `gh api`를 막는다. 이것은 습관이지 보안 경계가 아니다.
 
 병합하는 사람은 병합 직전에 head·base와 필수 검사 결과를 다시 확인한다. 되돌리기 어려움이거나 [민감한 파일](../../REVIEW.md#민감한-파일)을 건드리면 diff를 직접 읽고 그 head에서 병합한다.
 CodeQL 경고 수정 PR은 workflow 성공이 아니라 code scanning API로 판정한다.

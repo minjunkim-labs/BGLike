@@ -10,6 +10,8 @@ Godot 워크플로는 main push, main 대상 PR, 머지 큐(`merge_group`)와 �
 기준 선택기가 없으면 엔진 검사를 선택합니다. 새 선택기 규칙은 main 반영 뒤 후속 변경부터 사용합니다.
 `scope`는 전체 PR diff, 머지 큐의 base SHA와 main push의 before SHA를 기준으로 공백과 변경 범위를 확인합니다. policy는 Python 회귀 테스트를 실행하고, PR에서는 제목과 브랜치 규칙도 검사합니다. 머지 큐 실행은 브랜치 단계를 건너뛰고, 제목은 큐 커밋의 첫 줄(`<PR 제목> (#번호)`)에서 번호를 떼고 다시 검사합니다. PR을 연 뒤 제목만 고치면 `ci`가 다시 돌지 않으므로, 형식에 맞지 않는 제목은 머지 큐에서 막힙니다. 머지 큐 실행은 큐에 들어간 PR head가 PR 본문 Review 칸의 마지막 「리뷰한 head와 되돌리기:」 SHA와 같은지도 확인합니다(`scripts/reviewed_head.py`, repo-baseline에서 해시 복사). 리뷰 뒤 커밋이 올라간 head나 그 줄이 없는 PR은 큐에서 빠집니다. Dependabot과 repo-baseline 동기화 PR은 통과합니다. PR이 실수로 스크립트를 약하게 고쳐도 자기 판정은 바뀌지 않도록 base 커밋의 스크립트를 돌립니다. base 커밋을 읽지 못하면 실패하고, base에 스크립트가 없을 때만 PR 쪽 사본을 돌립니다. 이 검사는 보안 경계가 아닙니다. 큐 실행의 workflow와 앞 단계는 PR 쪽 판이고, PR 본문은 고칠 수 있는 사람이면 누구나 고칠 수 있습니다.
 
+`baseline` job(`Baseline check`)은 `python3 -I .baseline/baseline.py check`와 `budget`을 돌립니다. repo-baseline 관리 파일, `.baseline/commands.json`과 `AGENTS.md` 명령 칸이 맞는지 봅니다. smoke는 `jdx/mise-action`으로 `.mise.toml`의 Python을 설치한 뒤 `baseline.py run setup`과 `run test`로 로컬과 같은 명령을 돌립니다. 판정 job `ci`는 policy·scope·baseline이 모두 성공해야 통과합니다.
+
 로컬 `make repository-check`와 `make check`는 `scripts/check_whitespace.py`로
 `origin/main`과 HEAD의 공통 기준점부터 커밋된 변경, 스테이징, 미스테이징 변경을 각각 검사합니다.
 먼저 `git fetch origin main`으로 기준을 갱신합니다. 다른 기준은
