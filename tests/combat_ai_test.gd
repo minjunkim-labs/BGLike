@@ -88,6 +88,7 @@ func _run() -> void:
 	await _test_stealth_targets()
 	await _test_stealth_area_skills()
 	await _test_water_positions()
+	await _test_oil_stand_up()
 	await _test_reaction_pause()
 	await _test_enemy_reactions()
 	await _test_guards()
@@ -1029,6 +1030,199 @@ func _test_water_positions() -> void:
 		_check(archer.cell == expected and archer.action_left == 0
 			and f.actions.last_attack.mode == CombatChecks.RollMode.NORMAL,
 			"풋내기 궁수는 같은 비용의 후퇴 칸 중 %s 칸에서 쏨: %s" % ["물이 아닌" if not water.is_empty() else "맵 순서상 앞", archer.cell])
+
+
+func _oil_dice(unit: CombatUnit, values: Array[int], include_attack: bool = false,
+	attack_count: int = 1) -> ScriptedDice:
+	var sides: Array[int] = [unit.get_ability_sides(CombatUnit.Ability.FINESSE)]
+	if include_attack:
+		sides.append_array(ScriptedDice.attack_sides(unit, attack_count))
+		sides.append_array(ScriptedDice.damage_sides(unit))
+	return ScriptedDice.new(values, sides)
+
+
+func _test_oil_stand_up() -> void:
+	# 전사: 기름 칸 진입 시 넘어지면 남은 이동력이 절반(4) 이상일 때 일어나서 사거리 안 대상을 공격한다.
+	var stand_warrior: Fixture = _fixture()
+	var warrior: CombatUnit = stand_warrior.units[2]
+	warrior.cell = Vector2i.ZERO
+	stand_warrior.units[0].cell = Vector2i(2, 0)
+	stand_warrior.units[1].cell = Vector2i(3, 0)
+	stand_warrior.units[3].cell = Vector2i(4, 0)
+	stand_warrior.actions.grid.map_size = Vector2i(5, 1)
+	stand_warrior.actions.grounds.add(stand_warrior.units[0], Vector2i(1, 0), "oil")
+	stand_warrior.actions.dice = _oil_dice(warrior, [1, 10, 1], true)
+	await ai.play_turn(warrior, stand_warrior.actions)
+	_check(warrior.cell == Vector2i(1, 0) and not warrior.fallen and warrior.movement_left == 3
+		and warrior.action_left == 0 and stand_warrior.units[0].hit_points < stand_warrior.units[0].get_max_hit_points()
+		and stand_warrior.logs.any(func(line: String) -> bool: return "일어남: 이동력 4" in line),
+		"기름에서 넘어진 전사는 남은 이동력이 충분하면 일어나서 사거리 안 대상을 공격")
+
+	# 기름 칸 이탈 실패로 제자리에서 넘어져도 남은 이동력이 충분하면 일어나서 사거리 안 대상을 공격한다.
+	var leave_oil: Fixture = _fixture(true)
+	var leaver: CombatUnit = leave_oil.units[3]
+	leaver.cell = Vector2i.ZERO
+	leave_oil.units[0].cell = Vector2i(0, 1)
+	leave_oil.units[0].hit_points = 5
+	leave_oil.units[1].cell = Vector2i(4, 0)
+	leave_oil.units[2].cell = Vector2i(4, 1)
+	leave_oil.actions.grid.map_size = Vector2i(5, 2)
+	leave_oil.actions.grounds.add(leave_oil.units[0], Vector2i.ZERO, "oil")
+	leave_oil.actions.dice = _oil_dice(leaver, [1, 10, 10, 1], true, 2)
+	await ai.play_turn(leaver, leave_oil.actions)
+	_check(leaver.cell == Vector2i.ZERO and not leaver.fallen and leaver.movement_left == 4
+		and leaver.action_left == 0 and leave_oil.units[0].hit_points < 5,
+		"기름 칸을 떠나다 넘어진 적도 남은 이동력이 충분하면 일어나서 사거리 안 대상을 공격")
+
+	# 전사: 남은 이동력이 일어서기 비용(4)보다 적으면 일어나지 못하고 턴을 끝낸다.
+	var low_move: Fixture = _fixture()
+	var slow: CombatUnit = low_move.units[2]
+	slow.cell = Vector2i.ZERO
+	slow.movement_left = 4
+	low_move.units[0].cell = Vector2i(2, 0)
+	low_move.units[1].cell = Vector2i(3, 0)
+	low_move.units[3].cell = Vector2i(4, 0)
+	low_move.actions.grid.map_size = Vector2i(5, 1)
+	low_move.actions.grounds.add(low_move.units[0], Vector2i(1, 0), "oil")
+	low_move.actions.dice = _oil_dice(slow, [1])
+	await ai.play_turn(slow, low_move.actions)
+	_check(slow.cell == Vector2i(1, 0) and slow.fallen and slow.movement_left == 3
+		and slow.action_left == 1 and low_move.units[0].hit_points == low_move.units[0].get_max_hit_points()
+		and not low_move.logs.any(func(line: String) -> bool: return "일어남" in line),
+		"남은 이동력이 일어서기 비용보다 적으면 일어나지 못하고 공격 없이 턴 종료")
+
+	# 궁수: 접근 중 기름에서 넘어져도 이동력이 충분하면 일어나서 사거리 안 대상을 공격한다.
+	var stand_archer: Fixture = _fixture(true)
+	var archer: CombatUnit = stand_archer.units[3]
+	archer.cell = Vector2i.ZERO
+	stand_archer.units[0].cell = Vector2i(10, 0)
+	stand_archer.units[1].cell = Vector2i(11, 0)
+	stand_archer.units[2].cell = Vector2i(11, 1)
+	stand_archer.actions.grid.map_size = Vector2i(12, 2)
+	stand_archer.actions.grounds.add(stand_archer.units[0], Vector2i(2, 0), "oil")
+	stand_archer.actions.dice = _oil_dice(archer, [1, 10, 1], true)
+	await ai.play_turn(archer, stand_archer.actions)
+	_check(archer.cell == Vector2i(2, 0) and not archer.fallen and archer.movement_left == 2
+		and archer.action_left == 0 and stand_archer.units[0].hit_points < stand_archer.units[0].get_max_hit_points(),
+		"기름에서 넘어진 궁수는 남은 이동력이 충분하면 일어나서 사거리 안 대상을 공격")
+
+	# 궁수: 사거리 안이어도 일어서기 비용이 모자라면 공격하지 못하고 턴을 끝낸다.
+	var low_archer: Fixture = _fixture(true)
+	var fallen_archer: CombatUnit = low_archer.units[3]
+	fallen_archer.cell = Vector2i.ZERO
+	fallen_archer.movement_left = 4
+	low_archer.units[0].cell = Vector2i(9, 0)
+	low_archer.units[1].cell = Vector2i(10, 0)
+	low_archer.units[2].cell = Vector2i(10, 1)
+	low_archer.actions.grid.map_size = Vector2i(11, 2)
+	low_archer.actions.grounds.add(low_archer.units[0], Vector2i(1, 0), "oil")
+	low_archer.actions.dice = _oil_dice(fallen_archer, [1])
+	await ai.play_turn(fallen_archer, low_archer.actions)
+	_check(fallen_archer.cell == Vector2i(1, 0) and fallen_archer.fallen and fallen_archer.movement_left == 3
+		and fallen_archer.action_left == 1 and low_archer.units[0].hit_points == low_archer.units[0].get_max_hit_points(),
+		"일어서기 비용이 모자란 궁수는 사거리 안에 적이 있어도 공격 없이 턴 종료")
+
+	# 보스: 접근 중 기름에서 넘어지면 남은 이동력이 절반(3) 이상일 때 일어나서 공격한다.
+	var stand_boss: Fixture = _fixture()
+	var boss: CombatUnit = stand_boss.units[2]
+	boss.kind = CombatUnit.Kind.SCRAP_ROBOT_1000
+	boss.hit_points = 40
+	ScriptedDice.start_turn(boss)
+	boss.cell = Vector2i.ZERO
+	stand_boss.units[0].cell = Vector2i(2, 0)
+	stand_boss.units[1].cell = Vector2i(3, 0)
+	stand_boss.units[3].cell = Vector2i(4, 0)
+	stand_boss.actions.grid.map_size = Vector2i(5, 1)
+	stand_boss.actions.grounds.add(stand_boss.units[0], Vector2i(1, 0), "oil")
+	stand_boss.actions.dice = _oil_dice(boss, [1, 11, 1], true)
+	await ai.play_turn(boss, stand_boss.actions)
+	_check(boss.cell == Vector2i(1, 0) and not boss.fallen and boss.movement_left == 2
+		and boss.action_left == 0 and stand_boss.units[0].hit_points < stand_boss.units[0].get_max_hit_points(),
+		"기름에서 넘어진 보스는 남은 이동력이 충분하면 일어나서 사거리 안 대상을 공격")
+
+	# 보스: 남은 이동력이 일어서기 비용(3)보다 적으면 일어나지 못하고 턴을 끝낸다.
+	var low_boss: Fixture = _fixture()
+	var slow_boss: CombatUnit = low_boss.units[2]
+	slow_boss.kind = CombatUnit.Kind.SCRAP_ROBOT_1000
+	slow_boss.hit_points = 40
+	ScriptedDice.start_turn(slow_boss)
+	slow_boss.cell = Vector2i.ZERO
+	slow_boss.movement_left = 3
+	low_boss.units[0].cell = Vector2i(2, 0)
+	low_boss.units[1].cell = Vector2i(3, 0)
+	low_boss.units[3].cell = Vector2i(4, 0)
+	low_boss.actions.grid.map_size = Vector2i(5, 1)
+	low_boss.actions.grounds.add(low_boss.units[0], Vector2i(1, 0), "oil")
+	low_boss.actions.dice = _oil_dice(slow_boss, [1])
+	await ai.play_turn(slow_boss, low_boss.actions)
+	_check(slow_boss.cell == Vector2i(1, 0) and slow_boss.fallen and slow_boss.movement_left == 2
+		and slow_boss.action_left == 1 and low_boss.units[0].hit_points == low_boss.units[0].get_max_hit_points(),
+		"일어서기 비용이 모자란 보스는 일어나지 못하고 공격 없이 턴 종료")
+
+	# seam 2: 일어난 뒤 다시 이동하지 않는다 (궁수 후퇴, 독안개 거미, 보스 만능팔, 보스 과부하).
+	var retreat_archer: Fixture = _fixture(true)
+	var jumper: CombatUnit = retreat_archer.units[3]
+	jumper.cell = Vector2i.ZERO
+	retreat_archer.units[0].cell = Vector2i(0, 1)
+	retreat_archer.actions.incapacitate(retreat_archer.units[1])
+	retreat_archer.units[2].cell = Vector2i(3, 2)
+	retreat_archer.actions.grid.map_size = Vector2i(4, 3)
+	retreat_archer.actions.grid.pits = [Vector2i(1, 0)]
+	retreat_archer.actions.grid.blocked_cells = [Vector2i(1, 1)]
+	retreat_archer.actions.grounds.add(retreat_archer.units[0], Vector2i(2, 0), "oil")
+	retreat_archer.actions.dice = _oil_dice(jumper, [1])
+	await ai.play_turn(jumper, retreat_archer.actions)
+	_check(jumper.cell == Vector2i(2, 0) and not jumper.fallen and jumper.movement_left == 2
+		and jumper.action_left == 1, "후퇴 중 넘어져 일어난 궁수는 사격 대상을 못 봐도 다시 이동하지 않음")
+
+	var fog_fall: Fixture = _fog_fixture(Vector2i.ZERO, Vector2i(10, 0), Vector2i(11, 0))
+	var spider: CombatUnit = fog_fall.units[2]
+	fog_fall.units[3].cell = Vector2i(11, 1)
+	fog_fall.actions.grid.map_size = Vector2i(12, 2)
+	fog_fall.actions.grid.blocked_cells = [Vector2i(2, 1)]
+	fog_fall.actions.grounds.add(fog_fall.units[0], Vector2i(2, 0), "oil")
+	fog_fall.actions.dice = _oil_dice(spider, [1])
+	await ai.play_turn(spider, fog_fall.actions)
+	_check(spider.cell == Vector2i(2, 0) and not spider.fallen and spider.movement_left == 1
+		and spider.action_left == 1 and _fog_logs(fog_fall).is_empty(),
+		"독안개 이동 중 넘어져 일어난 거미는 사거리 밖이어도 접근 이동으로 다시 걷지 않음")
+
+	var pull_fall: Fixture = _fixture()
+	var pull_boss: CombatUnit = pull_fall.units[2]
+	pull_boss.kind = CombatUnit.Kind.SCRAP_ROBOT_2000
+	pull_boss.hit_points = 45
+	ScriptedDice.start_turn(pull_boss)
+	pull_boss.cell = Vector2i.ZERO
+	pull_fall.units[0].cell = Vector2i(6, 0)
+	pull_fall.units[1].cell = Vector2i(7, 0)
+	pull_fall.units[3].cell = Vector2i(7, 1)
+	pull_fall.actions.grid.map_size = Vector2i(8, 2)
+	pull_fall.actions.grid.blocked_cells = [Vector2i(1, 1)]
+	pull_fall.actions.grounds.add(pull_fall.units[0], Vector2i(1, 0), "oil")
+	pull_fall.actions.dice = _oil_dice(pull_boss, [1])
+	await ai.play_turn(pull_boss, pull_fall.actions)
+	_check(pull_boss.cell == Vector2i(1, 0) and not pull_boss.fallen and pull_boss.movement_left == 2
+		and pull_boss.action_left == 1,
+		"만능팔 접근 중 넘어져 일어난 보스는 사거리 밖이어도 다시 이동하지 않음")
+
+	var overload_fall: Fixture = _fixture()
+	var over_boss: CombatUnit = overload_fall.units[2]
+	over_boss.kind = CombatUnit.Kind.SCRAP_ROBOT_1000
+	over_boss.hit_points = 20
+	ScriptedDice.start_turn(over_boss)
+	over_boss.cell = Vector2i.ZERO
+	overload_fall.units[0].cell = Vector2i(2, 0)
+	overload_fall.units[0].hit_points = 1
+	overload_fall.units[1].cell = Vector2i(5, 0)
+	overload_fall.units[3].cell = Vector2i(6, 1)
+	overload_fall.actions.grid.map_size = Vector2i(7, 2)
+	overload_fall.actions.grid.blocked_cells = [Vector2i(1, 1)]
+	overload_fall.actions.grounds.add(overload_fall.units[0], Vector2i(1, 0), "oil")
+	overload_fall.actions.dice = _oil_dice(over_boss, [1, 11, 1], true)
+	await ai.play_turn(over_boss, overload_fall.actions)
+	_check(over_boss.cell == Vector2i(1, 0) and not over_boss.fallen and over_boss.movement_left == 2
+		and overload_fall.units[0].hit_points == 0 and over_boss.action_left == 1,
+		"과부하 보스는 넘어져 일어난 뒤 첫 대상을 공격해도 두 번째 행동에 다시 이동하지 않음")
 
 
 func _test_reaction_pause() -> void:

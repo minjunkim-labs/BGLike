@@ -3,38 +3,43 @@ extends RefCounted
 ## 기획서 7장의 우선순위. 자원·판정·반응은 CombatActions가 실행한다.
 
 
+class _TurnState extends RefCounted:
+	var fell: bool = false
+
+
 func play_turn(actor: CombatUnit, actions: CombatActions, pause: Callable = Callable()) -> void:
 	if not _active(actor, actions):
 		return
+	var turn: _TurnState = _TurnState.new()
 	if actor.is_boss():
-		await _boss_turn(actor, actions, pause)
+		await _boss_turn(actor, actions, pause, turn)
 	elif actor.kind == CombatUnit.Kind.MOTHER_SPIDER and actions.spawn_spiderling(actor):
 		await _pause(pause)
 		return
 	elif actor.kind == CombatUnit.Kind.FOG_SPIDER:
-		await _fog_spider_turn(actor, actions, pause)
+		await _fog_spider_turn(actor, actions, pause, turn)
 	elif actor.kind == CombatUnit.Kind.ARCHER:
-		await _archer_turn(actor, actions, pause)
+		await _archer_turn(actor, actions, pause, turn)
 	else:
-		await _warrior_turn(actor, actions, pause)
+		await _warrior_turn(actor, actions, pause, null, turn)
 
 
-func _boss_turn(actor: CombatUnit, actions: CombatActions, pause: Callable) -> void:
+func _boss_turn(actor: CombatUnit, actions: CombatActions, pause: Callable, turn: _TurnState) -> void:
 	while _active(actor, actions) and actor.action_left > 0:
 		if (CombatActionRules.belongs_to(actor, "spin")
 			and actions.grid.opponents_in_area(actor, 1).filter(func(unit: CombatUnit) -> bool: return not unit.stealthed).size() >= 2
 			and await actions.spin(actor)):
 			await _pause(pause)
 			continue
-		if await _try_pull(actor, actions, pause):
+		if await _try_pull(actor, actions, pause, turn):
 			continue
 		if not _active(actor, actions):
 			return
 		var target: CombatUnit = _attack_target(actor, actions)
-		if target == null:
+		if target == null and not turn.fell:
 			var destination: Vector2i = approach_cell(actor, actions)
 			if destination != actor.cell:
-				await _move_to(actor, actions, destination)
+				await _move_to(actor, actions, destination, turn)
 				await _pause(pause)
 		if not _active(actor, actions):
 			return
@@ -69,7 +74,7 @@ func _pull_approach_cell(actor: CombatUnit, actions: CombatActions,
 	return best
 
 
-func _try_pull(actor: CombatUnit, actions: CombatActions, pause: Callable) -> bool:
+func _try_pull(actor: CombatUnit, actions: CombatActions, pause: Callable, turn: _TurnState) -> bool:
 	if (not CombatActionRules.belongs_to(actor, "pull") or actor.pull_cooldown > 0
 		or actor.action_left == 0):
 		return false
@@ -78,10 +83,10 @@ func _try_pull(actor: CombatUnit, actions: CombatActions, pause: Callable) -> bo
 		if not actions.grid.in_range(actor.cell, candidate.cell, 1, 0):
 			targets.append(candidate)
 	var target: CombatUnit = _pull_target(actor, actions, targets)
-	if target == null:
+	if target == null and not turn.fell:
 		var destination: Vector2i = _pull_approach_cell(actor, actions, targets)
 		if destination != actor.cell:
-			await _move_to(actor, actions, destination)
+			await _move_to(actor, actions, destination, turn)
 			await _pause(pause)
 	if not _active(actor, actions):
 		return false
@@ -94,7 +99,7 @@ func _try_pull(actor: CombatUnit, actions: CombatActions, pause: Callable) -> bo
 
 func _active(actor: CombatUnit, actions: CombatActions) -> bool:
 	return (actor != null and not actor.is_ally and actor.hit_points > 0
-		and not actor.is_stunned and actions.turns.current_unit == actor
+		and not actor.is_stunned and not actor.fallen and actions.turns.current_unit == actor
 		and not actions.busy and not actions.is_over())
 
 
@@ -103,17 +108,20 @@ func _pause(pause: Callable) -> void:
 		await pause.call()
 
 
-func _warrior_turn(actor: CombatUnit, actions: CombatActions, pause: Callable, focus: CombatUnit = null) -> void:
+func _warrior_turn(actor: CombatUnit, actions: CombatActions, pause: Callable, focus: CombatUnit,
+	turn: _TurnState) -> void:
+	if not _active(actor, actions):
+		return
 	if actor.hit_points * 2 <= actor.get_max_hit_points() and actions.can_use(actor, "second_wind"):
 		actions.use_self(actor, "second_wind")
 		await _pause(pause)
 	if not _active(actor, actions):
 		return
 	var target: CombatUnit = _attack_target(actor, actions)
-	if target == null:
+	if target == null and not turn.fell:
 		var destination: Vector2i = approach_cell(actor, actions, focus)
 		if destination != actor.cell:
-			await _move_to(actor, actions, destination)
+			await _move_to(actor, actions, destination, turn)
 			await _pause(pause)
 	if not _active(actor, actions):
 		return
@@ -124,18 +132,18 @@ func _warrior_turn(actor: CombatUnit, actions: CombatActions, pause: Callable, f
 
 
 ## 독안개 거미: 유효한 시전이 2건 미만이면 독안개를 쓰고 그 턴은 끝난다. 아니면 가장 가까운 아군에게 가서 기본 공격한다.
-func _fog_spider_turn(actor: CombatUnit, actions: CombatActions, pause: Callable) -> void:
-	if actions.fog_cast_count(actor) < 2 and actor.action_left > 0 and await _try_fog(actor, actions, pause):
+func _fog_spider_turn(actor: CombatUnit, actions: CombatActions, pause: Callable, turn: _TurnState) -> void:
+	if actions.fog_cast_count(actor) < 2 and actor.action_left > 0 and await _try_fog(actor, actions, pause, turn):
 		return
-	await _warrior_turn(actor, actions, pause, _walk_nearest(actor, actions)[0])
+	await _warrior_turn(actor, actions, pause, _walk_nearest(actor, actions)[0], turn)
 
 
-func _try_fog(actor: CombatUnit, actions: CombatActions, pause: Callable) -> bool:
+func _try_fog(actor: CombatUnit, actions: CombatActions, pause: Callable, turn: _TurnState) -> bool:
 	var plan: Array = _fog_plan(actor, actions)
 	if plan.is_empty():
 		return false
-	if plan[0] != actor.cell:
-		await _move_to(actor, actions, plan[0])
+	if plan[0] != actor.cell and not turn.fell:
+		await _move_to(actor, actions, plan[0], turn)
 		await _pause(pause)
 	if not _active(actor, actions) or not actions.cast_fog(actor, plan[1]):
 		return false
@@ -242,7 +250,7 @@ func _fog_stand(actor: CombatUnit, actions: CombatActions, aim: Vector2i, ally_c
 	return best
 
 
-func _archer_turn(actor: CombatUnit, actions: CombatActions, pause: Callable) -> void:
+func _archer_turn(actor: CombatUnit, actions: CombatActions, pause: Callable, turn: _TurnState) -> void:
 	if _targets(actor, actions).any(func(target: CombatUnit) -> bool:
 		return actions.grid.are_adjacent(actor.cell, target.cell)):
 		var destination: Vector2i = _retreat(actor, actions, false)
@@ -255,15 +263,15 @@ func _archer_turn(actor: CombatUnit, actions: CombatActions, pause: Callable) ->
 		else:
 			destination = _retreat(actor, actions)
 		if destination != actor.cell:
-			await _move_to(actor, actions, destination)
+			await _move_to(actor, actions, destination, turn)
 			await _pause(pause)
 	if not _active(actor, actions):
 		return
 	var target: CombatUnit = _attack_target(actor, actions)
-	if target == null:
+	if target == null and not turn.fell:
 		var destination: Vector2i = _direct_fire_move_cell(actor, actions)
 		if destination != actor.cell:
-			await _move_to(actor, actions, destination)
+			await _move_to(actor, actions, destination, turn)
 			await _pause(pause)
 	if not _active(actor, actions):
 		return
@@ -284,11 +292,14 @@ func _movement_cells(actor: CombatUnit, actions: CombatActions, include_jump: bo
 	return cells
 
 
-func _move_to(actor: CombatUnit, actions: CombatActions, destination: Vector2i) -> void:
+func _move_to(actor: CombatUnit, actions: CombatActions, destination: Vector2i, turn: _TurnState) -> void:
 	if actions.can_move(actor, destination):
 		await actions.move_to(actor, destination)
 	else:
 		await actions.jump_to(actor, destination)
+	if actor.fallen:
+		turn.fell = true
+		actions.stand_up(actor)
 
 
 ## 지정할 수 있는 상대. 은신 유닛은 후보에서 뺀다 (전투 기획서 7장).
