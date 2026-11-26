@@ -108,6 +108,9 @@ var _passive_dots: Dictionary[String, Label] = {}
 var _ability_slots: Array[AbilitySlot] = []
 var _titles: Array[Label] = []
 var _log_lines: Array[String] = []
+var _status_buttons: Array[Button] = []
+var _status_signature: Array[PackedStringArray] = []
+var _status_display_text: String = ""
 # 기본 툴팁 창 대신 같은 HUD의 최상단에 설명을 그린다.
 var _tooltip: HoverTooltip = HoverTooltip.new()
 var _cover_tooltip: PanelContainer
@@ -130,6 +133,7 @@ var grid: CombatGrid
 @onready var vitals_label: Label = $UnitDetails/UnitPanel/Info/Vitals
 @onready var ability_grid: GridContainer = $UnitDetails/UnitPanel/Info/Abilities
 @onready var resource_label: RichTextLabel = $UnitDetails/UnitPanel/Info/Resources
+@onready var status_row: HFlowContainer = $UnitDetails/UnitPanel/Info/StatusRow
 @onready var health_bar: ProgressBar = $UnitDetails/UnitPanel/Info/Health
 @onready var end_button: Button = $EndTurn
 @onready var preview_label: Label = $UnitDetails/AttackPreview
@@ -162,12 +166,12 @@ func _ready() -> void:
 	health_back.bg_color = CombatUnit.OUTLINE_COLOR
 	health_bar.add_theme_stylebox_override("fill", health_fill)
 	health_bar.add_theme_stylebox_override("background", health_back)
-	# 호버 설명은 왼쪽 열(x 8, 최대 폭 240)에 둔다. 스킬·패시브는 스킬 패널 위, 초상은 턴 순서 바 아래다(#555, #619).
+	# 호버 설명은 왼쪽 열(x 8, 최대 폭 240)에 둔다. 스킬·패시브는 스킬 패널 위, 초상·유닛 상태는 턴 순서 바 아래다(#555, #619, #796).
 	# 전투 로그와 유닛 정보는 오른쪽 열이라 자리만으로 가리지 않는다.
 	_tooltip.max_width = TOOLTIP_MAX_WIDTH
 	_tooltip.place = func(target: Control, tooltip_size: Vector2) -> Vector2:
 		var left: float = get_global_rect().position.x + TOOLTIP_LEFT
-		if order_bar.is_ancestor_of(target):
+		if order_bar.is_ancestor_of(target) or status_row.is_ancestor_of(target):
 			return Vector2(left, ($OrderScroll as Control).get_global_rect().end.y + TOOLTIP_GAP)
 		if ability_grid.is_ancestor_of(target):
 			var rect: Rect2 = target.get_global_rect()
@@ -626,6 +630,7 @@ func refresh(turns: CombatTurns, has_available_action: bool) -> void:
 		vitals_label.text = ""
 		ability_grid.visible = false
 		resource_label.text = ""
+		_clear_status_row()
 		actor_label.text = ""
 		return
 	round_label.text = tr("라운드 %d · %s") % [turns.round_number, tr("아군 턴 묶음") if current.is_ally else tr("적 턴 묶음 · Space: 빠르게")]
@@ -665,61 +670,213 @@ func refresh(turns: CombatTurns, has_available_action: bool) -> void:
 		end_button.add_theme_stylebox_override(state, end_style)
 
 
-## 상태 줄은 상태와 상태 사이에서만 줄을 바꾼다. 자동 줄바꿈은 한글 단어 중간(`기절 면/역`)도 끊는다(#503).
-func _join_states(states: Array[String]) -> String:
-	if states.is_empty():
-		return tr("없음")
-	var font: Font = resource_label.get_theme_font("normal_font")
-	var font_size: int = resource_label.get_theme_font_size("normal_font_size")
-	var width: float = resource_label.size.x
-	var joined: String = states[0]
-	var line: String = "상태: " + states[0]  # NO_TRANSLATE: 첫 줄 폭을 재는 데만 쓴다
-	for state: String in states.slice(1):
-		var candidate: String = line + ", " + state
-		if width > 0.0 and font.get_string_size(candidate + ",", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > width:
-			joined += ",\n" + state
-			line = state
+## 유닛 패널 상태 줄의 현재 표시 문자열("상태: 없음" 또는 "상태: ...").
+func status_text() -> String:
+	return _status_display_text
+
+
+## 유닛 패널 상태 줄에 표시 중인 개별 상태 호버 버튼 목록. 상태가 없으면 비어 있다(#796).
+func status_buttons() -> Array[Button]:
+	return _status_buttons.duplicate()
+
+
+func _clear_status_row() -> void:
+	for child: Node in status_row.get_children():
+		child.free()
+	_status_buttons.clear()
+	_status_signature.clear()
+	_status_display_text = ""
+
+
+func _periodic_status_entry(unit: CombatUnit, kind_name: String) -> Dictionary:
+	var count: int = unit.get_status_count(kind_name)
+	if count <= 0:
+		return {}
+	var indefinite: bool = false
+	var max_turns: int = 0
+	var save_dc: int = CombatGrounds.POISON_DC
+	var dc_found: bool = false
+	for effect: CombatUnit.StatusEffect in unit.status_effects:
+		if effect.kind != kind_name:
+			continue
+		if effect.turns_left == 0:
+			indefinite = true
 		else:
-			joined += ", " + state
-			line = candidate
-	return joined
+			max_turns = maxi(max_turns, effect.turns_left)
+		if kind_name == "poison" and not dc_found and effect.dc > 0:
+			save_dc = effect.dc
+			dc_found = true
+	if kind_name == "burn":
+		var label: String = "%s%d" % [tr("화상"), count]
+		var heading: String = tr("화상 %d중첩 (최대 %d턴)") % [count, max_turns] if max_turns > 0 else tr("화상 %d중첩") % count
+		return {"label": label, "tooltip": heading + "\n" + tr("내 턴 시작마다 중첩당 1d4 피해.\n물 칸에 들어가거나 물 속성에 닿으면 모두 풀립니다.")}
+	var label: String = "%s%d" % [tr("독"), count]
+	var heading: String
+	if indefinite:
+		label += "(%s)" % tr("기간 없음")
+		heading = tr("독 %d중첩 (기간 없음)") % count
+	else:
+		heading = tr("독 %d중첩 (최대 %d턴)") % [count, max_turns]
+	return {"label": label, "tooltip": heading + "\n" + tr("내 턴 시작마다 중첩당 피해 1.\n턴 시작 건강 내성(DC %d)에 성공하면 첫 독 중첩 1개가 풀립니다.") % save_dc}
+
+
+func _status_entries(unit: CombatUnit, phalanx: int) -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	if unit.is_stunned:
+		entries.append({
+			"label": tr("기절"),
+			"tooltip": tr("기절\n행동·이동·반응을 쓸 수 없고 나를 겨눈 공격이 유리합니다.\n시전자의 다음 턴 시작에 풀립니다.")
+		})
+	if unit.fallen:
+		var cost: int = CombatActionRules.standing_cost(unit.get_movement())
+		entries.append({
+			"label": tr("넘어짐"),
+			"tooltip": tr("넘어짐\n행동·보조 행동·반응을 쓸 수 없고 민첩 내성굴림이 불리합니다.\n이동력 %d로 일어서거나 다음 내 턴 시작에 풀립니다.") % cost
+		})
+	if unit.stealthed:
+		entries.append({
+			"label": tr("은신"),
+			"tooltip": tr("은신\n적이 공격·스킬 대상으로 지정할 수 없습니다. 범위·장판은 맞습니다.\n피해를 주는 공격을 쓰거나 다음 내 턴 시작에 풀립니다.")
+		})
+	for kind_name: String in ["burn", "poison"]:
+		var periodic: Dictionary = _periodic_status_entry(unit, kind_name)
+		if not periodic.is_empty():
+			entries.append(periodic)
+	# 켜지기 전에는 과부하 조건을 보인다(#503). 호버 설명은 기존 overload_text()를 재사용한다(#796).
+	var overload: String = CombatActionRules.overload_status(unit)
+	if not overload.is_empty():
+		var overload_tip: String = CombatActionRules.overload_text(unit)
+		if overload_tip.is_empty():
+			overload_tip = tr("과부하\n턴마다 행동 2.\n턴 시작에 자기 피해 %d.") % CombatActionRules.OVERLOAD_SELF_DAMAGE
+		entries.append({"label": overload, "tooltip": overload_tip})
+	if unit.is_boss():
+		entries.append({
+			"label": tr("기절 면역"),
+			"tooltip": tr("기절 면역\n기절 상태에 걸리지 않습니다.")
+		})
+	if unit.pull_cooldown > 0:
+		entries.append({
+			"label": tr("만능팔 대기"),
+			"tooltip": tr("만능팔 대기\n대기 중이라 만능팔을 쓸 수 없습니다.\n다음 내 턴 시작마다 대기가 줄어듭니다.")
+		})
+	if unit.aegisal_left > 0:
+		entries.append({
+			"label": tr("애기살 %d발") % unit.aegisal_left,
+			"tooltip": tr("애기살 %d발\n기본 공격마다 1발을 쓰고 피해 주사위를 2번 굴려 높은 값을 씁니다.\n전투가 끝나면 사라집니다.") % unit.aegisal_left
+		})
+	if unit.disengaged:
+		entries.append({
+			"label": tr("기회 공격 면제"),
+			"tooltip": tr("기회 공격 면제\n이번 턴의 남은 이동에서 기회 공격을 받지 않습니다.\n이번 턴 묶음이 끝나면 풀립니다.")
+		})
+	if unit.shield_points > 0:
+		entries.append({
+			"label": tr("방어막 %d (%d턴)") % [unit.shield_points, unit.shield_turns],
+			"tooltip": tr("방어막 %d (%d턴)\nHP보다 먼저 모든 피해를 최대 %d까지 대신 받습니다.\n피해를 모두 흡수하거나 %d턴이 지나면 사라집니다.") % [
+				unit.shield_points, unit.shield_turns, unit.shield_points, unit.shield_turns]
+		})
+	if unit.battle_cry_turns > 0:
+		entries.append({
+			"label": tr("전투의 함성 명중 +%d (%d턴)") % [unit.battle_cry_bonus, unit.battle_cry_turns],
+			"tooltip": tr("전투의 함성 명중 +%d (%d턴)\n모든 명중굴림에 +%d를 더합니다.\n%d턴이 지나면 사라집니다.") % [
+				unit.battle_cry_bonus, unit.battle_cry_turns, unit.battle_cry_bonus, unit.battle_cry_turns]
+		})
+	if unit.distracted_turns > 0:
+		entries.append({
+			"label": tr("산만함 %d턴") % unit.distracted_turns,
+			"tooltip": tr("산만함 %d턴\n내성굴림·명중굴림 불리.\n시전자 턴 시작마다 1턴 줄어듭니다.") % unit.distracted_turns
+		})
+	if phalanx > 0:
+		var phalanx_detail: String = tr("인접한 아군이 있어 AC +%d. 중첩 없음.") % phalanx \
+			if (CombatActionRules.belongs_to(unit, "phalanx") and not unit.is_stunned) \
+			else tr("인접한 전사 효과로 AC +%d. 중첩 없음.") % phalanx
+		entries.append({
+			"label": tr("팔랑크스 AC +%d") % phalanx,
+			"tooltip": tr("팔랑크스 AC +%d\n%s\n인접에서 벗어나면 바로 사라집니다.") % [phalanx, phalanx_detail]
+		})
+	return entries
+
+
+func _status_button_style(color: Color, border: Color) -> StyleBoxFlat:
+	var style: StyleBoxFlat = _button_style(color, border, 3)
+	style.content_margin_top = 0
+	style.content_margin_bottom = 0
+	return style
+
+
+func _make_status_button(label: String, tooltip: String) -> Button:
+	var button: Button = HoverTooltip.HoverButton.new()
+	button.text = label
+	button.tooltip_text = tooltip
+	button.accessibility_name = label
+	button.focus_mode = Control.FOCUS_ALL
+	var normal: StyleBoxFlat = _status_button_style(Color("293541"), Color("61717e"))
+	var hover: StyleBoxFlat = _status_button_style(SLOT_FACE_ACTIVE, FOCUS_COLOR)
+	var focus: StyleBoxFlat = _status_button_style(Color("293541"), FOCUS_COLOR)
+	focus.draw_center = false
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", hover)
+	button.add_theme_stylebox_override("focus", focus)
+	var colored: String = CombatActionRules.colorize(label)
+	if colored != label.replace("[", "[lb]"):
+		# 수치 가감(+/-)이 있는 상태 항목은 초록·빨강 색(#457)을 유지하면서 버튼 크기는 text로 맞춘다.
+		var transparent: Color = Color(0.0, 0.0, 0.0, 0.0)
+		for color_name: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+			button.add_theme_color_override(color_name, transparent)
+		var rich: RichTextLabel = RichTextLabel.new()
+		rich.name = "ColoredLabel"
+		rich.bbcode_enabled = true
+		rich.scroll_active = false
+		rich.autowrap_mode = TextServer.AUTOWRAP_OFF
+		rich.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rich.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		rich.set_anchors_preset(Control.PRESET_FULL_RECT)
+		rich.offset_left = 3
+		rich.offset_right = -3
+		rich.text = colored
+		button.add_child(rich)
+	_tooltip.attach(button)
+	return button
+
+
+func _rebuild_status_row(entries: Array[Dictionary]) -> void:
+	var labels: Array[String] = []
+	var signature: Array[PackedStringArray] = []
+	for entry: Dictionary in entries:
+		var label: String = entry["label"] as String
+		var tooltip: String = entry["tooltip"] as String
+		labels.append(label)
+		signature.append(PackedStringArray([label, tooltip]))
+	_status_display_text = tr("상태: %s") % (tr("없음") if labels.is_empty() else ", ".join(labels))
+	if status_row.get_child_count() > 0 and signature == _status_signature:
+		return
+	for child: Node in status_row.get_children():
+		child.free()
+	_status_buttons.clear()
+	_status_signature = signature
+	var prefix: Label = Label.new()
+	prefix.text = tr("상태:")
+	prefix.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	status_row.add_child(prefix)
+	if entries.is_empty():
+		var none_label: Label = Label.new()
+		none_label.text = tr("없음")
+		none_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		none_label.focus_mode = Control.FOCUS_NONE
+		status_row.add_child(none_label)
+		return
+	for entry: Dictionary in entries:
+		var button: Button = _make_status_button(entry["label"] as String, entry["tooltip"] as String)
+		status_row.add_child(button)
+		_status_buttons.append(button)
 
 
 func show_unit(unit: CombatUnit) -> void:
 	unit_label.text = unit.get_display_name()
 	health_bar.max_value = unit.get_max_hit_points()
 	health_bar.value = unit.hit_points
-	var states: Array[String] = []
-	if unit.is_stunned:
-		states.append(tr("기절"))
-	if unit.fallen:
-		states.append(tr("넘어짐"))
-	if unit.stealthed:
-		states.append(tr("은신"))
-	var periodic: String = unit.get_periodic_status_text()
-	if not periodic.is_empty():
-		states.append(periodic)
-	# 켜지기 전에는 과부하 조건을 보인다(#503).
-	var overload: String = CombatActionRules.overload_status(unit)
-	if not overload.is_empty():
-		states.append(overload)
-	if unit.is_boss():
-		states.append(tr("기절 면역"))
-	if unit.pull_cooldown > 0:
-		states.append(tr("만능팔 대기"))
-	if unit.aegisal_left > 0:
-		states.append(tr("애기살 %d발") % unit.aegisal_left)
-	if unit.disengaged:
-		states.append(tr("기회 공격 면제"))
-	if unit.shield_points > 0:
-		states.append(tr("방어막 %d (%d턴)") % [unit.shield_points, unit.shield_turns])
-	if unit.battle_cry_turns > 0:
-		states.append(tr("전투의 함성 명중 +%d (%d턴)") % [unit.battle_cry_bonus, unit.battle_cry_turns])
-	if unit.distracted_turns > 0:
-		states.append(tr("산만함 %d턴") % unit.distracted_turns)
 	var phalanx: int = grid.phalanx_bonus(unit) if grid != null else 0
-	if phalanx > 0:
-		states.append(tr("팔랑크스 AC +%d") % phalanx)
 	vitals_label.text = tr("HP %d / %d   AC %d") % [
 		unit.hit_points, unit.get_max_hit_points(), unit.get_armor_class() + phalanx]
 	ability_grid.visible = true
@@ -730,9 +887,9 @@ func show_unit(unit: CombatUnit) -> void:
 		slot.die_label.text = CombatActionRules.colorize(die)
 		slot.tooltip_text = "%s · %s" % [CombatUnit.ability_name(ability), die]
 		slot.accessibility_name = CombatUnit.ability_text(unit, ability)
-	resource_label.text = CombatActionRules.colorize(tr("공격 %+d · 사거리 %d칸\n상태: %s") % [
-		unit.get_attack_bonus(), unit.get_attack_range(),
-		_join_states(states)])
+	resource_label.text = CombatActionRules.colorize(tr("공격 %+d · 사거리 %d칸") % [
+		unit.get_attack_bonus(), unit.get_attack_range()])
+	_rebuild_status_row(_status_entries(unit, phalanx))
 
 
 func show_attack_preview(target: CombatUnit, preview: CombatChecks.AttackPreview) -> void:

@@ -162,6 +162,12 @@ bbcode_enabled = true
 fit_content = true
 scroll_active = false
 
+[node name="StatusRow" type="HFlowContainer" parent="UI/TurnHud/UnitDetails/UnitPanel/Info"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 2
+
 [node name="AttackPreview" type="Label" parent="UI/TurnHud/UnitDetails"]
 layout_mode = 2
 mouse_filter = 2
