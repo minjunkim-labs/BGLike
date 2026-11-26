@@ -24,7 +24,8 @@ HEADING = re.compile(r"^ {0,3}#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$")
 SCHEME = re.compile(r"^(?:[a-zA-Z][a-zA-Z0-9+.-]*:|//)")
 # Plain-text references to docs files in code, scripts and workflows. Partial names such as
 # "docs/adr/0003" are not checked: only a full file name can be proven missing.
-CODE_REFERENCE = re.compile(r"docs/[\w./-]*\w\.(?:md|png|svg)")
+# "grill-with-docs/SKILL.md" ends in docs/ inside a longer name; only a whole docs folder is a reference.
+CODE_REFERENCE = re.compile(r"(?<![\w-])docs/[\w./-]*\w\.(?:md|png|svg)")
 # A URL ends at the first quote, bracket or separator, so a docs/ path after it is still checked.
 URL = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s\"'`<>\[\]()\\,;]+")
 # Underscore emphasis wraps a word: "_x_" or "__x__", not the underscore inside "a_b".
