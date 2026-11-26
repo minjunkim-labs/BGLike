@@ -144,6 +144,17 @@ layout_mode = 2
 show_percentage = false
 mouse_filter = 2
 
+[node name="Vitals" type="Label" parent="UI/TurnHud/UnitDetails/UnitPanel/Info"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Abilities" type="GridContainer" parent="UI/TurnHud/UnitDetails/UnitPanel/Info"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 1
+columns = 3
+
 [node name="Resources" type="RichTextLabel" parent="UI/TurnHud/UnitDetails/UnitPanel/Info"]
 layout_mode = 2
 mouse_filter = 2

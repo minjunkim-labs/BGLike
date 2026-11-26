@@ -1,0 +1,59 @@
+{
+  "issue": "https://github.com/minjunkim-labs/BGLike/issues/795",
+  "generator": {
+    "tool": "draw_ability_icons.py",
+    "mode": "pixels placed by standard-library Python code from the briefs below with each ability representative color and dark outline; no generative image model and no input image",
+    "author": "Antigravity for Issue #795",
+    "date": "2026-11-25",
+    "command": "python3 scenes/combat/art/sources/icons/draw_ability_icons.py scenes/combat/art/icons/abilities"
+  },
+  "spec": {
+    "canvas": [48, 48],
+    "design_grid": [64, 64],
+    "display_scale": 0.25,
+    "logical_size": [12, 12],
+    "outline": "2 source px of #120d16, shared with draw_item_icons.py",
+    "palette": "representative colors from docs/design/combat/ability.md 3-4 with upper-left highlight and lower-right shade",
+    "light": "upper left",
+    "background": "transparent",
+    "filter": "sharp bilinear (pixel_art.tres); no resampling after drawing"
+  },
+  "icons": [
+    {
+      "id": "strength",
+      "name": "힘",
+      "color": "#EF4444",
+      "brief": "Flexed muscular bicep arm with fist raised on the upper-left and a pronounced bicep bulge."
+    },
+    {
+      "id": "agility",
+      "name": "민첩",
+      "color": "#10B981",
+      "brief": "Mid-air somersaulting acrobat silhouette with a sweeping circular motion arc."
+    },
+    {
+      "id": "finesse",
+      "name": "솜씨",
+      "color": "#FBBF24",
+      "brief": "Upright hand wearing a yellow fingerless glove over the palm and lower fingers with exposed fingertips."
+    },
+    {
+      "id": "intelligence",
+      "name": "지능",
+      "color": "#06B6D4",
+      "brief": "Symmetrical two-hemisphere brain silhouette with central fissure and bold cortical folds."
+    },
+    {
+      "id": "will",
+      "name": "의지",
+      "color": "#8B5CF6",
+      "brief": "Symmetrical upright lotus blossom with five layered petals and no leaves or stem."
+    },
+    {
+      "id": "health",
+      "name": "건강",
+      "color": "#EA0CC1",
+      "brief": "Classic full heart silhouette with a crisp upper-left specular highlight."
+    }
+  ]
+}

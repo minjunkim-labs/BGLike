@@ -230,8 +230,8 @@ func _test_spiderling_rewards() -> void:
 		_check(actions.is_victory() and progress.rewards.size() == (2 if mixed else 1),
 			"새끼만 처치하면 보장1개이고 혼합 전투는 풋내기1마리분만 추가 드랍")
 		if not mixed:
-			# 실제 1-1의 사물·풍경과 지형. 정비 화면은 보상 흐름 검사에서 확인한다.
-			_check_pixel_art(main, ["AnimatedSprite2D", "Sprite2D", "Button"])
+			# 실제 1-1의 사물·풍경과 지형·유닛 패널 능력치 아이콘(#795). 정비 화면은 보상 흐름 검사에서 확인한다.
+			_check_pixel_art(main, ["AnimatedSprite2D", "Sprite2D", "Button", "TextureRect"])
 		main.queue_free()
 		await process_frame
 

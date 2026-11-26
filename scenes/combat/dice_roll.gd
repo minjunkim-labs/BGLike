@@ -13,22 +13,24 @@ var bonus: int
 ## 기준값의 이름과 값. 명중은 AC, 내성굴림(독 제거·회전회오리·만능팔)은 DC다.
 var target_label: String
 var target_value: int
+## 판정에 쓴 능력치(CombatUnit.Ability). 지정하지 않으면 -1이며 아이콘을 그리지 않는다(#795).
+var ability: int = -1
 
 
 ## 명중굴림. 면 열거 결과에 절대성공·절대실패가 담긴다.
 static func hit(roller: CombatUnit, sides: int, result: CombatChecks.RollResult,
-		bonus: int, armor_class: int) -> CombatDiceRoll:
-	return _create(Category.HIT, roller, sides, result, bonus, TranslationServer.tr("AC"), armor_class)
+		bonus: int, armor_class: int, roll_ability: int = -1) -> CombatDiceRoll:
+	return _create(Category.HIT, roller, sides, result, bonus, TranslationServer.tr("AC"), armor_class, roll_ability)
 
 
 ## 기준값 이상이면 성공하는 내성굴림.
 static func save(roller: CombatUnit, sides: int, result: CombatChecks.RollResult,
-		bonus: int, target_label: String, target_value: int) -> CombatDiceRoll:
-	return _create(Category.SAVE, roller, sides, result, bonus, target_label, target_value)
+		bonus: int, target_label: String, target_value: int, roll_ability: int = -1) -> CombatDiceRoll:
+	return _create(Category.SAVE, roller, sides, result, bonus, target_label, target_value, roll_ability)
 
 
 static func _create(category: Category, roller: CombatUnit, sides: int, result: CombatChecks.RollResult,
-		bonus: int, target_label: String, target_value: int) -> CombatDiceRoll:
+		bonus: int, target_label: String, target_value: int, roll_ability: int = -1) -> CombatDiceRoll:
 	var roll: CombatDiceRoll = CombatDiceRoll.new()
 	roll.category = category
 	roll.roller = roller
@@ -37,4 +39,5 @@ static func _create(category: Category, roller: CombatUnit, sides: int, result: 
 	roll.bonus = bonus
 	roll.target_label = target_label
 	roll.target_value = target_value
+	roll.ability = roll_ability
 	return roll
