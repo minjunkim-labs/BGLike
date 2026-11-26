@@ -444,6 +444,7 @@ func _test_first_turn_enemy_pressure() -> void:
 	var actions: CombatActions = battle.get("actions") as CombatActions
 	var party: Array[CombatUnit] = battle.get("party")
 	var units: Array[CombatUnit] = battle.get("units")
+	# MonsterBaseline에서 2-1 새끼 거미 이동력은 8이라 기존 #751 첫 턴 압박 기준을 유지한다(실제 이동력 12 위협은 combat_monster_stats_test에서 검증).
 	for unit: CombatUnit in units:
 		if unit.is_ally:
 			continue

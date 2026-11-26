@@ -29,10 +29,11 @@ func _run() -> void:
 	_test_stat_table()
 	_test_overload_thresholds()
 	_test_slip_chances()
-	_test_rule_constants()
 	_test_spiderling_cap()
 	await _test_boss_oil_immunity()
 	await _test_poison_tick_damage()
+	await _test_poison_tooltip()
+	await _test_act2_stage1_spiderling_movement()
 	var dice_problems: Array[String] = ScriptedDice.finish()
 	for problem: String in dice_problems:
 		_check(false, "주사위 기대와 다름: " + problem)
@@ -99,11 +100,6 @@ func _test_slip_chances() -> void:
 		var chance: float = CombatChecks.save_chance(unit.get_ability_sides(CombatUnit.Ability.FINESSE),
 			unit.get_defense_bonus(), CombatGrounds.SLIP_DC, CombatChecks.RollMode.NORMAL)
 		_check(is_equal_approx(chance, pair[1]), "%s 미끌거림 버팀 %.3f (실제 %.3f)" % [unit.get_display_name(), pair[1], chance])
-
-
-func _test_rule_constants() -> void:
-	_check(CombatActionRules.poison_tick_damage == 3, "독 중첩 하나의 틱 피해는 3")
-	_check(CombatActionRules.MAX_SPIDERLINGS == 10, "맵 전체 새끼 거미 상한은 10")
 
 
 func _fixture(extra_spiderlings: int) -> Dictionary:
@@ -226,3 +222,57 @@ func _test_poison_tick_damage() -> void:
 	_check(f_turns.current_unit == fog_warrior and fog_warrior.hit_points == fog_warrior.get_max_hit_points() - 3,
 		"독안개 독 1중첩의 턴 시작 피해는 3 (실제 HP %d / %d)" % [fog_warrior.hit_points, fog_warrior.get_max_hit_points()])
 	f_turns.turn_started.disconnect(f_actions._on_turn_started)
+
+
+func _test_poison_tooltip() -> void:
+	var main: Node = (load("res://scenes/game.tscn") as PackedScene).instantiate()
+	root.add_child(main)
+	var battle: Node2D = main.get_node("Battle") as Node2D
+	battle.set_process(false)
+	battle.call("start_battle")
+	var units: Array[CombatUnit] = battle.get("units")
+	var hud: CombatTurnHud = battle.get_node("UI/TurnHud") as CombatTurnHud
+	var ally: CombatUnit = units[0]
+	ally.status_effects.append(CombatUnit.StatusEffect.new("poison", units[2], 4, CombatGrounds.POISON_DC))
+	hud.show_unit(ally)
+	await process_frame
+	var poison_buttons: Array[Button] = hud.status_buttons().filter(
+		func(button: Button) -> bool: return button.text == "독1")
+	_check(poison_buttons.size() == 1 and "중첩당 피해 3." in poison_buttons[0].tooltip_text,
+		"독 상태 호버 툴팁은 상향된 틱 피해 3을 표시한다: %s" % ["" if poison_buttons.is_empty() else poison_buttons[0].tooltip_text])
+	main.queue_free()
+	await process_frame
+
+
+## 실제 2-1에서 새끼 거미 이동력 12와 새 배치가 아군 첫 턴 위협을 만들고, 엄마 거미는 첫 턴에 닿지 않음을 확인한다.
+func _test_act2_stage1_spiderling_movement() -> void:
+	var main: Node = (load("res://scenes/game.tscn") as PackedScene).instantiate()
+	root.add_child(main)
+	var battle: Node2D = main.get_node("Battle") as Node2D
+	battle.set_process(false)
+	battle.call("start_battle")
+	(battle.get("progress") as CombatActProgress).stage_index = 3
+	battle.call("_start_stage", true)
+	battle.call("start_battle")
+	var actions: CombatActions = battle.get("actions") as CombatActions
+	var party: Array[CombatUnit] = battle.get("party")
+	var units: Array[CombatUnit] = battle.get("units")
+	var spiderling_reach_count: int = 0
+	var mother_reaches: bool = false
+	for unit: CombatUnit in units:
+		if unit.is_ally:
+			continue
+		var reach: Dictionary[Vector2i, int] = actions.grid.reachable_cells(unit)
+		var cells: Array[Vector2i] = [unit.cell]
+		cells.append_array(reach.keys())
+		var hits_ally: bool = cells.any(func(cell: Vector2i) -> bool:
+			return party.any(func(ally: CombatUnit) -> bool:
+				return actions.grid.can_target(unit, ally, "attack", cell)))
+		if unit.kind == CombatUnit.Kind.SPIDERLING and hits_ally:
+			spiderling_reach_count += 1
+		elif unit.kind == CombatUnit.Kind.MOTHER_SPIDER:
+			mother_reaches = hits_ally
+	_check(spiderling_reach_count > 0 and not mother_reaches,
+		"2-1 실수치(새끼 이동력 12)에서 새끼 거미는 첫 턴 위협에 닿고 엄마 거미는 닿지 않음 (%d마리 도달)" % spiderling_reach_count)
+	main.queue_free()
+	await process_frame

@@ -717,7 +717,7 @@ func _periodic_status_entry(unit: CombatUnit, kind_name: String) -> Dictionary:
 		heading = tr("독 %d중첩 (기간 없음)") % count
 	else:
 		heading = tr("독 %d중첩 (최대 %d턴)") % [count, max_turns]
-	return {"label": label, "tooltip": heading + "\n" + tr("내 턴 시작마다 중첩당 피해 1.\n턴 시작 건강 내성(DC %d)에 성공하면 첫 독 중첩 1개가 풀립니다.") % save_dc}
+	return {"label": label, "tooltip": heading + "\n" + tr("내 턴 시작마다 중첩당 피해 %d.\n턴 시작 건강 내성(DC %d)에 성공하면 첫 독 중첩 1개가 풀립니다.") % [CombatActionRules.poison_tick_damage, save_dc]}
 
 
 func _status_entries(unit: CombatUnit, phalanx: int) -> Array[Dictionary]:
