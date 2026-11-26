@@ -1,6 +1,7 @@
 extends SceneTree
 ## 실제 메인 장면과 결과 버튼에서 막 진행과 자원 유지 규칙을 검사한다.
 
+const MonsterBaseline = preload("res://tests/monster_baseline.gd")
 const ScriptedDice = preload("res://tests/scripted_dice.gd")
 const LargeMapBattle = preload("res://tests/large_map_battle.gd")
 
@@ -9,6 +10,7 @@ var failures: int = 0
 
 
 func _initialize() -> void:
+	MonsterBaseline.apply()
 	_run.call_deferred()
 
 
@@ -229,28 +231,28 @@ func _test_spiderling_placement_and_turns() -> void:
 	battle.set_process(false)
 	battle.call("start_battle")
 	var units: Array[CombatUnit] = battle.get("units")
-	_check(units.size() == 6, "1막 1스테이지는 아군2명과 새끼 거미4마리")
-	if units.size() != 6:
+	_check(units.size() == 8, "1막 1스테이지는 아군2명과 새끼 거미6마리")
+	if units.size() != 8:
 		main.queue_free()
 		await process_frame
 		return
-	var cells: Array[Vector2i] = [Vector2i(10, 3), Vector2i(11, 5), Vector2i(10, 8), Vector2i(11, 11)]
-	for index: int in range(4):
+	var cells: Array[Vector2i] = [Vector2i(10, 3), Vector2i(11, 5), Vector2i(10, 8), Vector2i(11, 11), Vector2i(9, 6), Vector2i(9, 10)]
+	for index: int in range(6):
 		_check(units[index + 2].kind == CombatUnit.Kind.SPIDERLING
 			and units[index + 2].cell == cells[index] and units[index + 2].hit_points == 1,
 			"처음 배치한 새끼 거미의 종류·HP·좌표 순서")
 	var turns: CombatTurns = battle.get("turns") as CombatTurns
-	turns.start(units, ScriptedDice.new([8, 7, 8, 8, 8, 8], [8, 12, 8, 8, 8, 8]))
-	_check(turns.ordered_units == [units[0], units[2], units[3], units[4], units[5], units[1]],
+	turns.start(units, ScriptedDice.new([8, 7, 8, 8, 8, 8, 8, 8], [8, 12, 8, 8, 8, 8, 8, 8]))
+	_check(turns.ordered_units == [units[0], units[2], units[3], units[4], units[5], units[6], units[7], units[1]],
 		"이니셔티브 동점은 민첩을 먼저 비교하고 새끼끼리는 배치 좌표 순서")
-	var rolls: Array[int] = [2, 1, 8, 7, 6, 5]
-	turns.start(units, ScriptedDice.new(rolls, [8, 12, 8, 8, 8, 8]))
+	var rolls: Array[int] = [2, 1, 8, 7, 6, 5, 4, 3]
+	turns.start(units, ScriptedDice.new(rolls, [8, 12, 8, 8, 8, 8, 8, 8]))
 	for index: int in range(units.size()):
 		_check(units[index].initiative_roll == rolls[index]
 			and units[index].get_initiative() == rolls[index],
 			"처음 배치한 새끼를 포함해 유닛마다 민첩 주사위을 독립 적용")
 	var actions: CombatActions = battle.get("actions") as CombatActions
-	for index: int in range(2, 6):
+	for index: int in range(2, 8):
 		_check(turns.current_unit == units[index] and units[index].action_left == 1,
 			"새끼 거미는 각자 이니셔티브 순서의 자기 턴으로 진입")
 		var destination: Vector2i = cells[index - 2] + Vector2i.UP
@@ -258,7 +260,7 @@ func _test_spiderling_placement_and_turns() -> void:
 			"새끼 이동 fixture의 목적지는 장애물이 없는 바닥")
 		_check(await actions.move_to(units[index], destination)
 			and units[index].movement_left == 7, "새끼 거미는 자기 턴에 자기 이동력으로 이동")
-		for waiting: int in range(index + 1, 6):
+		for waiting: int in range(index + 1, 8):
 			_check(units[waiting].cell == cells[waiting - 2] and units[waiting].movement_left == 8,
 				"다른 새끼의 이동은 대기 중인 새끼의 위치·이동력을 바꾸지 않음")
 		turns.end_turn()
@@ -267,7 +269,7 @@ func _test_spiderling_placement_and_turns() -> void:
 	for portrait: Node in hud.order_bar.find_children("*", "Button", true, false):
 		if "새끼 거미" in (portrait as Button).text.replace("\n", " "):
 			spiderling_portraits += 1
-	_check(spiderling_portraits == 4, "턴 순서 바는 새끼 거미4마리의 이름을 표시")
+	_check(spiderling_portraits == 6, "턴 순서 바는 새끼 거미6마리의 이름을 표시")
 	main.queue_free()
 	await process_frame
 
@@ -296,8 +298,9 @@ func _check_enemy_values(battle: Node2D, act: int) -> void:
 
 func _test_mother_stages() -> void:
 	var placements: Dictionary = {
-		3: [Vector2i(12, 3), Vector2i(10, 5), Vector2i(11, 8), Vector2i(9, 11), Vector2i(11, 1)],
-		6: [Vector2i(9, 4), Vector2i(9, 7), Vector2i(9, 10), Vector2i(11, 2), Vector2i(11, 9)]
+		3: [Vector2i(12, 3), Vector2i(10, 5), Vector2i(11, 8), Vector2i(9, 11), Vector2i(11, 1), Vector2i(9, 2), Vector2i(12, 10)],
+		6: [Vector2i(9, 4), Vector2i(9, 7), Vector2i(9, 10), Vector2i(11, 2), Vector2i(11, 9),
+			Vector2i(11, 5), Vector2i(11, 7), Vector2i(10, 12), Vector2i(12, 11)]
 	}
 	for stage: int in [3, 6]:
 		var main: Node = (load("res://scenes/game.tscn") as PackedScene).instantiate()
@@ -310,18 +313,23 @@ func _test_mother_stages() -> void:
 		battle.call("_start_stage", true)
 		battle.call("start_battle")
 		var units: Array[CombatUnit] = battle.get("units")
-		_check(units.size() == 7, "%d막 1스테이지의 처음 배치한 적5마리" % progress.act_number())
-		if units.size() != 7:
+		_check(units.size() == 2 + placements[stage].size(), "%d막 1스테이지의 처음 배치한 적" % progress.act_number())
+		if units.size() != 2 + placements[stage].size():
 			main.queue_free()
 			await process_frame
 			continue
 		var mothers: Array[CombatUnit] = []
 		var fog_spiders: Array[CombatUnit] = []
-		for index: int in range(5):
+		# 2막: 새끼4·엄마·새끼2, 3막: 새끼3·독안개(#463)·엄마·새끼3·독안개(#702).
+		var kinds: Dictionary = {
+			3: [0, 0, 0, 0, 1, 0, 0],
+			6: [0, 0, 0, 2, 1, 0, 0, 0, 2]
+		}
+		for index: int in range(placements[stage].size()):
 			var unit: CombatUnit = units[index + 2]
-			# 3막 1스테이지는 (11,2)가 독안개 거미(#463)이고 (11,9)가 엄마다.
-			var is_fog: bool = stage == 6 and index == 3
-			var is_mother: bool = index >= (4 if stage == 3 else 3) and not is_fog
+			var kind_code: int = kinds[stage][index]
+			var is_fog: bool = kind_code == 2
+			var is_mother: bool = kind_code == 1
 			var expected_kind: CombatUnit.Kind = CombatUnit.Kind.SPIDERLING
 			if is_fog:
 				expected_kind = CombatUnit.Kind.FOG_SPIDER
@@ -345,7 +353,7 @@ func _test_mother_stages() -> void:
 		actions.dice = ScriptedDice.new([1], [3]).then_seeded()
 		await (battle.get("enemy_ai") as CombatEnemyAi).play_turn(mothers[0], actions)
 		var child: CombatUnit = units.back()
-		_check(units.size() == 8 and child.kind == CombatUnit.Kind.SPIDERLING
+		_check(units.size() == 3 + placements[stage].size() and child.kind == CombatUnit.Kind.SPIDERLING
 			and child.get_parent() == battle.get_node("Units") and child.is_inside_tree()
 			and actions.grid.unit_at(child.cell) == child and turns.is_turn_finished(child),
 			"실제 AI가 만든 새끼를 장면·점유 칸·대기 중 턴에 함께 연결")
@@ -371,8 +379,8 @@ func _test_mother_stages() -> void:
 		_check(not actions.is_victory() and progress.rewards.is_empty(), "생성한 새끼까지 처치해야 승리")
 		actions.incapacitate(child)
 		actions.changed.emit()
-		_check(actions.is_victory() and progress.rewards.size() == (2 if stage == 3 else 3),
-			"보장1개에 엄마·독안개 거미 합쳐 1마리·2마리분만 추가 드랍하고 처음·생성 새끼는 모두 제외")
+		_check(actions.is_victory() and progress.rewards.size() == (2 if stage == 3 else 4),
+			"보장1개에 엄마·독안개 거미 합쳐 1마리·3마리분만 추가 드랍하고 처음·생성 새끼는 모두 제외")
 		main.queue_free()
 		await process_frame
 
@@ -386,9 +394,11 @@ func _test_novice_placements() -> void:
 	var progress: CombatActProgress = battle.get("progress") as CombatActProgress
 	var expected: Dictionary = {
 		1: [[CombatUnit.Kind.WARRIOR, Vector2i(10, 2)]],
-		4: [[CombatUnit.Kind.WARRIOR, Vector2i(9, 3)], [CombatUnit.Kind.ARCHER, Vector2i(10, 6)]],
+		4: [[CombatUnit.Kind.WARRIOR, Vector2i(9, 3)], [CombatUnit.Kind.ARCHER, Vector2i(10, 6)],
+			[CombatUnit.Kind.WARRIOR, Vector2i(11, 8)]],
 		7: [[CombatUnit.Kind.WARRIOR, Vector2i(10, 5)], [CombatUnit.Kind.WARRIOR, Vector2i(10, 10)],
-			[CombatUnit.Kind.ARCHER, Vector2i(13, 4)]]
+			[CombatUnit.Kind.ARCHER, Vector2i(13, 4)], [CombatUnit.Kind.WARRIOR, Vector2i(11, 8)],
+			[CombatUnit.Kind.ARCHER, Vector2i(13, 9)]]
 	}
 	for index: int in range(9):
 		var party: Array[CombatUnit] = battle.get("party")
@@ -434,6 +444,7 @@ func _test_first_turn_enemy_pressure() -> void:
 	var actions: CombatActions = battle.get("actions") as CombatActions
 	var party: Array[CombatUnit] = battle.get("party")
 	var units: Array[CombatUnit] = battle.get("units")
+	# MonsterBaseline에서 2-1 새끼 거미 이동력은 8이라 기존 #751 첫 턴 압박 기준을 유지한다(실제 이동력 12 위협은 combat_monster_stats_test에서 검증).
 	for unit: CombatUnit in units:
 		if unit.is_ally:
 			continue
@@ -471,6 +482,9 @@ func _test_first_turn_enemy_pressure() -> void:
 			_check(not party.any(func(ally: CombatUnit) -> bool:
 				return actions.grid.can_target(unit, ally, "attack", unit.cell)),
 				"3-2 적 궁수는 시작 칸에서 아군을 사격하지 않음")
+			# 두 번째 궁수 (13, 9)는 #702로 더했다. 첫 턴 압박 완화(#751)의 보행 기준은 처음부터 있던 궁수 (13, 4)에만 적용한다.
+			if unit.cell == Vector2i(13, 9):
+				continue
 			var warrior_steps: int = unit.get_movement() + 1
 			var archer_steps: int = unit.get_movement() + 1
 			for cell: Vector2i in reach:
@@ -508,9 +522,9 @@ func _test_enemy_turn_speed() -> void:
 	await process_frame
 	var normal: Dictionary = await _play_three_one_rounds(false)
 	var fast: Dictionary = await _play_three_one_rounds(true)
-	print("3-1 적 턴 2라운드: 보통 %d ms, Space %d ms, 새끼 거미 %d마리" % [
+	print("3-1 적 턴 1라운드: 보통 %d ms, Space %d ms, 새끼 거미 %d마리" % [
 		normal.msec, fast.msec, normal.spiderlings])
-	_check(normal.spiderlings >= 5 and fast.state == normal.state,
+	_check(normal.spiderlings > normal.initial_spiderlings and fast.state == normal.state,
 		"Space 가속은 새끼 거미가 늘어난 3-1의 적 행동 결과를 바꾸지 않음")
 	# 프레임 처리 시간은 배율과 무관해 느린 CI에서 차이가 줄어든다.
 	_check(fast.msec * 4 < normal.msec * 3, "Space를 누르고 있으면 3-1 적 턴 시간이 4분의 3 아래로 줄어듦")
@@ -546,10 +560,14 @@ func _play_three_one_rounds(fast: bool) -> Dictionary:
 	space.physical_keycode = KEY_SPACE
 	space.pressed = fast
 	Input.parse_input_event(space)
-	var result: Dictionary = {"spiderlings": 0, "reaction_waits": false}
+	var initial_spiderlings: int = 0
+	for unit: CombatUnit in battle.get("units"):
+		if unit.kind == CombatUnit.Kind.SPIDERLING and unit.hit_points > 0:
+			initial_spiderlings += 1
+	var result: Dictionary = {"initial_spiderlings": initial_spiderlings, "spiderlings": 0, "reaction_waits": false}
 	battle.set_process(true)
 	var started: int = Time.get_ticks_msec()
-	while turns.round_number < 3 and not actions.is_over() and Time.get_ticks_msec() - started < 30000:
+	while turns.round_number < 2 and not actions.is_over() and Time.get_ticks_msec() - started < 90000:
 		var actor: CombatUnit = turns.current_unit
 		if actor != null and actor.is_ally and not battle.get("_enemy_turn_running"):
 			# 반응 선택 창 대기 없이 같은 적 행동을 비교한다.
@@ -583,7 +601,8 @@ func _play_three_one_rounds(fast: bool) -> Dictionary:
 			Input.parse_input_event(space)
 		await process_frame
 	result.msec = Time.get_ticks_msec() - started
-	_check(turns.round_number == 3, "3-1 적 턴 두 라운드를 제한 시간 안에 마침")
+	# #702로 3-1이 11유닛이 되어 한 라운드에 약 16초(보통 속도)가 걸려 한 라운드만 잰다.
+	_check(turns.round_number == 2, "3-1 적 턴 한 라운드를 제한 시간 안에 마침")
 	_check(turns.current_unit.is_ally and not "Space: 빠르게" in hud.round_label.text, "아군 턴에는 Space 안내를 숨김")
 	space.pressed = false
 	Input.parse_input_event(space)
@@ -971,7 +990,7 @@ func _test_act_and_defeat(battle: Node2D) -> void:
 	_check(battle.loot.bag == expected_bag, "다음 막 시작은 미수령 보상을 더한 공용 가방 보존")
 	_check_enemy_values(battle, 2)
 	_check(battle.progress.level == 1 and level_party[0].hit_points == 17, "2막 시작에도 레벨 1 유지, 막 시작 회복은 새 최대 HP")
-	_check((battle.get("turns") as CombatTurns).ordered_units.size() == 7,
+	_check((battle.get("turns") as CombatTurns).ordered_units.size() == 9,
 		"새 막에서 전투 불능 아군 부활과 적 재배치")
 	var party: Array[CombatUnit] = battle.get("party")
 	for unit: CombatUnit in party:

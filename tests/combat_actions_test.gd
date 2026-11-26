@@ -10,6 +10,7 @@ class Fixture extends RefCounted:
 	var strikes: Array[Dictionary] = []
 
 
+const MonsterBaseline = preload("res://tests/monster_baseline.gd")
 const ScriptedDice = preload("res://tests/scripted_dice.gd")
 
 var _checks: int = 0
@@ -19,6 +20,7 @@ var _fixtures: Array[Fixture] = []
 
 
 func _initialize() -> void:
+	MonsterBaseline.apply()
 	create_timer(30.0).timeout.connect(func() -> void:
 		push_error("Combat actions: test timeout")
 		quit(1)
@@ -934,7 +936,7 @@ func _test_crate_stage() -> void:
 	var units: Array[CombatUnit] = battle.get("units")
 	var crate: CombatGrid.Prop = actions.grid.prop_at(Vector2i(4, 9))
 	_check(crate != null and crate.hit_points == 6 and actions.get_props().size() == 2
-		and units.size() == 6, "실제1막1스테이지는 기존6유닛과(4,9)의 상자/(9,8)의 바위로 시작한다")
+		and units.size() == 8, "실제1막1스테이지는 아군2명·새끼 거미6마리와(4,9)의 상자/(9,8)의 바위로 시작한다")
 	var rock: CombatGrid.Prop = actions.grid.prop_at(Vector2i(9, 8))
 	_check(rock != null and rock.kind == "rock" and actions.grid.water_cells == [Vector2i(7, 2), Vector2i(8, 2)]
 		and actions.grid.pits == [Vector2i(9, 2)] and actions.grid.height_at(Vector2i(0, 1)) == 1

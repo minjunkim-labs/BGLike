@@ -11,10 +11,12 @@ var checks: int = 0
 var failures: int = 0
 var fixtures: Array[Fixture] = []
 var ai: CombatEnemyAi = CombatEnemyAi.new()
+const MonsterBaseline = preload("res://tests/monster_baseline.gd")
 const ScriptedDice = preload("res://tests/scripted_dice.gd")
 
 
 func _initialize() -> void:
+	MonsterBaseline.apply()
 	create_timer(90.0).timeout.connect(func() -> void:
 		push_error("Combat AI: test timeout")
 		quit(1)
@@ -1139,7 +1141,7 @@ func _test_oil_stand_up() -> void:
 		and fallen_archer.action_left == 1 and low_archer.units[0].hit_points == low_archer.units[0].get_max_hit_points(),
 		"일어서기 비용이 모자란 궁수는 사거리 안에 적이 있어도 공격 없이 턴 종료")
 
-	# 보스: 접근 중 기름에서 넘어지면 남은 이동력이 절반(3) 이상일 때 일어나서 공격한다.
+	# 보스: 기름 장판 미끌거림에 면역이라 굴림 없이 통과하고 이동력을 잃지 않은 채 공격한다(#702).
 	var stand_boss: Fixture = _fixture()
 	var boss: CombatUnit = stand_boss.units[2]
 	boss.kind = CombatUnit.Kind.SCRAP_ROBOT_1000
@@ -1151,13 +1153,13 @@ func _test_oil_stand_up() -> void:
 	stand_boss.units[3].cell = Vector2i(4, 0)
 	stand_boss.actions.grid.map_size = Vector2i(5, 1)
 	stand_boss.actions.grounds.add(stand_boss.units[0], Vector2i(1, 0), "oil")
-	stand_boss.actions.dice = _oil_dice(boss, [1, 11, 1], true)
+	stand_boss.actions.dice = ScriptedDice.new([11, 1], ScriptedDice.attack_sides(boss) + ScriptedDice.damage_sides(boss))
 	await ai.play_turn(boss, stand_boss.actions)
-	_check(boss.cell == Vector2i(1, 0) and not boss.fallen and boss.movement_left == 2
+	_check(boss.cell == Vector2i(1, 0) and not boss.fallen and not boss.oil_slipped and boss.movement_left == 5
 		and boss.action_left == 0 and stand_boss.units[0].hit_points < stand_boss.units[0].get_max_hit_points(),
-		"기름에서 넘어진 보스는 남은 이동력이 충분하면 일어나서 사거리 안 대상을 공격")
+		"기름 장판 위를 지난 보스는 굴림 없이 넘어지지 않고 공격")
 
-	# 보스: 남은 이동력이 일어서기 비용(3)보다 적으면 일어나지 못하고 턴을 끝낸다.
+	# 보스: 남은 이동력이 절반(3) 이하 여도 기름 장판에 넘어지지 않고 공격한다.
 	var low_boss: Fixture = _fixture()
 	var slow_boss: CombatUnit = low_boss.units[2]
 	slow_boss.kind = CombatUnit.Kind.SCRAP_ROBOT_1000
@@ -1170,13 +1172,14 @@ func _test_oil_stand_up() -> void:
 	low_boss.units[3].cell = Vector2i(4, 0)
 	low_boss.actions.grid.map_size = Vector2i(5, 1)
 	low_boss.actions.grounds.add(low_boss.units[0], Vector2i(1, 0), "oil")
-	low_boss.actions.dice = _oil_dice(slow_boss, [1])
+	low_boss.actions.dice = ScriptedDice.new([11, 1], ScriptedDice.attack_sides(slow_boss) + ScriptedDice.damage_sides(slow_boss))
 	await ai.play_turn(slow_boss, low_boss.actions)
-	_check(slow_boss.cell == Vector2i(1, 0) and slow_boss.fallen and slow_boss.movement_left == 2
-		and slow_boss.action_left == 1 and low_boss.units[0].hit_points == low_boss.units[0].get_max_hit_points(),
-		"일어서기 비용이 모자란 보스는 일어나지 못하고 공격 없이 턴 종료")
+	_check(slow_boss.cell == Vector2i(1, 0) and not slow_boss.fallen and not slow_boss.oil_slipped
+		and slow_boss.movement_left == 2 and slow_boss.action_left == 0
+		and low_boss.units[0].hit_points < low_boss.units[0].get_max_hit_points(),
+		"이동력이 적은 보스도 기름 장판에 넘어지지 않고 공격")
 
-	# seam 2: 일어난 뒤 다시 이동하지 않는다 (궁수 후퇴, 독안개 거미, 보스 만능팔, 보스 과부하).
+	# seam 2: 일어난 뒤 다시 이동하지 않는다 (궁수 후퇴, 독안개 거미).
 	var retreat_archer: Fixture = _fixture(true)
 	var jumper: CombatUnit = retreat_archer.units[3]
 	jumper.cell = Vector2i.ZERO
@@ -1216,11 +1219,11 @@ func _test_oil_stand_up() -> void:
 	pull_fall.actions.grid.map_size = Vector2i(8, 2)
 	pull_fall.actions.grid.blocked_cells = [Vector2i(1, 1)]
 	pull_fall.actions.grounds.add(pull_fall.units[0], Vector2i(1, 0), "oil")
-	pull_fall.actions.dice = _oil_dice(pull_boss, [1])
+	pull_fall.actions.dice = ScriptedDice.new([1], [20])
 	await ai.play_turn(pull_boss, pull_fall.actions)
-	_check(pull_boss.cell == Vector2i(1, 0) and not pull_boss.fallen and pull_boss.movement_left == 2
-		and pull_boss.action_left == 1,
-		"만능팔 접근 중 넘어져 일어난 보스는 사거리 밖이어도 다시 이동하지 않음")
+	_check(pull_boss.cell == Vector2i(2, 0) and not pull_boss.fallen and not pull_boss.oil_slipped
+		and pull_boss.action_left == 0 and pull_fall.units[0].cell == Vector2i(3, 0),
+		"기름을 지난 보스는 미끌거리지 않고 사거리까지 이동해 만능팔을 사용")
 
 	var overload_fall: Fixture = _fixture()
 	var over_boss: CombatUnit = overload_fall.units[2]
@@ -1235,11 +1238,15 @@ func _test_oil_stand_up() -> void:
 	overload_fall.actions.grid.map_size = Vector2i(7, 2)
 	overload_fall.actions.grid.blocked_cells = [Vector2i(1, 1)]
 	overload_fall.actions.grounds.add(overload_fall.units[0], Vector2i(1, 0), "oil")
-	overload_fall.actions.dice = _oil_dice(over_boss, [1, 11, 1], true)
+	overload_fall.actions.dice = ScriptedDice.new([11, 1, 11, 1],
+		ScriptedDice.attack_sides(over_boss) + ScriptedDice.damage_sides(over_boss)
+		+ ScriptedDice.attack_sides(over_boss) + ScriptedDice.damage_sides(over_boss))
 	await ai.play_turn(over_boss, overload_fall.actions)
-	_check(over_boss.cell == Vector2i(1, 0) and not over_boss.fallen and over_boss.movement_left == 2
-		and overload_fall.units[0].hit_points == 0 and over_boss.action_left == 1,
-		"과부하 보스는 넘어져 일어난 뒤 첫 대상을 공격해도 두 번째 행동에 다시 이동하지 않음")
+	_check(over_boss.cell == Vector2i(4, 0) and not over_boss.fallen and not over_boss.oil_slipped
+		and over_boss.movement_left == 2 and overload_fall.units[0].hit_points == 0
+		and overload_fall.units[1].hit_points < overload_fall.units[1].get_max_hit_points()
+		and over_boss.action_left == 0,
+		"과부하 보스는 기름 위에서 넘어지지 않고 첫 대상을 처치한 뒤 두 번째 행동으로 이동해 공격")
 
 
 func _test_reaction_pause() -> void:

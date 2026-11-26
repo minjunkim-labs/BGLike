@@ -1,6 +1,7 @@
 extends SceneTree
 ## 실제 장면의 화면 상태, 입력 연결, 전투 종료와 재시작을 검사한다.
 
+const MonsterBaseline = preload("res://tests/monster_baseline.gd")
 const ScriptedDice = preload("res://tests/scripted_dice.gd")
 
 var checks: int = 0
@@ -13,6 +14,7 @@ var hud: CombatTurnHud
 
 
 func _initialize() -> void:
+	MonsterBaseline.apply()
 	_run.call_deferred()
 
 
@@ -4029,12 +4031,12 @@ func _test_spawned_portrait_input() -> void:
 		return not unit.is_ally and unit.kind == CombatUnit.Kind.MOTHER_SPIDER).size()
 	var initial_fogs: int = units.filter(func(unit: CombatUnit) -> bool:
 		return not unit.is_ally and unit.kind == CombatUnit.Kind.FOG_SPIDER).size()
-	var initial_ready: bool = (units.size() == 7 and initial_allies == 2
-		and initial_spiderlings == 3 and initial_mothers == 1 and initial_fogs == 1
+	var initial_ready: bool = (units.size() == 11 and initial_allies == 2
+		and initial_spiderlings == 6 and initial_mothers == 1 and initial_fogs == 2
 		and units[0].is_ally and units[0].kind == CombatUnit.Kind.WARRIOR
 		and units[1].is_ally and units[1].kind == CombatUnit.Kind.ARCHER)
 	_check(initial_ready,
-		"소환 전제조건: 3-1 아군2·새끼3·엄마거미1·독안개 거미1")
+		"소환 전제조건: 3-1 아군2·새끼6·엄마거미1·독안개 거미2")
 	if not initial_ready:
 		main.queue_free()
 		await process_frame
@@ -4045,10 +4047,10 @@ func _test_spawned_portrait_input() -> void:
 		await process_frame
 		await process_frame
 		var visible_bar: Rect2 = scroll.get_global_rect().intersection(hud.order_bar.get_global_rect())
-		_check((hud.get("_portraits") as Dictionary).size() == 7 and hud.order_bar.size.x > scroll.size.x
+		_check((hud.get("_portraits") as Dictionary).size() == 11 and hud.order_bar.size.x > scroll.size.x
 			and scroll.get_h_scroll_bar().is_visible_in_tree() and visible_bar.has_area()
 			and not visible_bar.intersects((hud.get_node("UnitDetails") as Control).get_global_rect()),
-			"%s: 3-1 시작 초상7개가 넘쳐도 보이는 턴 순서 바는 정보 패널과 겹치지 않고 가로 스크롤" % size)
+			"%s: 3-1 시작 초상11개가 넘쳐도 보이는 턴 순서 바는 정보 패널과 겹치지 않고 가로 스크롤" % size)
 		# #255: 바와 정보 패널 사이 구분선. 넘친 쪽 끝의 흐림은 엔진 스크롤 힌트가 그린다.
 		var divider: Control = hud.get_node("OrderDivider") as Control
 		_check(scroll.scroll_hint_mode == ScrollContainer.SCROLL_HINT_MODE_BOTTOM_AND_RIGHT
@@ -4092,7 +4094,7 @@ func _test_spawned_portrait_input() -> void:
 	var ai: CombatEnemyAi = battle.get("enemy_ai") as CombatEnemyAi
 	for step: int in range(200):
 		var actor: CombatUnit = turns.current_unit
-		if actor.is_ally and units.size() >= 13:
+		if actor.is_ally and units.size() >= 15:
 			break
 		if not actor.is_ally:
 			units[0].reaction_left = 0
@@ -4103,19 +4105,19 @@ func _test_spawned_portrait_input() -> void:
 	for frame: int in range(4):
 		await process_frame
 	var fixture_failures: int = failures
-	_check(units.size() == 13 and turns.round_number == 6 and turns.current_unit == units[1],
-		"실제3-1 AI가 새끼6마리를 생성한 뒤 궁수 턴에서 누적 초상 입력 검사")
+	_check(units.size() == 15 and turns.current_unit == units[1],
+		"실제3-1 AI가 새끼 4마리(상한 10마리까지)를 생성한 뒤 궁수 턴에서 누적 초상 입력 검사")
 	var portraits: Dictionary = hud.get("_portraits")
 	var spawned: Array[CombatUnit] = []
 	for unit: CombatUnit in units:
 		if unit not in initial_units:
 			spawned.append(unit)
-	_check(spawn_events[0] == 6 and spawned.size() == 6
+	_check(spawn_events[0] == 4 and spawned.size() == 4
 		and spawned.all(func(unit: CombatUnit) -> bool:
 			return not unit.is_ally and unit.kind == CombatUnit.Kind.SPIDERLING),
-		"소환 전제조건: 소환 로그6건과 실제 새 개체6개 일치")
-	_check(portraits.size() == 13 and units.all(func(unit: CombatUnit) -> bool: return portraits.has(unit)),
-		"소환 전제조건: 살아 있는 각 유닛과 초상13개 일치")
+		"소환 전제조건: 소환 로그4건과 실제 새 개체4개 일치(새끼 거미 상한 10)")
+	_check(portraits.size() == 15 and units.all(func(unit: CombatUnit) -> bool: return portraits.has(unit)),
+		"소환 전제조건: 살아 있는 각 유닛과 초상15개 일치")
 	if failures != fixture_failures:
 		main.queue_free()
 		await process_frame
