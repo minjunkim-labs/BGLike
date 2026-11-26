@@ -31,7 +31,7 @@ func _check(condition: bool, message: String) -> void:
 
 
 func _run() -> void:
-	create_timer(180.0 if manual else 30.0).timeout.connect(func() -> void:
+	create_timer(180.0 if manual else 45.0, true, false, true).timeout.connect(func() -> void:
 		if not finished:
 			push_error("Combat feedback watchdog expired")
 			quit(1))
@@ -112,6 +112,7 @@ func _run() -> void:
 	await _test_skill_effects()
 	await _test_status_effects()
 	await _test_down_effect()
+	await _test_last_kill_slowmo()
 	monitoring = false
 	if observer != null:
 		_check(observer.last_error == OK and observer.frame_count > 0, "Forward+ 원본 프레임 저장")
@@ -494,15 +495,169 @@ func _test_down_effect() -> void:
 	_check(seen[0] and not last.visible and _sprites(effects).size() == 1 and _ghosts(effects).size() == 1,
 		"incapacitate 한 번으로 효과가 생기고 유닛은 숨겨진다")
 	_check(actions.is_over() and actions.is_victory() and battle.get("_victory_waiting")
+		and battle.get("_last_kill_slowmo") and absf(Engine.time_scale - 0.2) < 0.001
 		and not hud.get_node("Result").visible and hud.end_button.disabled,
-		"마지막 적 처치 직후에는 사라짐 애니메이션과 여운 동안 승리 결과 창을 열지 않고 입력을 잠근다(#728)")
-	var down_finished: bool = await _wait_for(func() -> bool: return effects.get_child_count() == 0, 1.5)
-	_check(down_finished and battle.get("_victory_waiting") and not hud.get_node("Result").visible,
-		"사라짐 애니메이션이 끝난 직후에도 추가 여운(0.4초) 동안은 아직 승리 창을 열지 않는다(#728)")
+		"마지막 적 처치 직후에는 슬로우모션(0.2배속)과 사라짐 애니메이션·여운 동안 승리 결과 창을 열지 않고 입력을 잠근다(#728, #799)")
+	var down_finished: bool = await _wait_for(func() -> bool: return effects.get_child_count() == 0, 2.5)
+	_check(down_finished and battle.get("_victory_waiting") and not battle.get("_last_kill_slowmo")
+		and absf(Engine.time_scale - 1.0) < 0.001 and not hud.get_node("Result").visible,
+		"사라짐 애니메이션이 끝난 직후에도 추가 여운(0.4초) 동안은 평소 속도로 돌아온 채 아직 승리 창을 열지 않는다(#728, #799)")
 	var victory_shown: bool = await _wait_for(func() -> bool:
-		return not battle.get("_victory_waiting") and hud.get_node("Result").visible, 1.0)
+		return not battle.get("_victory_waiting") and hud.get_node("Result").visible, 1.5)
 	_check(victory_shown and hud.result_label.text == "승리" and not (battle.get("progress") as CombatActProgress).rewards.is_empty(),
 		"사라짐 애니메이션과 승리 여운이 끝난 뒤 승리 결과 창이 열리고 보상은 한 번만 기록된다(#728)")
+	battle.set_process(false)
+	actions.dice = saved_dice
+
+
+## #799: 마지막 적 처치 슬로우모션. 나오는 경우(화상 틱·절대성공 공격·동시 처치·적 턴 4배속 우선)와 나오지 않는 경우를 검증한다.
+func _test_last_kill_slowmo() -> void:
+	var actions: CombatActions = battle.get("actions") as CombatActions
+	var hud: CombatTurnHud = battle.get_node("UI/TurnHud") as CombatTurnHud
+	var saved_dice: CombatDice = actions.dice
+	actions.dice = CombatDice.new()
+	actions.dice.seed = 799
+	# 1. 나오지 않는 경우: 마지막이 아닌 적 처치, 아군 전투 불능(일부·전멸), 이어하기 재실행 중 처치.
+	(battle.get("progress") as CombatActProgress).stage_index = 0
+	battle.set_process(false)
+	battle.call("_start_stage", true)
+	battle.call("start_battle")
+	var units: Array[CombatUnit] = battle.get("units")
+	var allies: Array[CombatUnit] = units.filter(func(u: CombatUnit) -> bool: return u.is_ally)
+	var enemies: Array[CombatUnit] = units.filter(func(u: CombatUnit) -> bool: return not u.is_ally)
+	ScriptedDice.arrange_turns(turns, units, allies)
+	battle.set_process(true)
+	_check(enemies.size() >= 2 and allies.size() >= 2, "슬로우모션 시험 전제조건: 아군 2명 이상, 적 2명 이상")
+	actions.incapacitate(enemies[0])
+	await process_frame
+	_check(not battle.get("_last_kill_slowmo") and not battle.get("_victory_waiting")
+		and absf(Engine.time_scale - 1.0) < 0.001,
+		"마지막이 아닌 적 처치에는 슬로우모션이 나오지 않는다(#799)")
+	actions.incapacitate(allies[0])
+	await process_frame
+	_check(not battle.get("_last_kill_slowmo") and absf(Engine.time_scale - 1.0) < 0.001,
+		"아군 한 명의 전투 불능에는 슬로우모션이 나오지 않는다(#799)")
+	for ally: CombatUnit in allies:
+		if ally.hit_points > 0:
+			actions.incapacitate(ally)
+	await process_frame
+	_check(actions.is_over() and not actions.is_victory() and not battle.get("_last_kill_slowmo")
+		and absf(Engine.time_scale - 1.0) < 0.001,
+		"아군 전멸(패배)에는 슬로우모션이 나오지 않는다(#799)")
+
+	# 이어하기 재실행 중에는 슬로우모션이 나오지 않는다.
+	battle.set_process(false)
+	battle.call("_start_stage", true)
+	battle.call("start_battle")
+	units = battle.get("units")
+	ScriptedDice.arrange_turns(turns, units, units.filter(func(u: CombatUnit) -> bool: return u.is_ally))
+	battle.set_process(true)
+	battle.set("_replay_actions", 1)
+	battle.set("_turn_actions", 0)
+	for unit: CombatUnit in units:
+		if not unit.is_ally:
+			actions.incapacitate(unit)
+	await process_frame
+	_check(actions.is_over() and actions.is_victory() and not battle.get("_last_kill_slowmo")
+		and absf(Engine.time_scale - 1.0) < 0.001,
+		"이어하기 재실행 중 마지막 적 처치에는 슬로우모션이 나오지 않는다(#799)")
+	battle.set("_replay_actions", 0)
+
+	# 2. 동시 처치: 둘 이상이 같은 순간에 쓰러져도 슬로우모션은 한 번만 시작한다.
+	battle.set_process(false)
+	battle.call("_start_stage", true)
+	battle.call("start_battle")
+	units = battle.get("units")
+	ScriptedDice.arrange_turns(turns, units, units.filter(func(u: CombatUnit) -> bool: return u.is_ally))
+	battle.set_process(true)
+	enemies = units.filter(func(u: CombatUnit) -> bool: return not u.is_ally)
+	var before_rev: int = int(battle.get("_victory_revision"))
+	for enemy: CombatUnit in enemies:
+		enemy.hit_points = 0
+	for enemy: CombatUnit in enemies:
+		actions.incapacitate(enemy)
+	await process_frame
+	_check(battle.get("_last_kill_slowmo") and absf(Engine.time_scale - 0.2) < 0.001
+		and int(battle.get("_victory_revision")) == before_rev + 1,
+		"같은 순간에 마지막 적이 둘 이상 쓰러져도 슬로우모션은 한 번만 시작한다(#799)")
+	battle.call("_cancel_victory_wait")
+	_check(not battle.get("_last_kill_slowmo") and absf(Engine.time_scale - 1.0) < 0.001,
+		"승리 대기 취소 시 슬로우모션과 배속을 즉시 복구한다(#799)")
+
+	# 3. 공격이 아닌 처치(적 턴 시작 화상 틱) + 적 턴 4배속 충돌 처리 및 1.0초 후 복귀.
+	battle.set_process(false)
+	battle.call("_start_stage", true)
+	battle.call("start_battle")
+	units = battle.get("units")
+	allies = units.filter(func(u: CombatUnit) -> bool: return u.is_ally)
+	enemies = units.filter(func(u: CombatUnit) -> bool: return not u.is_ally)
+	ScriptedDice.arrange_turns(turns, units, allies)
+	for index: int in range(1, enemies.size()):
+		enemies[index].hit_points = 0
+	var burn_enemy: CombatUnit = enemies[0]
+	burn_enemy.hit_points = 1
+	actions.apply_status(allies[0], burn_enemy, "burn")
+	actions.dice = ScriptedDice.new([1], [4]).then_seeded()
+	battle.set("_enemy_turn_running", true)
+	await process_frame
+	battle.set_process(true)
+	turns.turn_started.emit(burn_enemy)
+	await process_frame
+	_check(actions.is_over() and actions.is_victory() and battle.get("_last_kill_slowmo")
+		and absf(Engine.time_scale - 0.2) < 0.001
+		and absf(float(battle.call("_desired_time_scale")) - 0.2) < 0.001
+		and not hud.get_node("Result").visible,
+		"적 턴 화상 틱으로 마지막 적이 쓰러져도 4배속 대신 0.2배속 슬로우모션이 나오고 결과 창을 숨긴다(#799)")
+	await create_timer(0.5, false, false, true).timeout
+	_check(battle.get("_last_kill_slowmo") and absf(Engine.time_scale - 0.2) < 0.001,
+		"슬로우모션 중간(0.5초)에는 0.2배속을 유지한다(#799)")
+	var slowmo_ended: bool = await _wait_for(func() -> bool: return not battle.get("_last_kill_slowmo"), 2.0)
+	_check(slowmo_ended and absf(Engine.time_scale - 1.0) < 0.001,
+		"슬로우모션은 1.0초 뒤 끝나고 1.0배속으로 돌아온다(#799)")
+	battle.set("_enemy_turn_running", false)
+	var burn_victory: bool = await _wait_for(func() -> bool:
+		return not battle.get("_victory_waiting") and hud.get_node("Result").visible, 2.0)
+	_check(burn_victory and hud.result_label.text == "승리" and absf(Engine.time_scale - 1.0) < 0.001,
+		"화상 처치 슬로우모션 종료 뒤 평소 속도와 승리 결과 화면으로 돌아온다(#799)")
+
+	# 4. 절대성공 공격으로 마지막 적 처치: 굴림 연출(#488)은 1.0배속 그대로이고, 처치 뒤에 슬로우모션이 나온다.
+	battle.set_process(false)
+	battle.call("_start_stage", true)
+	battle.call("start_battle")
+	units = battle.get("units")
+	allies = units.filter(func(u: CombatUnit) -> bool: return u.is_ally)
+	enemies = units.filter(func(u: CombatUnit) -> bool: return not u.is_ally)
+	var warrior: CombatUnit = allies[0]
+	var target: CombatUnit = enemies[0]
+	for index: int in range(1, enemies.size()):
+		enemies[index].hit_points = 0
+	warrior.cell = Vector2i(4, 4)
+	target.cell = Vector2i(5, 4)
+	target.hit_points = 1
+	target.reaction_left = 0
+	ScriptedDice.arrange_turns(turns, units, [warrior, allies[1], target])
+	battle.set_process(true)
+	actions.dice = ScriptedDice.new([20, 1], ScriptedDice.attack_sides(warrior) + ScriptedDice.damage_sides(warrior)).then_seeded()
+	battle.call("_update_turn_ui")
+	var dice_view: CombatDiceRollView = battle.get_node("UI/DiceRollView") as CombatDiceRollView
+	var roll_scale_seen: Array[float] = []
+	var attack_done: Array[bool] = [false]
+	var run_attack: Callable = func() -> void:
+		await actions.attack(warrior, target)
+		attack_done[0] = true
+	run_attack.call()
+	await _wait_for(func() -> bool:
+		if dice_view.visible and target.hit_points > 0:
+			roll_scale_seen.append(Engine.time_scale)
+		return attack_done[0], 4.0)
+	_check(not roll_scale_seen.is_empty() and roll_scale_seen.all(func(s: float) -> bool: return absf(s - 1.0) < 0.001),
+		"절대성공 굴림 연출 중에는 평소 속도(1.0배속)를 유지한다(#488, #799)")
+	_check(target.hit_points == 0 and battle.get("_last_kill_slowmo") and absf(Engine.time_scale - 0.2) < 0.001,
+		"절대성공 굴림과 피해가 끝나 마지막 적이 쓰러진 뒤에 0.2배속 슬로우모션이 나온다(#799)")
+	var abs_victory: bool = await _wait_for(func() -> bool:
+		return not battle.get("_victory_waiting") and hud.get_node("Result").visible, 3.0)
+	_check(abs_victory and not battle.get("_last_kill_slowmo") and absf(Engine.time_scale - 1.0) < 0.001,
+		"절대성공 마지막 처치 슬로우모션 뒤 평소 속도와 승리 결과 화면으로 돌아온다(#799)")
 	battle.set_process(false)
 	actions.dice = saved_dice
 
@@ -632,7 +787,7 @@ func _wait_for(predicate: Callable, seconds: float) -> bool:
 	while Time.get_ticks_msec() < deadline:
 		if predicate.call():
 			return true
-		await create_timer(0.02).timeout
+		await create_timer(0.02, true, false, true).timeout
 	return false
 
 

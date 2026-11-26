@@ -4,6 +4,12 @@ extends Node2D
 const ENEMY_PAUSE_TIME: float = 0.35
 ## 적 턴에 Space를 누르고 있는 동안의 시간 배율. 규칙이 아니라 표시 속도다.
 const ENEMY_FAST_SPEED: float = 4.0
+## 마지막 적 처치 슬로우모션 길이(실제 초, #799). 일시정지 메뉴를 열면 함께 멈춘다.
+const LAST_KILL_SLOWMO_DURATION: float = 1.0
+## 한 프레임 지연으로 슬로우모션 전체가 건너뛰어지지 않도록 한 프레임에 줄이는 최대 실제 시간(초, #799).
+const LAST_KILL_SLOWMO_MAX_STEP: float = 0.1
+## 마지막 적 처치 슬로우모션 배율(#799). 적 턴 4배속보다 우선해 0.2배속으로 고정한다.
+const LAST_KILL_SLOWMO_SCALE: float = 0.2
 ## 마지막 적 처치 시 전투 불능(사라짐) 애니메이션이 끝난 뒤 승리 화면을 띄우기 전 기다리는 게임 시간(초, #728).
 const VICTORY_DELAY: float = 0.4
 
@@ -45,6 +51,9 @@ var waiting_for_start: bool = true
 var _turn_tile_unit: CombatUnit
 ## 마지막 적 처치 시 사라짐 애니메이션과 승리 여운을 기다리는 중인지(#728).
 var _victory_waiting: bool = false
+## 마지막 적 처치 슬로우모션이 진행 중인지(#799).
+var _last_kill_slowmo: bool = false
+var _last_kill_slowmo_left: float = 0.0
 var _victory_revision: int = 0
 var staging: HBoxContainer
 var start_button: Button
@@ -131,7 +140,8 @@ func _ready() -> void:
 
 
 func _on_victory_downed(unit: CombatUnit) -> void:
-	if is_processing() and not unit.is_ally and actions.is_over() and actions.is_victory():
+	if (is_processing() and not _victory_waiting and not unit.is_ally
+			and actions.is_over() and actions.is_victory()):
 		_begin_victory_wait()
 
 
@@ -359,16 +369,33 @@ func _finish_preparation() -> void:
 	_start_stage(progress.starts_act())
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _last_kill_slowmo:
+		var unscaled_delta: float = delta / Engine.time_scale if Engine.time_scale > 0.0 else delta
+		_last_kill_slowmo_left = maxf(0.0, _last_kill_slowmo_left - minf(unscaled_delta, LAST_KILL_SLOWMO_MAX_STEP))
+		if _last_kill_slowmo_left <= 0.0:
+			_last_kill_slowmo = false
 	if _save_pending and GameSave.autosave and _can_save():
 		_autosave(combat_state())
-	# 반응 확인 창은 가속과 관계없이 보통 속도로 선택을 기다린다.
-	Engine.time_scale = ENEMY_FAST_SPEED if (_enemy_turn_running and not hud.reaction_dialog.visible
-		and Input.is_key_pressed(KEY_SPACE)) else 1.0
+	_sync_time_scale()
 	var actor: CombatUnit = turns.current_unit
 	if (not waiting_for_start and actor != null and not actor.is_ally and not actions.busy
 		and not actions.is_over() and not _enemy_turn_running):
 		_play_enemy_turn(actor)
+
+
+func _desired_time_scale() -> float:
+	if _last_kill_slowmo:
+		return LAST_KILL_SLOWMO_SCALE
+	# 반응 확인 창과 전투 종료·승리 대기 중에는 가속하지 않고 보통 속도로 둔다.
+	if (_enemy_turn_running and not actions.is_over() and not _victory_waiting
+			and not hud.reaction_dialog.visible and Input.is_key_pressed(KEY_SPACE)):
+		return ENEMY_FAST_SPEED
+	return 1.0
+
+
+func _sync_time_scale() -> void:
+	Engine.time_scale = _desired_time_scale()
 
 
 func _play_enemy_turn(actor: CombatUnit) -> void:
@@ -855,12 +882,23 @@ func _sync_party_level() -> void:
 		unit.dice_level = progress.level
 
 
-## 마지막 적 처치 시 사라짐 애니메이션과 짧은 여운을 기다린 뒤 승리 화면과 승리곡을 연다(#728).
+## 마지막 적 처치 시 슬로우모션(#799)과 사라짐 애니메이션·짧은 여운(#728)을 기다린 뒤 승리 화면과 승리곡을 연다.
 func _begin_victory_wait() -> void:
 	_victory_revision += 1
 	var revision: int = _victory_revision
 	_victory_waiting = true
-	await get_tree().create_timer(CombatHitEffects.down_duration() + VICTORY_DELAY, false).timeout
+	_last_kill_slowmo = true
+	_last_kill_slowmo_left = LAST_KILL_SLOWMO_DURATION
+	_sync_time_scale()
+	var victory_timer: SceneTreeTimer = get_tree().create_timer(
+		CombatHitEffects.down_duration() + VICTORY_DELAY, false)
+	while _last_kill_slowmo and is_inside_tree() and revision == _victory_revision:
+		await get_tree().process_frame
+	if not is_inside_tree() or revision != _victory_revision:
+		return
+	_sync_time_scale()
+	if victory_timer.time_left > 0.0:
+		await victory_timer.timeout
 	if not is_inside_tree() or revision != _victory_revision:
 		return
 	_victory_waiting = false
@@ -870,6 +908,9 @@ func _begin_victory_wait() -> void:
 func _cancel_victory_wait() -> void:
 	_victory_revision += 1
 	_victory_waiting = false
+	_last_kill_slowmo = false
+	_last_kill_slowmo_left = 0.0
+	_sync_time_scale()
 
 
 ## 화면에 맞는 배경음을 고른다(#629). 정비·보상 확인은 차분한 곡, 끝난 전투는 승리·패배 곡(승리 연출 대기 중에는 전투 곡 유지, #728), 그 밖은 전투 곡이다.
