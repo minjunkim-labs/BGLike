@@ -147,7 +147,7 @@ class DocLinkTests(unittest.TestCase):
         self.assertEqual(self.problems(), ["docs/a.md:1: 링크 대상이 없음: c.md?plain=1"])
 
     def test_folder_name_ending_in_docs_is_not_a_docs_path(self):
-        self.write("tool.json", '{".claude/skills/grill-with-docs/SKILL.md": 1, "x": "../docs/gone.md"}\n')
+        self.write("tool.json", '{".claude/skills/grill-with-docs/SKILL.md": 1, "a.docs/SKILL.md": 2, "x": "../docs/gone.md"}\n')
         self.assertEqual(self.problems(), ["tool.json:1: docs 경로가 없음: docs/gone.md"])
 
     def test_docs_path_inside_an_external_url_is_not_a_local_reference(self):

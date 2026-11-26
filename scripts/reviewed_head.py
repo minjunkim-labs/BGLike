@@ -34,8 +34,12 @@ def queued(ref):
 
 
 def reviewed_head(body):
-    """The SHA on the last 「리뷰한 head:」 or v1 「리뷰한 head와 되돌리기:」 line, or None. Later rounds come last."""
-    lines = re.findall(r"^리뷰한 head(?:와 되돌리기)?:(.*)$", (body or "").replace("\r\n", "\n"), re.M)
+    """The SHA on the last 「리뷰한 head:」 line, else the last v1 「리뷰한 head와 되돌리기:」 line, or None.
+
+    v2 review-report keeps a trailing v1-only paragraph, so a stale v1 SHA can come after the new v2 field.
+    """
+    body = (body or "").replace("\r\n", "\n")
+    lines = re.findall(r"^리뷰한 head:(.*)$", body, re.M) or re.findall(r"^리뷰한 head와 되돌리기:(.*)$", body, re.M)
     match = re.match(r"\s*`?([0-9a-f]{40})\b", lines[-1]) if lines else None
     return match.group(1) if match else None
 
