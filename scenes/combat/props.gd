@@ -310,7 +310,7 @@ func _roll_rock_stun(actor: CombatUnit, target: CombatUnit) -> void:
 	var saved: CombatChecks.RollResult = CombatChecks.saving_throw(sides,
 		target.get_defense_bonus(), ROCK_STUN_DC, CombatActionRules.save_mode(target, ability), host.dice,
 		target.get_ability_modifier(ability))
-	host._show_roll_in_background(CombatDiceRoll.save(target, sides, saved, saved.added(), tr("DC"), ROCK_STUN_DC))
+	host._show_roll_in_background(CombatDiceRoll.save(target, sides, saved, saved.added(), tr("DC"), ROCK_STUN_DC, ability))
 	var stunned: bool = not saved.success and host.apply_status(actor, target, "stun")
 	var rock_reason: String = host._save_reason(target, ability)
 	host.logged.emit(tr("%s %s 내성%s %d 대 DC %d") % [target.get_display_name(), CombatUnit.ability_name(ability),

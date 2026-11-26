@@ -55,6 +55,9 @@ const ART_STATES: Array[String] = ["rolling", "success", "failure", "absolute_su
 const TEXTURE_SCALE: float = 0.5
 const DIE_SIZE: float = 24.0
 const DIE_SPACING: float = 4.0
+## 능력치 아이콘 표시 크기(48 원본의 0.25배 = 12 논리px)와 주사위와의 간격(#795).
+const ABILITY_ICON_SIZE: float = float(CombatUnit.ABILITY_ICON_SIZE)
+const ABILITY_ICON_GAP: float = 3.0
 ## 주사위 줄(24) 아래에 판정 단어 줄(12)을 둔 패널. 머리 위에서는 아랫변이 머리 점이다.
 const WORD_ROW_Y: float = 24.0
 const WORD_ROW_HEIGHT: float = 12.0
@@ -365,10 +368,11 @@ static func panel_origin(head: Vector2, panel: Vector2, screen: Rect2) -> Vector
 	return (head - Vector2(panel.x * 0.5, panel.y)).round()
 
 
-## 화면 안에 있어야 하는 폭. 기준값·합계 글자와 배경 패널 여백(#727)은 주사위 묶음 양옆으로 패널 밖까지 나가므로 그 폭을 더한다.
-static func footprint(dice_count: int) -> Vector2:
+## 화면 안에 있어야 하는 폭. 기준값·합계 글자와 배경 패널 여백(#727), 능력치 아이콘(#795)은 주사위 묶음 양옆으로 패널 밖까지 나가므로 그 폭을 더한다.
+static func footprint(dice_count: int, has_ability: bool = false) -> Vector2:
 	var group: float = dice_count * DIE_SIZE + maxi(0, dice_count - 1) * DIE_SPACING
-	return Vector2(maxf(PANEL_SIZE.x, group + 2.0 * (SIDE_LABEL_GAP + SIDE_LABEL_WIDTH)) + 2.0 * BACKDROP_PAD.x,
+	var extra_left: float = (ABILITY_ICON_SIZE + ABILITY_ICON_GAP) if has_ability else 0.0
+	return Vector2(maxf(PANEL_SIZE.x, group + 2.0 * (SIDE_LABEL_GAP + SIDE_LABEL_WIDTH + extra_left)) + 2.0 * BACKDROP_PAD.x,
 		PANEL_SIZE.y + 2.0 * BACKDROP_PAD.y)
 
 
@@ -545,7 +549,7 @@ func _update_layout() -> void:
 		return
 	_head = _head_point()
 	var screen: Rect2 = get_viewport_rect()
-	_offscreen = is_offscreen(_head, footprint(_dice.size()), screen, BACKDROP_PAD.y)
+	_offscreen = is_offscreen(_head, footprint(_dice.size(), _ability_icon() != null), screen, BACKDROP_PAD.y)
 	_origin = panel_origin(Vector2.INF if _offscreen else _head, PANEL_SIZE, screen)
 	_backdrop_rect = _layout_elements(_origin - Vector2(0.0, _lift))
 	if not _offscreen and not screen.encloses(Rect2(_backdrop_rect.position + Vector2(0.0, _lift), _backdrop_rect.size)):
@@ -557,6 +561,17 @@ func _update_layout() -> void:
 	_pointer.queue_redraw()
 
 
+func _ability_icon() -> Texture2D:
+	if _roll == null or _roll.ability < 0 or _roll.ability >= CombatUnit.ABILITY_IDS.size():
+		return null
+	return CombatUnit.ability_icon(_roll.ability as CombatUnit.Ability)
+
+
+func _ability_icon_rect(base: Vector2, left: float) -> Rect2:
+	return Rect2(Vector2(roundf(left - ABILITY_ICON_GAP - ABILITY_ICON_SIZE),
+		roundf(base.y + (DIE_SIZE - ABILITY_ICON_SIZE) * 0.5)), Vector2.ONE * ABILITY_ICON_SIZE)
+
+
 func _layout_elements(base: Vector2) -> Rect2:
 	var group: float = _group_width()
 	var left: float = base.x + PANEL_SIZE.x * 0.5 - group * 0.5
@@ -566,8 +581,10 @@ func _layout_elements(base: Vector2) -> Rect2:
 	if _settled:
 		total_row = _surface_row(rows)
 	var total_y: float = base.y + total_row * TEXTURE_SCALE
+	var target_right: float = (_ability_icon_rect(base, left).position.x - SIDE_LABEL_GAP) if _ability_icon() != null \
+		else (left - SIDE_LABEL_GAP)
 	_target.size.x = SIDE_LABEL_WIDTH
-	_target.position = Vector2(roundf(left - SIDE_LABEL_GAP - SIDE_LABEL_WIDTH),
+	_target.position = Vector2(roundf(target_right - SIDE_LABEL_WIDTH),
 		roundf(line_y - _target.size.y * 0.5))
 	_total.position = Vector2(roundf(left + group + SIDE_LABEL_GAP), roundf(total_y - _total.size.y * 0.5))
 	var word: String = _summary_text
@@ -581,7 +598,7 @@ func _layout_elements(base: Vector2) -> Rect2:
 	_summary.size = Vector2(summary_box_width, summary_box_height)
 	_summary.position = Vector2(roundf(base.x + (PANEL_SIZE.x - summary_box_width) * 0.5),
 		roundf(base.y + WORD_ROW_Y + (WORD_ROW_HEIGHT - summary_box_height) * 0.5))
-	return _compute_backdrop_rect(base, left, group, summary_width)
+	return _compute_backdrop_rect(base, left, group, summary_width, target_right)
 
 
 func _summary_text_width() -> float:
@@ -595,8 +612,8 @@ func _summary_text_width() -> float:
 	return width
 
 
-## 주사위·기준값·합계·판정 단어 줄을 모두 감싸는 배경 패널 사각형(정수 논리 px, #727).
-func _compute_backdrop_rect(base: Vector2, left: float, group: float, summary_width: float) -> Rect2:
+## 주사위·능력치 아이콘·기준값·합계·판정 단어 줄을 모두 감싸는 배경 패널 사각형(정수 논리 px, #727, #795).
+func _compute_backdrop_rect(base: Vector2, left: float, group: float, summary_width: float, target_right: float) -> Rect2:
 	var font: Font = get_theme_default_font()
 	var target_width: float = _target.get_minimum_size().x
 	if font != null and not _target.text.is_empty():
@@ -606,7 +623,7 @@ func _compute_backdrop_rect(base: Vector2, left: float, group: float, summary_wi
 	if font != null and not _total.text.is_empty():
 		total_width = maxf(total_width, font.get_string_size(_total.text, HORIZONTAL_ALIGNMENT_LEFT, -1,
 			get_theme_default_font_size()).x)
-	var min_x: float = left - SIDE_LABEL_GAP - target_width
+	var min_x: float = target_right - target_width
 	var max_x: float = left + group + SIDE_LABEL_GAP + total_width
 	var min_y: float = minf(base.y, minf(_target.position.y, _total.position.y))
 	var max_y: float = maxf(base.y + DIE_SIZE, maxf(_target.position.y + _target.size.y, _total.position.y + _total.size.y))
@@ -648,6 +665,9 @@ func _draw_art() -> void:
 	var mask: Texture2D = liquid_texture(_roll.sides)
 	var base: Vector2 = _origin - Vector2(0.0, _lift)
 	var left: float = base.x + PANEL_SIZE.x * 0.5 - _group_width() * 0.5
+	var icon: Texture2D = _ability_icon()
+	if icon != null:
+		_art.draw_texture_rect(icon, _ability_icon_rect(base, left), false)
 	var offset: Vector2 = Vector2(die_offset(_roll.result, _tumbling, _last_step, _settled_elapsed))
 	for index: int in range(_dice.size()):
 		var die: Die = _dice[index]

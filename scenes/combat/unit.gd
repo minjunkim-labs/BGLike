@@ -12,8 +12,16 @@ const ALLY_ABILITY_SIDES: Array[Array] = [[20, 8, 6, 4, 8, 12], [6, 12, 20, 6, 4
 ## 아이템 `stats`의 능력치 가감 키. 순서는 Ability와 같다.
 const ABILITY_MODIFIER_KEYS: Array[String] = ["strength_modifier", "agility_modifier", "finesse_modifier",
 	"intelligence_modifier", "will_modifier", "health_modifier"]
+## 능력치 6종의 영문 파일 식별자와 대표 색(docs/design/combat/ability.md 3-4, #795). 순서는 Ability와 같다.
+const ABILITY_IDS: Array[String] = ["strength", "agility", "finesse", "intelligence", "will", "health"]
+const ABILITY_COLORS: Array[Color] = [Color("ef4444"), Color("10b981"), Color("fbbf24"),
+	Color("06b6d4"), Color("8b5cf6"), Color("ea0cc1")]
+const ABILITY_ICON_DIR: String = "res://scenes/combat/art/icons/abilities/"
+## 능력치 아이콘 표시 크기(48×48 원본의 0.25배 = 12 논리px, #795).
+const ABILITY_ICON_SIZE: int = 12
 static var ABILITY_NAMES: Array[String] = [TranslationServer.tr("힘"), TranslationServer.tr("민첩"),
 	TranslationServer.tr("솜씨"), TranslationServer.tr("지능"), TranslationServer.tr("의지"), TranslationServer.tr("건강")]
+static var _ability_icons: Dictionary[int, Texture2D] = {}
 
 const MOVEMENT_PER_TURN: int = 8
 ## 전사의 이동력. 궁수와 이동력을 정하지 않은 몬스터는 MOVEMENT_PER_TURN이다.
@@ -201,6 +209,21 @@ static func ability_name(ability: Ability) -> String:
 	return ABILITY_NAMES[ability]
 
 
+static func ability_color(ability: Ability) -> Color:
+	return ABILITY_COLORS[ability]
+
+
+static func ability_icon_path(ability: Ability) -> String:
+	return "%s%s.png" % [ABILITY_ICON_DIR, ABILITY_IDS[ability]]
+
+
+static func ability_icon(ability: Ability) -> Texture2D:
+	var key: int = int(ability)
+	if not _ability_icons.has(key):
+		_ability_icons[key] = load(ability_icon_path(ability)) as Texture2D
+	return _ability_icons[key]
+
+
 ## 굴림값과 표준값에 더하는 값. 주사위 레벨(파티 공통)과 장비의 능력치 가감 합이다 (주사위 육성 4장, 아이템 기획 폼 3장).
 func get_ability_modifier(ability: Ability) -> int:
 	return dice_level + get_equipment_modifier(ability)
@@ -211,11 +234,16 @@ func get_equipment_modifier(ability: Ability) -> int:
 	return _equipment_stat(ABILITY_MODIFIER_KEYS[ability])
 
 
+## 능력치 이름 없는 주사위 표기(`d20`, `d20+2`, `d20 +1`, #795).
+static func ability_die_text(unit: CombatUnit, ability: Ability) -> String:
+	var modifier: int = unit.get_equipment_modifier(ability)
+	return "d%d%s%s" % [unit.get_ability_sides(ability), "" if modifier == 0 else "%+d" % modifier,
+		"" if unit.dice_level == 0 else " %+d" % unit.dice_level]
+
+
 ## 패널·호버의 능력치 표기. 장비 가감이 있으면 `힘 d20+2`처럼, 레벨이 있으면 `힘 d20 +1`처럼 덧붙인다 (#456, #477).
 static func ability_text(unit: CombatUnit, ability: Ability) -> String:
-	var modifier: int = unit.get_equipment_modifier(ability)
-	return "%s d%d%s%s" % [ABILITY_NAMES[ability], unit.get_ability_sides(ability), "" if modifier == 0 else "%+d" % modifier,
-		"" if unit.dice_level == 0 else " %+d" % unit.dice_level]
+	return "%s %s" % [ABILITY_NAMES[ability], ability_die_text(unit, ability)]
 
 
 ## 이름 뒤에 주격 조사 이/가를 붙인다. 숫자로 끝나면 읽은 소리를 따른다(1000 → 천 → 이, #415).

@@ -120,6 +120,10 @@ func _test_panel_placement() -> void:
 		and not CombatDiceRollView.is_offscreen(Vector2(320, 200), CombatDiceRollView.footprint(2), screen,
 			CombatDiceRollView.BACKDROP_PAD.y),
 		"화면 밖 판정은 기준값·합계 글자 폭과 배경 패널 상하좌우 여백까지 본다")
+	_check(CombatDiceRollView.footprint(1, true).x > CombatDiceRollView.footprint(1).x
+		and CombatDiceRollView.footprint(1, true).x == CombatDiceRollView.footprint(1).x + 2.0 * (
+			CombatDiceRollView.ABILITY_ICON_SIZE + CombatDiceRollView.ABILITY_ICON_GAP),
+		"능력치 아이콘이 있는 굴림은 footprint 폭에 12 논리px 아이콘과 간격을 반영한다(#795)")
 	_check(screen.encloses(spot) and spot.position == spot.position.round()
 		and absf(spot.get_center().x - 320.0) <= 0.5
 		and spot.position.y >= 86.0 and not spot.intersects(Rect2(256, 128, 128, 64)),
@@ -554,6 +558,7 @@ func _test_scene() -> void:
 	await create_timer(CombatDiceRollView.HOLD_TIME + 0.1).timeout
 
 	_test_grades()
+	await _test_ability_icon_in_view(view, ally, play)
 	await _test_overhead(battle, view, ally, play)
 	await _test_animation(view, ally, play, finished)
 	await _test_overlapping_rolls(actions, view, ally, play, finished)
@@ -561,6 +566,32 @@ func _test_scene() -> void:
 	_check(actions.dice.state == dice_state, "화면 연출은 게임의 주사위 순서와 저장 상태를 바꾸지 않는다")
 	current_scene.queue_free()
 	await process_frame
+
+
+## 능력치 아이콘(#795): CombatDiceRoll.ability가 지정되면 주사위 왼쪽에 12 논리px 아이콘을 두고,
+## 기준값 글자를 아이콘 왼쪽으로 밀며 배경 패널 안에 감싼다. 주사위의 성공·실패 색은 그대로다.
+func _test_ability_icon_in_view(view: CombatDiceRollView, ally: CombatUnit, play: Callable) -> void:
+	var target: Label = view.get_node("Target") as Label
+	var total: Label = view.get_node("Total") as Label
+	var art: Control = view.get_node("Art") as Control
+	var roll: CombatDiceRoll = CombatDiceRoll.hit(ally, 20, _result([14], 14, 17, true), 3, 12, CombatUnit.Ability.STRENGTH)
+	_check(roll.ability == CombatUnit.Ability.STRENGTH, "CombatDiceRoll.ability 필드에 능력치가 저장된다")
+	play.call(roll)
+	await create_timer(CombatDiceRollView.TUMBLE_TIME + 0.1).timeout
+	var origin: Vector2 = view.get("_origin")
+	var left: float = origin.x + CombatDiceRollView.PANEL_SIZE.x * 0.5 - CombatDiceRollView.DIE_SIZE * 0.5
+	var icon_rect: Rect2 = view.call("_ability_icon_rect", origin, left) as Rect2
+	var backdrop_rect: Rect2 = view.get("_backdrop_rect")
+	_check(view.call("_ability_icon") == CombatUnit.ability_icon(CombatUnit.Ability.STRENGTH)
+		and art.material == CombatDiceRollView.PIXEL_ART
+		and icon_rect.size == Vector2(12, 12)
+		and icon_rect.end.x <= left - CombatDiceRollView.ABILITY_ICON_GAP + 0.5
+		and target.position.x + target.size.x <= icon_rect.position.x - CombatDiceRollView.SIDE_LABEL_GAP + 0.5
+		and backdrop_rect.encloses(icon_rect)
+		and total.get_theme_color("font_color") == CombatDiceRollView.SUCCESS_COLOR,
+		"주사위 왼쪽에 12 논리px 능력치 아이콘을 두고 배경 안에 감싸며 주사위 성공 색을 유지한다: icon=%s backdrop=%s" % [
+			icon_rect, backdrop_rect])
+	await create_timer(CombatDiceRollView.HOLD_TIME + 0.1).timeout
 
 
 ## 머리 위 표시: 유닛과 카메라를 따라가고, 유닛이 화면 밖이면 정해진 자리에 이름과 함께 보이며, 돌아오면 머리 위로 간다.

@@ -277,7 +277,8 @@ func _on_turn_started(unit: CombatUnit) -> void:
 			var saved: CombatChecks.RollResult = CombatChecks.saving_throw(health_sides, unit.get_defense_bonus(),
 				effect.dc, CombatActionRules.save_mode(unit, CombatUnit.Ability.HEALTH), dice, unit.get_ability_modifier(CombatUnit.Ability.HEALTH))
 			# 턴 시작 처리는 중간에 멈추지 않는다. 확정된 굴림을 보이기만 하고 기다리지 않는다.
-			_show_roll_in_background(CombatDiceRoll.save(unit, health_sides, saved, saved.added(), tr("DC"), effect.dc))
+			_show_roll_in_background(CombatDiceRoll.save(unit, health_sides, saved, saved.added(), tr("DC"), effect.dc,
+				CombatUnit.Ability.HEALTH))
 			var poison_reason: String = _save_reason(unit, CombatUnit.Ability.HEALTH)
 			logged.emit(tr("%s 독 제거(건강 내성%s): 건강 d%d %s %+d = %d / DC %d · %s") % [unit.get_display_name(),
 				"" if poison_reason.is_empty() else " · " + poison_reason, health_sides, str(saved.rolls), saved.added(), saved.total, effect.dc, _save_outcome(saved)])
@@ -1690,7 +1691,7 @@ func _roll_hit(actor: CombatUnit, target: CombatUnit, action: String) -> bool:
 	var armor_class: int = grid.armor_class(target)
 	last_attack = CombatChecks.hit_roll(attack_sides, hit_bonus, armor_class, preview.mode, dice,
 		actor.get_ability_modifier(attack_ability))
-	await _show_roll(CombatDiceRoll.hit(actor, attack_sides, last_attack, last_attack.added(), armor_class))
+	await _show_roll(CombatDiceRoll.hit(actor, attack_sides, last_attack, last_attack.added(), armor_class, attack_ability))
 	# 연출 중 일시정지 메뉴에서 전투를 포기할 수 있다. 끝난 전투에 결과를 적용하지 않는다.
 	if actor.hit_points <= 0 or target.hit_points <= 0 or is_over():
 		return false
@@ -1753,8 +1754,9 @@ func _roll_save(target: CombatUnit, action: String, dc: int) -> CombatChecks.Rol
 
 ## 방금 굴린 내성굴림(last_save)을 화면용 굴림으로 만든다. 기준값은 DC다.
 func _save_roll(target: CombatUnit, action: String, dc: int) -> CombatDiceRoll:
-	var sides: int = target.get_ability_sides(CombatActionRules.SAVE_ABILITIES[action])
-	return CombatDiceRoll.save(target, sides, last_save, last_save.added(), tr("DC"), dc)
+	var ability: CombatUnit.Ability = CombatActionRules.SAVE_ABILITIES[action]
+	var sides: int = target.get_ability_sides(ability)
+	return CombatDiceRoll.save(target, sides, last_save, last_save.added(), tr("DC"), dc, ability)
 
 
 ## 피해는 명중·내성 굴림과 무관하게 피해 능력치 주사위를 새로 굴린다 (능력치 기획서 4-9).

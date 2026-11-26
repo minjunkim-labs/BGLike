@@ -25,6 +25,7 @@ func _check(condition: bool, message: String) -> void:
 
 func _run() -> void:
 	_test_skill_icons()
+	_test_ability_icons()
 	_test_cost_marks()
 	var scene: PackedScene = load("res://scenes/game.tscn") as PackedScene
 	var main: Node = scene.instantiate()
@@ -60,6 +61,7 @@ func _run() -> void:
 	_test_height_edges()
 	_test_unit_art()
 	_test_warrior()
+	await _test_ability_panel_tooltips()
 	await _test_cost_slot_and_face()
 	_test_passive_slot_and_number_colors()
 	await _test_resources()
@@ -868,18 +870,89 @@ func _test_passive_slot_and_number_colors() -> void:
 	unit.shield_points = saved_shield
 
 
+func _test_ability_icons() -> void:
+	const OUTLINE: Color = Color("120d16")
+	var expected_colors: Array[Color] = [
+		Color("ef4444"), Color("10b981"), Color("fbbf24"),
+		Color("06b6d4"), Color("8b5cf6"), Color("ea0cc1"),
+	]
+	for index: int in range(CombatUnit.ABILITY_IDS.size()):
+		var ability: CombatUnit.Ability = index as CombatUnit.Ability
+		var color: Color = CombatUnit.ability_color(ability)
+		_check(color == expected_colors[index], "능력치 대표 색 일치: %s" % CombatUnit.ABILITY_IDS[index])
+		var texture: Texture2D = CombatUnit.ability_icon(ability)
+		_check(texture != null and texture.get_size() == Vector2(48, 48),
+			"능력치 아이콘은 48×48 원본이다: %s" % CombatUnit.ABILITY_IDS[index])
+		var image: Image = texture.get_image()
+		var filled: int = 0
+		var has_rep_color: bool = false
+		for y: int in range(image.get_height()):
+			for x: int in range(image.get_width()):
+				var pixel: Color = image.get_pixel(x, y)
+				if pixel.a > 0.5 and not pixel.is_equal_approx(OUTLINE):
+					filled += 1
+					if pixel.is_equal_approx(color):
+						has_rep_color = true
+		_check(float(filled) / float(48 * 48) >= 0.15 and has_rep_color,
+			"능력치 아이콘 칠 비율(15% 이상)과 대표 색 포함: %s (filled=%d)" % [CombatUnit.ABILITY_IDS[index], filled])
+
+
+func _check_ability_slots(expected_dice: Array[String], label: String) -> void:
+	var slots: Array = hud.get("_ability_slots")
+	_check(slots.size() == 6 and hud.ability_grid.columns == 3, "%s: 3열 2줄 능력치 칸 6개" % label)
+	for index: int in range(expected_dice.size()):
+		var slot: CombatTurnHud.AbilitySlot = slots[index] as CombatTurnHud.AbilitySlot
+		var ability: CombatUnit.Ability = index as CombatUnit.Ability
+		_check(slot.die_label.get_parsed_text() == expected_dice[index],
+			"%s [%s]: %s != %s" % [label, CombatUnit.ABILITY_IDS[index], slot.die_label.get_parsed_text(), expected_dice[index]])
+		_check(slot.icon_rect.texture == CombatUnit.ability_icon(ability)
+			and slot.icon_rect.custom_minimum_size == Vector2(12, 12)
+			and slot.icon_rect.material == preload("res://scenes/combat/art/pixel_art.tres"),
+			"%s [%s]: 12 논리px 아이콘과 sharp bilinear 셰이더" % [label, CombatUnit.ABILITY_IDS[index]])
+		_check(slot.tooltip_text == "%s · %s" % [CombatUnit.ability_name(ability), expected_dice[index]],
+			"%s [%s]: 호버 문구에 능력치 이름과 주사위: %s" % [label, CombatUnit.ABILITY_IDS[index], slot.tooltip_text])
+
+
+func _test_ability_panel_tooltips() -> void:
+	var slots: Array = hud.get("_ability_slots")
+	var saved_weapon: Dictionary = units[0].weapon
+	units[0].weapon = {"stats": {"strength_modifier": 2}}
+	hud.show_unit(units[0])
+	await process_frame
+	var str_slot: CombatTurnHud.AbilitySlot = slots[CombatUnit.Ability.STRENGTH] as CombatTurnHud.AbilitySlot
+	_check(str_slot.die_label.get_parsed_text() == "d20+2"
+		and str_slot.die_label.text.contains("[color=#70c76d]+2[/color]")
+		and str_slot.tooltip_text == "힘 · d20+2",
+		"장비 가감이 있는 능력치 칸은 [아이콘] d20+2(초록)과 호버 '힘 · d20+2'를 표시한다: " + str_slot.tooltip_text)
+	var tooltip: HoverTooltip = hud.get("_tooltip") as HoverTooltip
+	str_slot.grab_focus()
+	tooltip.call("_update")
+	_check(tooltip.visible and (tooltip.get("_label") as RichTextLabel).get_parsed_text() == "힘 · d20+2"
+		and hud.get_viewport_rect().encloses(tooltip.get_global_rect()),
+		"능력치 칸 포커스 시 화면 안에 능력치 이름 호버 설명을 띄운다")
+	str_slot.release_focus()
+	tooltip.hide()
+	var unit_panel: Control = hud.get_node("UnitDetails/UnitPanel") as Control
+	var combat_log: Control = hud.get_node("CombatLog") as Control
+	_check(not unit_panel.get_global_rect().intersects(combat_log.get_global_rect())
+		and unit_panel.size.x <= 204.0,
+		"능력치 아이콘 적용 뒤에도 유닛 패널 폭(204 이하)과 로그 비겹침을 유지한다: size=%s" % unit_panel.size)
+	units[0].weapon = saved_weapon
+	hud.show_unit(units[0])
+	await process_frame
+
+
 func _test_warrior() -> void:
 	var buttons: Dictionary = hud.get("_actions")
 	var badges: Dictionary = hud.get("_badges")
 	var costs: Dictionary = hud.get("_costs")
 	var titles: Array = hud.get("_titles")
-	_check(hud.unit_label.text == "아군 전사" and "HP 11 / 11" in hud.resource_label.get_parsed_text()
-		and "AC 6" in hud.resource_label.get_parsed_text() and "팔랑크스 AC +1" in hud.status_text()
+	_check(hud.unit_label.text == "아군 전사" and "HP 11 / 11" in hud.vitals_label.text
+		and "AC 6" in hud.vitals_label.text and "팔랑크스 AC +1" in hud.status_text()
 		and "이동" not in hud.resource_label.get_parsed_text(),
 		"현재 유닛 정보: HP·AC(민첩 d8 표준값 5 + 인접 궁수 팔랑크스 1) 표시, 남은 이동 제거")
 	_check(hud.health_bar.value == 11, "현재 유닛 HP 바")
-	for ability: String in ["힘 d20", "민첩 d8", "솜씨 d6", "지능 d4", "의지 d8", "건강 d12"]:
-		_check(ability in hud.resource_label.get_parsed_text(), "현재 전사의 능력치 주사위 표시: " + ability)
+	_check_ability_slots(["d20", "d8", "d6", "d4", "d8", "d12"], "현재 전사의 능력치 주사위 표시")
 	_check("자연" not in hud.resource_label.get_parsed_text() and "정신" not in hud.resource_label.get_parsed_text(),
 		"폐지한 능력치는 유닛 정보에서 제거")
 	var warrior_actions: Array[String] = ["attack", "sweep", "cross_slash", "battle_cry", "holy_veil", "steel_charge",
@@ -994,8 +1067,7 @@ func _test_archer_and_enemy() -> void:
 	var before: int = units[0].movement_left
 	hud.unit_selected.emit(units[1])
 	_check(turns.current_unit == units[1] and units[0].movement_left == before, "초상 전환 자원 유지")
-	for ability: String in ["힘 d6", "민첩 d12", "솜씨 d20", "지능 d6", "의지 d4", "건강 d8"]:
-		_check(ability in hud.resource_label.get_parsed_text(), "궁수로 전환하면 능력치 주사위 갱신: " + ability)
+	_check_ability_slots(["d6", "d12", "d20", "d6", "d4", "d8"], "궁수로 전환하면 능력치 주사위 갱신")
 	# 궁수의 반응 칸에는 반사신경만 있다. 기회 공격·반격은 없다.
 	_check((containers[2] as PanelContainer).visible and (buttons["reflex"] as Button).visible
 		and not (buttons["opportunity"] as Button).visible and not (buttons["counter"] as Button).visible,
@@ -1012,7 +1084,7 @@ func _test_archer_and_enemy() -> void:
 	_check(not (buttons["cross_slash"] as Button).visible and not (buttons["disengage"] as Button).visible,
 		"궁수 스킬만 표시")
 	_check(battle.call("preview_enemy", units[2]), "적 미리보기 연결")
-	_check(hud.unit_label.text == "풋내기 야만인" and "AC 4" in hud.resource_label.get_parsed_text(),
+	_check(hud.unit_label.text == "풋내기 야만인" and "AC 4" in hud.vitals_label.text,
 		"미리보기는 유닛 정보 자리를 사용하고 대상 AC를 표시")
 	_check((buttons["aegisal"] as Button).visible, "미리보기에도 현재 아군의 스킬 유지")
 	hud.unit_selected.emit(units[0])
@@ -2430,12 +2502,10 @@ func _test_mouse_controls_and_inspection() -> void:
 		and units[2].hit_points == 12 and (battle.get("selection") as CombatSelection).preview_target == null,
 		"적 초상을 반복 클릭해도 공격 준비·실행·조작 전환 없음")
 	_check(hud.unit_label.text == "풋내기 야만인" and hud.actor_label.text == "조작: 아군 전사"
-		and "힘 d10" in hud.resource_label.get_parsed_text() and "민첩 d6" in hud.resource_label.get_parsed_text()
-		and "솜씨 d4" in hud.resource_label.get_parsed_text() and "지능 d4" in hud.resource_label.get_parsed_text()
-		and "의지 d4" in hud.resource_label.get_parsed_text() and "건강 d4" in hud.resource_label.get_parsed_text()
 		and "자연" not in hud.resource_label.get_parsed_text() and "정신" not in hud.resource_label.get_parsed_text()
 		and "공격 +3" in hud.resource_label.get_parsed_text() and "사거리 1칸" in hud.resource_label.get_parsed_text(),
 		"정보 대상·조작 유닛을 구분하고 실제 능력치·공격 수치 표시")
+	_check_ability_slots(["d10", "d6", "d4", "d4", "d4", "d4"], "풋내기 야만인 능력치 주사위 표시")
 	_check("행동" not in hud.resource_label.get_parsed_text() and "반응" not in hud.resource_label.get_parsed_text()
 		and (hud.get("_titles") as Array)[0].text == "행동 ●"
 		and (hud.get("_actions") as Dictionary).has("cross_slash"), "적 정보에도 현재 아군 자원 마크 유지")
@@ -2449,7 +2519,8 @@ func _test_mouse_controls_and_inspection() -> void:
 	_check(units[0].action_left == 0, "필드 적 두 번째 좌클릭은 공격 확정")
 	await _click((portraits[units[1]] as Button).get_global_rect().get_center())
 	_check(turns.current_unit == units[1] and units[0].action_left == 0
-		and "힘 d6" in hud.resource_label.get_parsed_text() and "사거리 6칸" in hud.resource_label.get_parsed_text(),
+		and (hud.get("_ability_slots")[0] as CombatTurnHud.AbilitySlot).die_label.get_parsed_text() == "d6"
+		and "사거리 6칸" in hud.resource_label.get_parsed_text(),
 		"조작 가능한 아군 초상은 정보와 조작 전환, 기존 자원 유지")
 	turns.select_unit(units[0])
 	turns.end_turn()

@@ -20,6 +20,48 @@ class SpaceBlocker extends Node:
 		if event is InputEventKey and event.keycode == KEY_SPACE:
 			get_viewport().set_input_as_handled()
 
+
+## 유닛 패널 능력치 1칸. 12 논리px 아이콘과 주사위를 보이고 호버·포커스로 능력치 이름을 띄운다(#795).
+class AbilitySlot extends HBoxContainer:
+	var ability: CombatUnit.Ability
+	var icon_rect: TextureRect = TextureRect.new()
+	var die_label: RichTextLabel = RichTextLabel.new()
+
+	func _init(slot_ability: CombatUnit.Ability) -> void:
+		ability = slot_ability
+		name = "Ability_" + CombatUnit.ABILITY_IDS[ability]
+		focus_mode = Control.FOCUS_ALL
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		add_theme_constant_override("separation", 2)
+		icon_rect.name = "Icon"
+		icon_rect.texture = CombatUnit.ability_icon(ability)
+		icon_rect.material = preload("res://scenes/combat/art/pixel_art.tres")
+		icon_rect.custom_minimum_size = Vector2(CombatUnit.ABILITY_ICON_SIZE, CombatUnit.ABILITY_ICON_SIZE)
+		icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_rect.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(icon_rect)
+		die_label.name = "Die"
+		die_label.bbcode_enabled = true
+		die_label.fit_content = true
+		die_label.scroll_active = false
+		die_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		die_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		die_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		die_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(die_label)
+		focus_entered.connect(queue_redraw)
+		focus_exited.connect(queue_redraw)
+
+	func _get_tooltip(_at_position: Vector2) -> String:
+		return ""
+
+	func _draw() -> void:
+		if has_focus():
+			draw_rect(Rect2(Vector2.ZERO, size), FOCUS_COLOR, false, 1.0)
+
 ## 확인 창 모양은 프로젝트 공용 테마에서 가져온다(#262).
 const UI_THEME: Theme = preload("res://scenes/ui_theme.tres")
 const DEFAULT_BUTTON_COLOR: Color = Color("223940")
@@ -63,6 +105,7 @@ var _containers: Array[PanelContainer] = []
 # 스킬 컨테이너 맨 왼쪽의 패시브 칸(#457). 켜짐·적용 중에만 강조한다.
 var _passives: Dictionary[String, Button] = {}
 var _passive_dots: Dictionary[String, Label] = {}
+var _ability_slots: Array[AbilitySlot] = []
 var _titles: Array[Label] = []
 var _log_lines: Array[String] = []
 var _status_buttons: Array[Button] = []
@@ -87,6 +130,8 @@ var grid: CombatGrid
 @onready var order_bar: HBoxContainer = $OrderScroll/OrderBar
 @onready var unit_label: Label = $UnitDetails/UnitPanel/Info/CurrentUnit
 @onready var actor_label: Label = $UnitDetails/UnitPanel/Info/Actor
+@onready var vitals_label: Label = $UnitDetails/UnitPanel/Info/Vitals
+@onready var ability_grid: GridContainer = $UnitDetails/UnitPanel/Info/Abilities
 @onready var resource_label: RichTextLabel = $UnitDetails/UnitPanel/Info/Resources
 @onready var status_row: HFlowContainer = $UnitDetails/UnitPanel/Info/StatusRow
 @onready var health_bar: ProgressBar = $UnitDetails/UnitPanel/Info/Health
@@ -128,6 +173,9 @@ func _ready() -> void:
 		var left: float = get_global_rect().position.x + TOOLTIP_LEFT
 		if order_bar.is_ancestor_of(target) or status_row.is_ancestor_of(target):
 			return Vector2(left, ($OrderScroll as Control).get_global_rect().end.y + TOOLTIP_GAP)
+		if ability_grid.is_ancestor_of(target):
+			var rect: Rect2 = target.get_global_rect()
+			return Vector2(rect.position.x, rect.end.y + TOOLTIP_GAP)
 		return Vector2(left, ($Skills as Control).get_global_rect().position.y - TOOLTIP_GAP - tooltip_size.y)
 	_tooltip.hidden_when = func() -> bool: return reaction_dialog.visible or $Result.visible
 	_tooltip.format = func(target: Control) -> String:
@@ -157,6 +205,7 @@ func _ready() -> void:
 	stand_button.pressed.connect(func() -> void: action_selected.emit("stand_up"))
 	add_child(stand_button)
 	restart_button.pressed.connect(func() -> void: restart_requested.emit())
+	_build_ability_slots()
 	_build_passives()
 	for index: int in range(CombatActionRules.GROUPS.size()):
 		var panel: PanelContainer = PanelContainer.new()
@@ -248,6 +297,15 @@ func _ready() -> void:
 	reaction_dialog.confirmed.connect(_finish_reaction.bind(true))
 	reaction_dialog.canceled.connect(_finish_reaction.bind(false))
 	reaction_dialog.custom_action.connect(_on_reflex_action)
+
+
+## 유닛 패널의 3열 2줄 능력치 칸 6개를 만든다(#795).
+func _build_ability_slots() -> void:
+	for index: int in range(CombatUnit.ABILITY_IDS.size()):
+		var slot: AbilitySlot = AbilitySlot.new(index as CombatUnit.Ability)
+		ability_grid.add_child(slot)
+		_tooltip.attach(slot)
+		_ability_slots.append(slot)
 
 
 ## 컨테이너 묶음(Groups)을 가로 줄로 감싸고 그 왼쪽 끝에 패시브 칸을 둔다. 버튼에는 비용 기호와 횟수 배지가 없다.
@@ -569,6 +627,8 @@ func refresh(turns: CombatTurns, has_available_action: bool) -> void:
 	if current == null:
 		round_label.text = tr("턴 종료")
 		unit_label.text = tr("유닛 없음")
+		vitals_label.text = ""
+		ability_grid.visible = false
 		resource_label.text = ""
 		_clear_status_row()
 		actor_label.text = ""
@@ -814,11 +874,17 @@ func show_unit(unit: CombatUnit) -> void:
 	health_bar.max_value = unit.get_max_hit_points()
 	health_bar.value = unit.hit_points
 	var phalanx: int = grid.phalanx_bonus(unit) if grid != null else 0
-	resource_label.text = CombatActionRules.colorize(tr("HP %d / %d   AC %d\n%s · %s · %s\n%s · %s · %s\n공격 %+d · 사거리 %d칸") % [
-		unit.hit_points, unit.get_max_hit_points(), unit.get_armor_class() + phalanx,
-		CombatUnit.ability_text(unit, CombatUnit.Ability.STRENGTH), CombatUnit.ability_text(unit, CombatUnit.Ability.AGILITY),
-		CombatUnit.ability_text(unit, CombatUnit.Ability.FINESSE), CombatUnit.ability_text(unit, CombatUnit.Ability.INTELLIGENCE),
-		CombatUnit.ability_text(unit, CombatUnit.Ability.WILL), CombatUnit.ability_text(unit, CombatUnit.Ability.HEALTH),
+	vitals_label.text = tr("HP %d / %d   AC %d") % [
+		unit.hit_points, unit.get_max_hit_points(), unit.get_armor_class() + phalanx]
+	ability_grid.visible = true
+	for index: int in range(_ability_slots.size()):
+		var ability: CombatUnit.Ability = index as CombatUnit.Ability
+		var slot: AbilitySlot = _ability_slots[index]
+		var die: String = CombatUnit.ability_die_text(unit, ability)
+		slot.die_label.text = CombatActionRules.colorize(die)
+		slot.tooltip_text = "%s · %s" % [CombatUnit.ability_name(ability), die]
+		slot.accessibility_name = CombatUnit.ability_text(unit, ability)
+	resource_label.text = CombatActionRules.colorize(tr("공격 %+d · 사거리 %d칸") % [
 		unit.get_attack_bonus(), unit.get_attack_range()])
 	_rebuild_status_row(_status_entries(unit, phalanx))
 
