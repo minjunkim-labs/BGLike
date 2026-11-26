@@ -524,7 +524,7 @@ func _test_enemy_turn_speed() -> void:
 	var fast: Dictionary = await _play_three_one_rounds(true)
 	print("3-1 적 턴 1라운드: 보통 %d ms, Space %d ms, 새끼 거미 %d마리" % [
 		normal.msec, fast.msec, normal.spiderlings])
-	_check(normal.spiderlings >= 5 and fast.state == normal.state,
+	_check(normal.spiderlings > normal.initial_spiderlings and fast.state == normal.state,
 		"Space 가속은 새끼 거미가 늘어난 3-1의 적 행동 결과를 바꾸지 않음")
 	# 프레임 처리 시간은 배율과 무관해 느린 CI에서 차이가 줄어든다.
 	_check(fast.msec * 4 < normal.msec * 3, "Space를 누르고 있으면 3-1 적 턴 시간이 4분의 3 아래로 줄어듦")
@@ -560,7 +560,11 @@ func _play_three_one_rounds(fast: bool) -> Dictionary:
 	space.physical_keycode = KEY_SPACE
 	space.pressed = fast
 	Input.parse_input_event(space)
-	var result: Dictionary = {"spiderlings": 0, "reaction_waits": false}
+	var initial_spiderlings: int = 0
+	for unit: CombatUnit in battle.get("units"):
+		if unit.kind == CombatUnit.Kind.SPIDERLING and unit.hit_points > 0:
+			initial_spiderlings += 1
+	var result: Dictionary = {"initial_spiderlings": initial_spiderlings, "spiderlings": 0, "reaction_waits": false}
 	battle.set_process(true)
 	var started: int = Time.get_ticks_msec()
 	while turns.round_number < 2 and not actions.is_over() and Time.get_ticks_msec() - started < 90000:
