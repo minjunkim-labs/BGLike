@@ -1,0 +1,18 @@
+{
+  "build": "N/A: 출시 빌드 없음. 검증용 PCK는 [Draft 절차](docs/process/ci/draft-release.md)",
+  "check": [
+    "make",
+    "repository-check"
+  ],
+  "doctor_versions": {
+    "godot": "4.7.2"
+  },
+  "setup": [
+    "make",
+    "godot-install"
+  ],
+  "test": [
+    "make",
+    "godot-check"
+  ]
+}

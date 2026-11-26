@@ -13,7 +13,9 @@
       }
     },
     "allowed_actions": {
-      "patterns_allowed": []
+      "patterns_allowed": [
+        "jdx/mise-action@*"
+      ]
     }
   },
   "observations": [

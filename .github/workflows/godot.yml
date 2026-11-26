@@ -59,6 +59,20 @@ jobs:
             fi
           fi
 
+  # repo-baseline v2: managed files, commands.json and the AGENTS.md command lines (POLICY), and the instruction budget.
+  baseline:
+    name: Baseline check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: baseline check
+        run: python3 -I .baseline/baseline.py check
+      - name: baseline budget
+        run: python3 -I .baseline/baseline.py budget
+
   smoke:
     needs: scope
     if: needs.scope.outputs.game == 'true'
@@ -70,6 +84,8 @@ jobs:
           fetch-depth: 2
           lfs: true
           persist-credentials: false
+      # Installs the toolchain .mise.toml pins; baseline.py run then runs every command under it.
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
       - name: Resolve pinned engine
         id: engine
         run: source scripts/godot_environment.sh
@@ -83,7 +99,7 @@ jobs:
       - name: Install pinned Godot
         id: godot-install
         shell: bash
-        run: make godot-install
+        run: python3 -I .baseline/baseline.py run setup
       # With the runner's 53 fonts (none Korean) visible, Godot's fallback font lookup made combat scene
       # setup several times slower (#430). Searching only the Noto CJK folder keeps real Hangul metrics and halves that time.
       # The fonts come from the Actions cache; apt runs only on a miss (a slow mirror once took 15 minutes).
@@ -115,7 +131,7 @@ jobs:
         env:
           GODOT: ${{ steps.engine.outputs.binary }}
           FONTCONFIG_FILE: ${{ runner.temp }}/fonts.conf
-        run: make godot-check
+        run: python3 -I .baseline/baseline.py run test
       - name: Record engine cache state
         if: always()
         env:
@@ -133,22 +149,23 @@ jobs:
             "${ENGINE_VERSION:-unknown}" "${CACHE_RESULT:-unknown}" "$cache_hit" \
             "${ARCHIVE_SOURCE:-unknown}" "${INSTALL_RESULT:-unknown}" >> "$GITHUB_STEP_SUMMARY"
 
-  # The one required check (repo-baseline contract). policy and scope must succeed before the gate script runs,
+  # The one required check (repo-baseline contract). policy, scope and baseline must succeed before the gate script runs,
   # so a broken ci_gate.py cannot pass them; the script then judges smoke against the selected scope.
   ci:
     name: ci
-    needs: [policy, scope, smoke]
+    needs: [policy, scope, baseline, smoke]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     env:
       POLICY_RESULT: ${{ needs.policy.result }}
       SCOPE_RESULT: ${{ needs.scope.result }}
+      BASELINE_RESULT: ${{ needs.baseline.result }}
       GAME_REQUIRED: ${{ needs.scope.outputs.game }}
       SMOKE_RESULT: ${{ needs.smoke.result }}
     steps:
-      - name: policy and scope succeeded
-        run: '[ "$POLICY_RESULT" = success ] && [ "$SCOPE_RESULT" = success ] || { echo "policy=$POLICY_RESULT scope=$SCOPE_RESULT"; exit 1; }'
+      - name: policy, scope and baseline succeeded
+        run: '[ "$POLICY_RESULT" = success ] && [ "$SCOPE_RESULT" = success ] && [ "$BASELINE_RESULT" = success ] || { echo "policy=$POLICY_RESULT scope=$SCOPE_RESULT baseline=$BASELINE_RESULT"; exit 1; }'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

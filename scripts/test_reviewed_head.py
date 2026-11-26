@@ -63,6 +63,16 @@ class ReviewedHeadTests(unittest.TestCase):
     def test_reviewed_head_accepts_backticks_and_crlf(self):
         self.assertEqual(reviewed_head(f"x\r\n리뷰한 head와 되돌리기: `{HEAD}`, 어려움 (이유)\r\n"), HEAD)
 
+    def test_reviewed_head_reads_the_v2_field_and_the_last_line_of_either_form(self):
+        other = "b" * 40
+        self.assertEqual(reviewed_head(f"리뷰한 head: {HEAD}\n등급: 쉬움\n"), HEAD)
+        self.assertEqual(reviewed_head(f"리뷰한 head와 되돌리기: {other}, 어려움\n리뷰한 head: {HEAD}\n"), HEAD)
+        self.assertIsNone(reviewed_head("리뷰한 head:\n"))
+
+    def test_v2_field_wins_over_a_stale_v1_paragraph_after_it(self):
+        old = "b" * 40
+        self.assertEqual(reviewed_head(f"리뷰한 head: {HEAD}\n등급: 어려움\n\n리뷰한 head와 되돌리기: {old}, 어려움\n"), HEAD)
+
 
 if __name__ == "__main__":
     unittest.main()
