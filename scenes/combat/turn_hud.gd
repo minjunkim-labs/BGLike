@@ -717,7 +717,7 @@ func _periodic_status_entry(unit: CombatUnit, kind_name: String) -> Dictionary:
 		heading = tr("독 %d중첩 (기간 없음)") % count
 	else:
 		heading = tr("독 %d중첩 (최대 %d턴)") % [count, max_turns]
-	return {"label": label, "tooltip": heading + "\n" + tr("내 턴 시작마다 중첩당 피해 1.\n턴 시작 건강 내성(DC %d)에 성공하면 모두 풀립니다.") % save_dc}
+	return {"label": label, "tooltip": heading + "\n" + tr("내 턴 시작마다 중첩당 피해 1.\n턴 시작 건강 내성(DC %d)에 성공하면 첫 독 중첩 1개가 풀립니다.") % save_dc}
 
 
 func _status_entries(unit: CombatUnit, phalanx: int) -> Array[Dictionary]:
@@ -787,9 +787,12 @@ func _status_entries(unit: CombatUnit, phalanx: int) -> Array[Dictionary]:
 			"tooltip": tr("산만함 %d턴\n내성굴림·명중굴림 불리.\n시전자 턴 시작마다 1턴 줄어듭니다.") % unit.distracted_turns
 		})
 	if phalanx > 0:
+		var phalanx_detail: String = tr("인접한 아군이 있어 AC +%d. 중첩 없음.") % phalanx \
+			if (CombatActionRules.belongs_to(unit, "phalanx") and not unit.is_stunned) \
+			else tr("인접한 전사 효과로 AC +%d. 중첩 없음.") % phalanx
 		entries.append({
 			"label": tr("팔랑크스 AC +%d") % phalanx,
-			"tooltip": tr("팔랑크스 AC +%d\n인접한 전사 효과로 AC +%d. 중첩 없음.\n인접에서 벗어나면 바로 사라집니다.") % [phalanx, phalanx]
+			"tooltip": tr("팔랑크스 AC +%d\n%s\n인접에서 벗어나면 바로 사라집니다.") % [phalanx, phalanx_detail]
 		})
 	return entries
 

@@ -2254,17 +2254,23 @@ func _test_unit_panel_status_hover() -> void:
 	await process_frame
 	_check(hud.status_text() == "상태: 없음" and hud.status_buttons().is_empty(),
 		"#796: 상태가 없으면 `상태: 없음`이고 호버 버튼이 없음: " + hud.status_text())
-	# 팔랑크스(인접한 기절하지 않은 전사 효과)는 기절 전 상태에서 검증한다.
+	# 팔랑크스(인접 아군이 있는 전사 본인 / 전사와 인접한 아군)는 기절 전 상태에서 각각 검증한다.
 	var ally: CombatUnit = units[0]
 	var saved_cells: Array[Vector2i] = [units[0].cell, units[1].cell]
 	units[0].cell = Vector2i(4, 9)
 	units[1].cell = Vector2i(5, 9)
 	hud.show_unit(ally)
 	await process_frame
-	var phalanx_buttons: Array[Button] = hud.status_buttons().filter(
+	var warrior_phalanx: Array[Button] = hud.status_buttons().filter(
 		func(button: Button) -> bool: return button.text == "팔랑크스 AC +1")
-	_check(phalanx_buttons.size() == 1 and "인접한 전사 효과로 AC +1" in phalanx_buttons[0].tooltip_text,
-		"#796: 팔랑크스 AC +1 호버 문구 확인")
+	_check(warrior_phalanx.size() == 1 and "인접한 아군이 있어 AC +1" in warrior_phalanx[0].tooltip_text,
+		"#796: 전사 본인 팔랑크스 AC +1 호버 문구 확인")
+	hud.show_unit(units[1])
+	await process_frame
+	var archer_phalanx: Array[Button] = hud.status_buttons().filter(
+		func(button: Button) -> bool: return button.text == "팔랑크스 AC +1")
+	_check(archer_phalanx.size() == 1 and "인접한 전사 효과로 AC +1" in archer_phalanx[0].tooltip_text,
+		"#796: 인접 아군 팔랑크스 AC +1 호버 문구 확인")
 	# 나머지 아군·적 상태 11종(기절·넘어짐·은신·화상·독·만능팔 대기·애기살·기회 공격 면제·방어막·전투의 함성·산만함)을 검사한다.
 	ally.is_stunned = true
 	ally.fallen = true
@@ -2272,6 +2278,7 @@ func _test_unit_panel_status_hover() -> void:
 	ally.status_effects.append(CombatUnit.StatusEffect.new("burn", units[2], 2))
 	ally.status_effects.append(CombatUnit.StatusEffect.new("burn", units[2], 1))
 	ally.status_effects.append(CombatUnit.StatusEffect.new("poison", units[2], 4, 4))
+	ally.status_effects.append(CombatUnit.StatusEffect.new("poison", units[2], 3, 4))
 	ally.pull_cooldown = 1
 	ally.aegisal_left = 2
 	ally.disengaged = true
@@ -2290,7 +2297,7 @@ func _test_unit_panel_status_hover() -> void:
 		"넘어짐": "민첩 내성굴림이 불리",
 		"은신": "대상으로 지정할 수 없습니다",
 		"화상2": "중첩당 1d4 피해",
-		"독1": "건강 내성(DC 4)",
+		"독2": "건강 내성(DC 4)에 성공하면 첫 독 중첩 1개가 풀립니다",
 		"만능팔 대기": "만능팔을 쓸 수 없습니다",
 		"애기살 2발": "피해 주사위를 2번",
 		"기회 공격 면제": "이번 턴 묶음이 끝나면 풀립니다",
