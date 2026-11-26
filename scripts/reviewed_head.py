@@ -2,7 +2,8 @@
 
 Run it in a `merge_group` job. GitHub names the queue branch `gh-readonly-queue/<base>/pr-<N>-<SHA>`; that
 SHA is the queue base, not the PR head, so only N is read from it. The script reads the PR head and body with
-`gh api` and compares the head with the last 「리뷰한 head와 되돌리기:」 line in the body (prompts/review.md 「보고」).
+`gh api` and compares the head with the last 「리뷰한 head:」 line in the body (v2 review-report), or the v1
+「리뷰한 head와 되돌리기:」 line.
 A push to a queued PR removes it from the queue, so the head read here is the head that was queued.
 
 This catches a head that moved after review. It is not a security boundary: anyone who can edit the PR body
@@ -33,8 +34,8 @@ def queued(ref):
 
 
 def reviewed_head(body):
-    """The SHA on the last 「리뷰한 head와 되돌리기:」 line, or None. Later review rounds come last."""
-    lines = re.findall(r"^리뷰한 head와 되돌리기:(.*)$", (body or "").replace("\r\n", "\n"), re.M)
+    """The SHA on the last 「리뷰한 head:」 or v1 「리뷰한 head와 되돌리기:」 line, or None. Later rounds come last."""
+    lines = re.findall(r"^리뷰한 head(?:와 되돌리기)?:(.*)$", (body or "").replace("\r\n", "\n"), re.M)
     match = re.match(r"\s*`?([0-9a-f]{40})\b", lines[-1]) if lines else None
     return match.group(1) if match else None
 
@@ -69,7 +70,7 @@ def verdict(ref, head, author_email, body, changed, manifest_text):
         return None
     review = reviewed_head(body)
     if not review:
-        return f"PR #{number} 본문 Review 칸에 「리뷰한 head와 되돌리기:」 SHA가 없습니다."
+        return f"PR #{number} 본문 Review 칸에 「리뷰한 head:」 SHA가 없습니다."
     if review != head:
         return (f"PR #{number}을 큐에 넣은 head {head[:12]}가 리뷰한 head {review[:12]}와 다릅니다. "
                 "새 head를 다른 컨텍스트가 다시 리뷰하고 그 SHA로 큐에 넣습니다.")
