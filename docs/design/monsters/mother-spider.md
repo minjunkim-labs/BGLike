@@ -75,4 +75,4 @@
 
 | 항목 | 임시 규칙 | 결정 Issue |
 |---|---|---|
-| 3-1 증식 구조 재설계 | 동시 생존 새끼 거미 상한 10마리([#702](https://github.com/minjunkim-labs/BGLike/issues/702))를 M7 확정 규칙으로 두고 추가 재설계는 보류 | 12/23~12/24 최종 튜닝([#205](https://github.com/minjunkim-labs/BGLike/issues/205)에서 이관) |
+| 3-1 증식 구조 재설계 | 동시 생존 새끼 거미 상한 10마리([#702](https://github.com/minjunkim-labs/BGLike/issues/702))를 M7 확정 규칙으로 두고 추가 재설계는 보류 | 12/23~12/24 최종 튜닝 때 체감 확인 후 필요 시 별도 Issue([#205](https://github.com/minjunkim-labs/BGLike/issues/205)에서 이관) |
