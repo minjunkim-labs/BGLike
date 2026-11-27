@@ -202,11 +202,11 @@ python3 scenes/combat/art/sources/icons/draw_ability_icons.py scenes/combat/art/
 
 | 항목 | 값 |
 |---|---|
-| 타격 섬광 | 48×48 RGBA 3프레임을 0.5배(24 논리px)로 12fps에 한 번(0.25초) 재생한다. `pixel_art.tres`(#264)로 그린다. 위치는 화살이 닿는 점과 같은 대상 몸통, 나무 상자는 상자 칸 표면 −8 |
-| 히트스톱 | 명중 순간 대상 그림 애니메이션을 0.05초(60fps의 3프레임) 멈춘다. 그 뒤 공격자 반대쪽으로 2 논리px 밀렸다(0.04초) 돌아온다(0.04초). 그림만 옮기고 `position`·칸은 바꾸지 않는다. 전투 진행은 기다리지 않는다 |
-| 빗나감 잔상 | 새 그림 없이 대상의 현재 프레임을 복제해 알파 0.55 푸른 기로, 공격자 반대쪽 3 논리px에 놓고 0.25초에 걸쳐 사라지게 한다. 대상은 움직이지 않는다 |
+| 타격 섬광 | 48×48 RGBA 3프레임을 0.5배(24 논리px)로 기본 12fps(전체 속도 0.7 기준 8.4fps, 약 0.357초)에 한 번 재생한다. `pixel_art.tres`(#264)로 그린다. 위치는 화살이 닿는 점과 같은 대상 몸통, 나무 상자는 상자 칸 표면 −8 |
+| 히트스톱 | 명중 순간 대상 그림 애니메이션을 기본 0.05초(0.7 기준 약 0.071초) 멈춘다. 그 뒤 공격자 반대쪽으로 2 논리px 밀렸다(기본 0.04초, 0.7 기준 약 0.057초) 돌아온다(기본 0.04초). 그림만 옮기고 `position`·칸은 바꾸지 않는다. 전투 진행은 기다리지 않는다 |
+| 빗나감 잔상 | 새 그림 없이 대상의 현재 프레임을 복제해 알파 0.55 푸른 기로, 공격자 반대쪽 3 논리px에 놓고 기본 0.25초(0.7 기준 약 0.357초)에 걸쳐 사라지게 한다. 대상은 움직이지 않는다 |
 | 대상 | 피해를 주는 모든 공격: 기본·스킬·반응·내성굴림형·장난스러운 화살·폭죽 화살·나무 상자. 화상 틱·낙하·밀치기·반사신경 회피는 공격이 아니라 섬광으로 보이지 않는다(화상·독 틱은 [상태 이상 효과](#상태-이상-효과-635)로 보인다) |
-| 빠르게 보기 | 모든 시간이 게임 시간(`Engine.time_scale`을 따른다)이라 4배속에서 1/4로 준다. 히트스톱 0.05초는 사실상 사라진다 |
+| 빠르게 보기 | 모든 시간이 `CombatPresentation.PRESENTATION_SPEED`([#811](https://github.com/minjunkim-labs/BGLike/issues/811), 플레이 확정 전 시작값 0.7)와 게임 시간(`Engine.time_scale`)을 따른다. 4배속에서 1/4로 줄어 히트스톱은 사실상 사라진다 |
 | 건너뛰기 | 건너뛰기 기능은 아직 없다. 이어하기 재실행(`_replaying()`)에서는 피해 팝업·피격음과 같이 이펙트를 만들지 않는다. 건너뛰기를 만들면 `battle.gd`의 같은 조건에 더한다 |
 
 섬광은 `scenes/combat/art/sources/effects/draw_hit_effects.py`가 코드로 픽셀을 찍는다. 표준 라이브러리만 써서 Pillow 없이 같은 명령이 같은 파일을 만든다(`hit_effect_generation.json`에 규격 기록). 팔레트는 `draw_item_icons.py`의 값이다. 안티앨리어싱이 없고 알파는 0 또는 255다.
@@ -221,7 +221,7 @@ python3 scenes/combat/art/sources/effects/draw_hit_effects.py scenes/combat/art/
 
 2026-11-18, [#634](https://github.com/minjunkim-labs/BGLike/issues/634): 스킬 효과는 pixelfx(MIT)와 직접 찍기를 비교해 **직접 찍기**로 만들었다. pixelfx는 30fps·88×84 같은 큰 캔버스에 반투명과 별도 빛 층을 쓰고 Node로 시트를 뽑는다. 이 게임의 12fps·유닛과 같은 64px 캔버스·알파 0/255·게임 팔레트로 줄이면 원래 장점이 대부분 사라지고, Node 의존과 출처 화면 수정이 따라온다. 직접 찍으면 표준 라이브러리 Python 하나로 같은 바이트를 다시 만들 수 있고 외부 권리 조건이 없다. 외부 자산을 쓰지 않으므로 Credits와 번역 파일은 바꾸지 않았다. 대안인 pixelfx 효과 가공은 택하지 않았다. 나중에 다시 비교할 수 있다.
 
-모든 효과는 `pixel_art.tres`로 0.5배, 12fps로 한 번 재생한다. 시간이 게임 시간이라 4배속에서 1/4로 줄고, 이어하기 재실행(`_replaying()`)에서는 만들지 않는다. 전투 진행은 기다리지 않는다.
+모든 효과는 `pixel_art.tres`로 0.5배, `CombatPresentation.fps(12.0)`(기본 12fps, 0.7 기준 8.4fps, [#811](https://github.com/minjunkim-labs/BGLike/issues/811))로 한 번 재생한다. 시간이 `PRESENTATION_SPEED`와 게임 시간을 따라 4배속에서 1/4로 줄고, 이어하기 재실행(`_replaying()`)에서는 만들지 않는다. 전투 진행은 기다리지 않는다.
 
 | 효과 | 언제 | 캔버스·프레임 | 놓는 곳 |
 |---|---|---|---|
@@ -242,7 +242,7 @@ python3 scenes/combat/art/sources/effects/draw_skill_effects.py scenes/combat/ar
 
 [#635](https://github.com/minjunkim-labs/BGLike/issues/635), 2026-11-18: 상태 이상 효과(불꽃·거품·별)는 [스킬 효과](#스킬-효과-634)와 같이 직접 찍어 만든다. 12fps·64px 캔버스·알파 0/255·게임 팔레트를 쓰고, 표준 라이브러리 Python 하나로 같은 바이트를 다시 만든다. 외부 자산을 쓰지 않으므로 `THIRD_PARTY_NOTICES.md`, Credits, 번역 파일은 바꾸지 않았다.
 
-모든 효과는 `pixel_art.tres`로 0.5배, 12fps로 한 번 재생한다. 시간이 게임 시간이라 4배속에서 1/4로 줄고, 이어하기 재실행(`_replaying()`)에서는 만들지 않는다. 전투 진행은 기다리지 않는다. 표시용 신호 셋을 `CombatActions`에 더했다. 판정은 바꾸지 않는다.
+모든 효과는 `pixel_art.tres`로 0.5배, `CombatPresentation.fps(12.0)`(기본 12fps, 0.7 기준 8.4fps, [#811](https://github.com/minjunkim-labs/BGLike/issues/811))로 한 번 재생한다. 시간이 `PRESENTATION_SPEED`와 게임 시간을 따라 4배속에서 1/4로 줄고, 이어하기 재실행(`_replaying()`)에서는 만들지 않는다. 전투 진행은 기다리지 않는다. 표시용 신호 셋을 `CombatActions`에 더했다. 판정은 바꾸지 않는다.
 
 | 효과 | 언제(신호) | 캔버스·프레임 | 놓는 곳 |
 |---|---|---|---|
@@ -277,7 +277,7 @@ python3 scenes/combat/art/sources/effects/draw_status_effects.py scenes/combat/a
 | 쓰러짐 잔상 | 유닛의 현재 프레임을 복제한 `Sprite2D`. 0.06초 흰빛으로 번쩍인 뒤 4 논리px 가라앉으며 알파 0으로 사라진다(`DOWN_FADE_TIME` 0.35초) | 유닛이 선 칸의 표면(밀림·낙하·낙사 뒤에는 착지 칸) 발 기준. 유닛과 따로 서므로 유닛이 숨거나 해제돼도 혼자 끝난다 |
 | 폭발 `down` | 64×64, 4프레임. 발치에서 퍼지는 먼지 고리와 위로 흩어지는 조각 | 스킬·상태 효과와 같은 발 기준점 (32, 56). 잔상과 같은 칸 표면 |
 
-- 시간: 쓰러짐은 유닛 자신의 연출이라 유닛 공격 fps와 같이 [전체 속도 계수](combat/combat-ui.md#5-전체-속도)(`CombatPresentation.PRESENTATION_SPEED`)를 곱한다. 폭발은 `CombatPresentation.fps(12.0)`(0.7에서 8.4fps, 4프레임 약 0.48초), 잔상 사라짐은 `CombatPresentation.duration(DOWN_FADE_TIME)`(0.5초)이다. 플레이로 고칠 곳은 계수와 `DOWN_FADE_TIME`이다. 이미 있는 타격 섬광·스킬·상태 효과의 12fps와 계수 값은 바꾸지 않았다.
+- 시간: 쓰러짐은 유닛 자신의 연출이라 유닛 공격 fps와 같이 [전체 속도 계수](combat/combat-ui.md#5-전체-속도)(`CombatPresentation.PRESENTATION_SPEED`)를 곱한다. 폭발은 `CombatPresentation.fps(12.0)`(0.7에서 8.4fps, 4프레임 약 0.48초), 잔상 사라짐은 `CombatPresentation.duration(DOWN_FADE_TIME)`(0.5초)이다. 플레이로 고칠 곳은 계수와 `DOWN_FADE_TIME`이다. 타격 섬광·히트스톱·피격 밀림·빗나감 잔상·스킬·상태 효과도 같은 계수를 따른다([#811](https://github.com/minjunkim-labs/BGLike/issues/811), 흰빛 번쩍임 `DOWN_FLASH_TIME` 0.06초만 고정).
 - 게임 시간이라 4배속에서는 그 위에 1/4로 준다. 이어하기 재실행(`_replaying()`)에서는 만들지 않는다. 일반 적 처치 때는 전투 진행을 기다리지 않으며, 마지막 적을 처치해 승리할 때만 사라짐 연출(`CombatHitEffects.down_duration()`)이 끝나고 추가 여운(`VICTORY_DELAY = 0.4`초)이 지난 뒤에 승리 결과 창과 승리곡을 연다([#728](https://github.com/minjunkim-labs/BGLike/issues/728)).
 - 같은 순간 틱으로 쓰러진 유닛에 화상·독 효과가 겹칠 수 있다([상태 이상 효과](#상태-이상-효과-635)의 남은 지적). 정리하지 않았다.
 

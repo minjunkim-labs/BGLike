@@ -280,19 +280,24 @@ func _test_hit_effects() -> void:
 			flash = child
 	_check(flash != null and flash.material == shader and absf(flash.scale.x - 0.5) < 0.001,
 		"명중하면 pixel_art 재질의 0.5배 섬광이 생긴다")
+	_check(flash != null and absf(flash.sprite_frames.get_animation_speed(&"flash") - CombatPresentation.fps(CombatHitEffects.FLASH_FPS)) < 0.001,
+		"타격 섬광 속도는 전체 속도 계수를 따른다(#811)")
 	var paused_seen: bool = false
 	var recoil_seen: float = 0.0
-	var deadline: int = Time.get_ticks_msec() + 1500
+	var hit_started: int = Time.get_ticks_msec()
+	var deadline: int = hit_started + 2000
 	while effects.get_child_count() > 0 and Time.get_ticks_msec() < deadline:
 		paused_seen = paused_seen or target.get_node("Sprite").speed_scale == 0.0
 		recoil_seen = maxf(recoil_seen, absf(target.recoil_offset.x))
 		await process_frame
-	await create_timer(0.15).timeout
+	var hit_settled: bool = await _wait_for(func() -> bool:
+		return (effects.get_child_count() == 0 and target.recoil_offset == Vector2.ZERO
+			and target.get_node("Sprite").speed_scale == 1.0), CombatPresentation.duration(0.4) + 0.5)
 	_check(paused_seen and recoil_seen > 1.0 and recoil_seen <= 2.001,
 		"히트스톱 동안 대상 그림이 멈추고 2 논리px 안으로 밀린다")
-	_check(effects.get_child_count() == 0 and target.recoil_offset == Vector2.ZERO
-		and target.position == home and target.get_node("Sprite").speed_scale == 1.0,
+	_check(hit_settled and target.position == home,
 		"끝나면 섬광이 사라지고 밀림·멈춤이 풀리며 위치는 그대로다")
+	var miss_started: int = Time.get_ticks_msec()
 	actions.struck.emit(attacker, target, target.cell, false)
 	await process_frame
 	var afterimage: Sprite2D
@@ -301,8 +306,12 @@ func _test_hit_effects() -> void:
 			afterimage = child
 	_check(afterimage != null and afterimage.material == shader and target.recoil_offset == Vector2.ZERO,
 		"빗나가면 대상은 움직이지 않고 잔상 그림이 생긴다")
-	await create_timer(0.5).timeout
-	_check(effects.get_child_count() == 0, "잔상은 0.5초 안에 사라진다")
+	var miss_deadline: int = miss_started + int((CombatPresentation.duration(CombatHitEffects.AFTERIMAGE_TIME) + 0.5) * 1000.0)
+	while effects.get_child_count() > 0 and Time.get_ticks_msec() < miss_deadline:
+		await process_frame
+	var miss_msec: int = Time.get_ticks_msec() - miss_started
+	_check(effects.get_child_count() == 0 and miss_msec >= int(CombatPresentation.duration(CombatHitEffects.AFTERIMAGE_TIME) * 1000.0 * 0.8),
+		"잔상은 전체 속도 계수에 맞춰 느려진 뒤 사라진다(#811): %dms" % miss_msec)
 	Engine.time_scale = 4.0
 	var started: int = Time.get_ticks_msec()
 	actions.struck.emit(attacker, target, target.cell, true)
@@ -311,7 +320,7 @@ func _test_hit_effects() -> void:
 		await process_frame
 	var fast_msec: int = Time.get_ticks_msec() - started
 	Engine.time_scale = 1.0
-	_check(fast_msec < 200, "4배속에서는 1배속 섬광 길이(250ms)보다 짧은 실제 시간에 끝난다: %dms" % fast_msec)
+	_check(fast_msec < 200, "4배속에서는 1배속 섬광 길이보다 짧은 실제 시간에 끝난다: %dms" % fast_msec)
 	await create_timer(0.1).timeout
 	var turn_actions: int = battle.get("_turn_actions")
 	battle.set("_turn_actions", 0)
@@ -328,8 +337,8 @@ func _test_hit_effects() -> void:
 	actions.struck.emit(attacker, temporary, temporary.cell, true)
 	await process_frame
 	temporary.free()
-	await create_timer(0.5).timeout
-	_check(effects.get_child_count() == 0, "이펙트 도중 대상이 해제되어도 정리된다")
+	var temporary_cleared: bool = await _wait_for(func() -> bool: return effects.get_child_count() == 0, CombatPresentation.duration(0.4) + 0.5)
+	_check(temporary_cleared, "이펙트 도중 대상이 해제되어도 정리된다")
 
 
 ## 상태 이상 효과(#635): 신호마다 맞는 폴더의 효과가 한 번 재생되고, 4배속에서 줄며, 이어하기 재실행에서는 없다.
@@ -357,6 +366,8 @@ func _test_status_effects() -> void:
 		var path: String = found[0].sprite_frames.get_frame_texture(&"play", 0).resource_path if found.size() == 1 else ""
 		_check(found.size() == 1 and ("/%s/" % entry[0]) in path and found[0].material == shader and absf(found[0].scale.x - 0.5) < 0.001,
 			"상태 효과 %s는 pixel_art 재질의 0.5배 효과 하나: %s" % [entry[0], path])
+		_check(found.size() == 1 and absf(found[0].sprite_frames.get_animation_speed(&"play") - CombatPresentation.fps(CombatHitEffects.FLASH_FPS)) < 0.001,
+			"상태 효과 %s 속도는 전체 속도 계수를 따른다(#811)" % entry[0])
 		var finished: bool = await _wait_for(func() -> bool: return effects.get_child_count() == 0, 1.0)
 		_check(finished, "상태 효과 %s는 한 번 재생하고 사라진다" % entry[0])
 	var map: TileMapLayer = battle.get("map")
@@ -389,7 +400,7 @@ func _test_status_effects() -> void:
 		await process_frame
 	var fast_msec: int = Time.get_ticks_msec() - started
 	Engine.time_scale = 1.0
-	_check(fast_spawned and fast_msec < 200, "4배속에서는 1배속 기절 길이(333ms)보다 짧은 실제 시간에 끝난다: %dms" % fast_msec)
+	_check(fast_spawned and fast_msec < 200, "4배속에서는 1배속 기절 길이보다 짧은 실제 시간에 끝난다: %dms" % fast_msec)
 	await create_timer(0.1).timeout
 	var turn_actions: int = battle.get("_turn_actions")
 	battle.set("_turn_actions", 0)
@@ -684,6 +695,8 @@ func _test_skill_effects() -> void:
 	var shield: Array[Node] = _sprites(effects)
 	_check(shield.size() == 1 and shield[0].material == shader and absf(shield[0].scale.x - 0.5) < 0.001,
 		"성스러운 장막은 pixel_art 재질의 0.5배 효과 하나를 만든다")
+	_check(shield.size() == 1 and absf(shield[0].sprite_frames.get_animation_speed(&"play") - CombatPresentation.fps(CombatHitEffects.FLASH_FPS)) < 0.001,
+		"스킬 효과 속도는 전체 속도 계수를 따른다(#811)")
 	await _wait_for(func() -> bool: return effects.get_child_count() == 0, 1.0)
 	_check(effects.get_child_count() == 0, "방어막 효과는 한 번 재생하고 사라진다")
 	actions.healed.emit(caster, 3)
@@ -751,7 +764,7 @@ func _test_skill_effects() -> void:
 		await process_frame
 	var fast_msec: int = Time.get_ticks_msec() - started
 	Engine.time_scale = 1.0
-	_check(fast_msec < 200, "4배속에서는 1배속 방어막 길이(333ms)보다 짧은 실제 시간에 끝난다: %dms" % fast_msec)
+	_check(fast_msec < 200, "4배속에서는 1배속 방어막 길이보다 짧은 실제 시간에 끝난다: %dms" % fast_msec)
 	await create_timer(0.1).timeout
 	var turn_actions: int = battle.get("_turn_actions")
 	battle.set("_turn_actions", 0)
@@ -769,8 +782,8 @@ func _test_skill_effects() -> void:
 	actions.healed.emit(temporary, 2)
 	await process_frame
 	temporary.free()
-	await create_timer(0.6).timeout
-	_check(effects.get_child_count() == 0, "효과 도중 유닛이 해제되어도 정리된다")
+	var skill_cleared: bool = await _wait_for(func() -> bool: return effects.get_child_count() == 0, CombatPresentation.duration(0.4) + 0.5)
+	_check(skill_cleared, "효과 도중 유닛이 해제되어도 정리된다")
 
 
 func _sprites(effects: Node) -> Array[Node]:
