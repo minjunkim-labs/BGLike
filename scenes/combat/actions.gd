@@ -114,6 +114,7 @@ func initialize(combat_units: Array[CombatUnit], combat_turns: CombatTurns) -> v
 	_clock_slots.clear()
 	turns = combat_turns
 	turns.turn_started.connect(_on_turn_started)
+	turns.stun_clears_on_turn_start = _clears_stun_on_turn_start
 	dice.randomize()
 
 
@@ -254,9 +255,7 @@ func _on_turn_started(unit: CombatUnit) -> void:
 	if unit.stealthed:
 		unit.stealthed = false
 		logged.emit(tr("%s 은신 해제") % unit.get_display_name())
-	for target: CombatUnit in units:
-		if target.stun_source == unit:
-			target.is_stunned = false
+	_clear_stun_from(unit)
 	grounds.clear_entered_for(unit)
 	_clear_burn_in_water(unit)
 	if unit.overloaded and unit.hit_points > 0 and not is_over():
@@ -322,16 +321,13 @@ func _emit_overload_burn(robot: CombatUnit) -> void:
 func _decrease_durations(unit: CombatUnit) -> void:
 	_tick_unit_effects(unit)
 	_clock_slots = _clock_slots.filter(func(slot: ClockSlot) -> bool: return _has_unit_effects(slot.caster))
-	for target: CombatUnit in units:
-		for effect: CombatUnit.StatusEffect in target.status_effects.duplicate():
-			if effect.source == unit and effect.kind != "burn" and effect.turns_left > 0:
-				effect.turns_left -= 1
-				if effect.turns_left == 0:
-					target.status_effects.erase(effect)
 
 
-## 시전자 기준 시계의 유닛 효과(성스러운 장막, 전투의 함성, 산만함, 화상)와 장판을 1턴 줄인다 (동작 유형 기획서 4-5).
+## 시전자 기준 시계의 유닛 효과(기절, 성스러운 장막, 전투의 함성, 산만함, 화상, 기간이 있는 독)와 장판을 1턴 줄인다 (동작 유형 기획서 4-5).
 func _tick_unit_effects(caster: CombatUnit) -> void:
+	# 살아 있는 시전자의 기절은 턴 시작 1단계(6-1)에서 이미 풀린다. 시전자가 쓰러졌으면 시계 슬롯이 여기서 푼다(#359).
+	if caster.hit_points <= 0:
+		_clear_stun_from(caster)
 	if caster.shield_turns > 0:
 		caster.shield_turns -= 1
 		if caster.shield_turns == 0:
@@ -356,10 +352,10 @@ func _tick_unit_effects(caster: CombatUnit) -> void:
 				calmed.append(target.get_display_name())
 	if not calmed.is_empty():
 		logged.emit(tr("산만함 만료: %s") % ", ".join(calmed))
-	# 화상 상태 이상도 시전자가 쓰러졌어도 시계 슬롯으로 줄인다(#698). 장판 만료 로그 전에 정리한다.
+	# 화상과 기간이 있는 독 상태 이상도 시전자가 쓰러졌어도 시계 슬롯으로 줄인다(#698, #359). 장판 만료 로그 전에 정리한다.
 	for target: CombatUnit in units:
 		for effect: CombatUnit.StatusEffect in target.status_effects.duplicate():
-			if effect.source == caster and effect.kind == "burn" and effect.turns_left > 0:
+			if effect.source == caster and effect.turns_left > 0:
 				effect.turns_left -= 1
 				if effect.turns_left == 0:
 					target.status_effects.erase(effect)
@@ -367,11 +363,24 @@ func _tick_unit_effects(caster: CombatUnit) -> void:
 	grounds.tick_persistent(caster)
 
 
+func _clear_stun_from(caster: CombatUnit) -> void:
+	for target: CombatUnit in units:
+		if target.stun_source == caster:
+			target.is_stunned = false
+
+
+func _clears_stun_on_turn_start(unit: CombatUnit) -> bool:
+	return (unit.is_stunned and unit.stun_source != null
+		and _clock_slots.any(func(slot: ClockSlot) -> bool:
+			return slot.anchor == unit and not slot.skip and slot.caster == unit.stun_source))
+
+
 func _has_unit_effects(caster: CombatUnit) -> bool:
 	return (units.any(func(unit: CombatUnit) -> bool:
-		return (unit.battle_cry_source == caster or unit.distracted_source == caster
+		return ((unit.hit_points > 0 and unit.is_stunned and unit.stun_source == caster)
+			or unit.battle_cry_source == caster or unit.distracted_source == caster
 			or unit.status_effects.any(func(effect: CombatUnit.StatusEffect) -> bool:
-				return effect.kind == "burn" and effect.source == caster and effect.turns_left > 0)))
+				return effect.source == caster and effect.turns_left > 0)))
 		or grounds.has_persistent_for(caster))
 
 
@@ -391,6 +400,7 @@ func apply_status(source: CombatUnit, target: CombatUnit, kind: String,
 			return false
 		target.is_stunned = true
 		target.stun_source = source
+		_clock_slots = _clock_slots.filter(func(slot: ClockSlot) -> bool: return _has_unit_effects(slot.caster))
 	else:
 		if target.get_status_count(kind) >= 3:
 			return false
@@ -469,17 +479,12 @@ func incapacitate(target: CombatUnit) -> void:
 	var revision: int = _revision
 	target.hit_points = 0
 	downed.emit(target)
+	target.is_stunned = false
 	target.status_effects.clear()
 	target.clear_unit_effects()
 	target.stealthed = false
 	_keep_clock_slot(target)
 	grounds.on_caster_incapacitated(target)
-	for unit: CombatUnit in units:
-		if unit.stun_source == target:
-			unit.is_stunned = false
-		for effect: CombatUnit.StatusEffect in unit.status_effects.duplicate():
-			if effect.source == target and effect.kind != "burn" and effect.turns_left > 0:
-				unit.status_effects.erase(effect)
 	if not _same_combat(target, revision):
 		return
 	turns.remove_unit(target)
@@ -489,7 +494,7 @@ func incapacitate(target: CombatUnit) -> void:
 
 
 ## 쓰러지는 target의 턴 자리를 시계 슬롯으로 보관하고, target 바로 뒤에 걸린 슬롯을 그다음 유닛으로 옮긴다.
-## 기절은 시전자 전투 불능에서 즉시 해제하므로 슬롯을 쓰지 않는다 (동작 유형 기획서 4-5, 8-1).
+## 기절·화상·기간 있는 독도 시전자 전투 불능 뒤 시계 슬롯으로 유지한다 (동작 유형 기획서 4-5, #698, #359).
 func _keep_clock_slot(target: CombatUnit) -> void:
 	var next: CombatUnit = turns.next_unit(target)
 	# next의 다음 턴 시작이 target 자리의 이번 순환 바로 뒤인지. next가 순서의 처음으로 돌면 다음 라운드 첫 시작이 그렇다.

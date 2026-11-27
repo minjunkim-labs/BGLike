@@ -15,6 +15,8 @@ const SAVED_LISTS: Dictionary[String, StringName] = {
 var ordered_units: Array[CombatUnit] = []
 var current_unit: CombatUnit
 var round_number: int = 0
+## 시계 슬롯으로 자기 턴 시작에 기절이 풀릴 예정인지 확인하는 훅(CombatActions.initialize가 연결).
+var stun_clears_on_turn_start: Callable
 
 var _group_start: int = 0
 var _group_end: int = -1
@@ -222,7 +224,7 @@ func remove_unit(unit: CombatUnit) -> void:
 
 func _select_next_or_advance() -> void:
 	for unit: CombatUnit in get_current_group():
-		if is_turn_finished(unit) or (unit in _deferred_units and unit.is_stunned):
+		if is_turn_finished(unit) or (unit in _deferred_units and unit.is_stunned and _keeps_stun_on_turn_start(unit)):
 			continue
 		current_unit = unit
 		_activate_current_unit()
@@ -232,7 +234,7 @@ func _select_next_or_advance() -> void:
 			return
 		_finished_units.append(unit)
 	for unit: CombatUnit in get_current_group():
-		if unit not in _deferred_units or not unit.is_stunned or is_turn_finished(unit):
+		if unit not in _deferred_units or is_turn_finished(unit):
 			continue
 		current_unit = unit
 		_activate_current_unit()
@@ -244,6 +246,10 @@ func _select_next_or_advance() -> void:
 	_pending_finished_units.clear()
 	_confirm_group()
 	_start_group_at(_group_end + 1)
+
+
+func _keeps_stun_on_turn_start(unit: CombatUnit) -> bool:
+	return not stun_clears_on_turn_start.is_valid() or not bool(stun_clears_on_turn_start.call(unit))
 
 
 ## 묶음이 확정될 때 이번 턴형 효과를 소멸하고 그 묶음 전원의 턴 자원을 한꺼번에 채운다(3-3, 3-5 턴 종료 1·4번).
