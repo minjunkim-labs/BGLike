@@ -11,13 +11,13 @@ class BranchNameTests(unittest.TestCase):
     def test_existing_ci_acceptance_rules(self):
         for branch in ["test/142-pck-bundle-regression", "feat/12-combat-base", "docs/issue-flow",
                        "build/export-preset", "ci/shared-check", "chore/ai-agents",
-                       "claude/anything", "codex/anything", "office/anything", "baseline/sync-6a08e44", "dependabot/github_actions/action-1"]:
+                       "claude/anything", "codex/anything", "baseline/sync-6a08e44", "dependabot/github_actions/action-1"]:
             with self.subTest(branch=branch):
                 check_branch(branch)
 
     def test_missing_issue_and_invalid_names_are_rejected(self):
         for branch in ["test/pck-bundle-regression", "feat/combat", "Test/12-combat", "test/12-bad_name",
-                       "test/12-double--dash", "test/12-trailing-", "test/12-extra/slash", "", "main",
+                       "test/12-double--dash", "test/12-trailing-", "test/12-extra/slash", "", "main", "office/anything",
                        "docs/x", "docs/1invalid", "test/12-valid\nother",
                        "feature/12-x", "feat/12", "docs/"]:
             with self.subTest(branch=branch), self.assertRaises(ValueError):
