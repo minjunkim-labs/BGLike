@@ -838,7 +838,7 @@ func _test_water_actions() -> void:
 	actions.grid.water_cells = [Vector2i(7, 7), Vector2i(2, 3)]
 	_check(not actions.create_ground(barbarian, Vector2i(7, 7), "burn") and actions.get_grounds().is_empty(),
 		"물 칸에는 불 장판이 생기지 않음")
-	_check(not actions.create_ground(barbarian, Vector2i(7, 7), "poison"), "삭제된 독 장판은 거부")
+	_check(not actions.create_ground(barbarian, Vector2i(8, 8), "poison"), "삭제된 독 장판은 거부")
 	_check(actions.create_ground(barbarian, Vector2i(8, 8), "burn"), "물이 아닌 칸의 불 장판은 그대로")
 	_check(actions.water_note(Vector2i(7, 7)).contains("물: 명중굴림 불리")
 		and actions.water_note(Vector2i(7, 7)).contains("화상 해제") and actions.water_note(Vector2i(8, 8)).is_empty(),

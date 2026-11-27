@@ -14,7 +14,7 @@ Godot 4 싱글 플레이 PC 게임입니다. 여러 사람이 함께 개발합�
 - test: `make godot-check`
 - build: `N/A: 출시 빌드 없음. 검증용 PCK는 [Draft 절차](docs/process/ci/draft-release.md)`
 
-setup은 고정한 Godot을 받아 해시를 확인합니다. Git LFS와 `git config core.hooksPath .githooks`는 [README](README.md#시작)대로 한 번 합니다. check는 공백 검사와 Python 테스트입니다. test는 Godot import·메인 장면·회귀 검사입니다. 둘 다 돌리려면 `make check`입니다.
+setup은 고정한 Godot을 받아 해시를 확인합니다. Git LFS와 `git config core.hooksPath .githooks`는 [README](README.md#시작)대로 한 번 합니다. check는 공백 검사와 Python 테스트입니다. test는 Godot import·메인 장면·회귀 검사입니다. 둘 다 돌리려면 `make check`이고, 회귀 스크립트 일부만 돌리려면 `bash scripts/check_godot.sh <테스트 경로>`입니다.
 
 ## 길잡이
 

@@ -43,6 +43,12 @@ if [ -z "${GODOT:-}" ] && [ ! -x "$godot" ] && [ "$GODOT_PLATFORM" = macos.unive
     godot="$macos_app_godot"
   fi
 fi
+if [ -z "${GODOT:-}" ] && [ ! -x "$godot" ]; then
+  path_godot=$(command -v godot 2>/dev/null || true)
+  if [ -n "$path_godot" ] && [ -x "$path_godot" ]; then
+    godot="$path_godot"
+  fi
+fi
 if [ ! -x "$godot" ]; then
   printf 'Godot is missing: run make godot-install or set GODOT to the pinned editor executable.\n' >&2
   exit 1

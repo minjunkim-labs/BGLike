@@ -105,7 +105,7 @@ func _test_pure_rules() -> void:
 	_check(CombatGrounds.reaction("water", "oil") == "remove" and CombatGrounds.reaction("water", "burn") == "remove",
 		"물은 기름과 불 장판을 지움")
 	_check(CombatGrounds.reaction("fire", "burn") == "" and CombatGrounds.reaction("none", "oil") == ""
-		and CombatGrounds.reaction("water", "poison") == "", "그 밖의 조합은 반응 없음")
+		and CombatGrounds.reaction("water", "fog") == "", "그 밖의 조합은 반응 없음")
 	_check(CombatActionRules.standing_cost(6) == 3 and CombatActionRules.standing_cost(3) == 2 and CombatActionRules.standing_cost(5) == 3,
 		"일어서기 비용은 최대 이동력의 절반을 올림")
 	var cross: Array[Vector2i] = CombatGrounds.cross_cells(Vector2i(4, 4))

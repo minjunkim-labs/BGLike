@@ -110,6 +110,36 @@ class GodotCheckTests(unittest.TestCase):
             calls = log.read_text().splitlines()
             self.assertIn("--headless --path . --script tests/title_test.gd", calls)
 
+    def test_path_godot_fallback_used_when_cache_and_app_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            binary = bin_dir / "godot"
+            log = root / "calls"
+            binary.write_text(FAKE_GODOT)
+            binary.chmod(0o755)
+            env = {k: v for k, v in os.environ.items() if k != "GODOT"}
+            env.update(
+                PATH=f"{bin_dir}:{os.environ.get('PATH', '')}",
+                GODOT_DIR=str(root / "empty-cache"),
+                GODOT_MACOS_APP_BINARY=str(root / "missing-app"),
+                CALL_LOG=str(log),
+                BROKEN="no-such-step",
+                ERROR_LINE="",
+                BROKEN_EXIT="0",
+            )
+            result = subprocess.run(
+                ["bash", "scripts/check_godot.sh", "tests/title_test.gd"],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            calls = log.read_text().splitlines()
+            self.assertIn("--headless --path . --script tests/title_test.gd", calls)
+
     def test_selected_script_keeps_common_setup_error_gate(self):
         for step in ("--import", "--quit-after"):
             with self.subTest(step=step):

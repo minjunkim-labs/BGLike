@@ -12,7 +12,7 @@
 | 게임·장면 | 메인 장면이 열리지 않거나 실행이 깨진다(리소스 경로, `.uid`, 필요한 `*.import` 누락 포함) |
 | 기획 | `docs/` 기획 문서의 규칙·수치와 다르게 구현했는데 Issue에 근거가 없다. 기획에서 정하지 않은 장르 규칙·이야기·기능을 임의로 확정한다. 미확정 수치를 새 규칙으로 만든다 |
 | 전투 | action·턴·주사위·사각 높이 격자·진행·loot의 공개 동작이나 호출자 호환성이 깨진다. 입력·표시·tooltip·후속 상태와 실제 애니메이션 완료를 구분하지 않는다 |
-| 검증 | 게임 동작이 바뀌는데 PR 본문에 실행한 검증, 직접 확인하지 못한 항목, [확인 등급](docs/process/capture-verification.md#확인-등급)의 사람 판단 항목과 위임받지 않은 직접 조작 항목이 빠졌다. 상수 재단언·소스 문자열 순서·성공만 반환하는 mock을 동작 검증의 근거로 쓴다 |
+| 검증 | 게임 동작이 바뀌는데 PR 본문에 실행한 검증, 직접 확인하지 못한 항목, [확인 등급](docs/process/capture-verification.md#확인-등급)의 사람 판단 항목과 위임받지 않은 직접 조작 항목이 빠졌다. 상수 재단언·소스 문자열 순서·성공만 반환하는 mock을 동작 검증의 근거로 쓴다. 부정·오류 테스트가 앞선 다른 거부 조건(물 칸·삭제된 종류 등)에 가려 검사 대상 분기에 닿지 않는다. 설계 규칙과 달라 실패한 테스트를 구현 대신 기대값만 고쳐 맞춘다 |
 | 도구·CI | 외부 입력을 안전한 argv·env로 넘기지 않는다. timeout·취소·경로 탈출·삭제·덮어쓰기의 실패 처리가 사라진다. 엔진 버전·archive checksum·source SHA·패키지 manifest 대조를 cache hit로 건너뛴다. trusted base·선택된 검사·실패·취소·누락 처리가 약해진다. Secret 환경에서 PR 코드를 실행한다. 외부 Action이 SHA로 고정되지 않았다 |
 | Draft | 같은 main source SHA의 CI를 확인하지 않는다. 기존 Release·태그·asset을 덮어쓴다 |
 | 문서 | 사실과 다르다. 명령이 실제로 동작하지 않는다 |
@@ -44,6 +44,9 @@
 리뷰가 놓친 버그나 반복된 오탐이 생기면 한 줄씩 더한다. 사용자가 승인한 것만 넣는다.
 
 - `scenes/combat/enemy_definitions.gd`의 주사위 면 수 축소나 `scenes/combat/stages/*_enemies.tscn` 배치 변경으로 저장 복원 범위·배치 수가 달라졌는데 [0003-save-files.md](docs/adr/0003-save-files.md)의 `GameSave.FORMAT_VERSION`을 올리지 않으면 P1이다.
+- 2026-11-27 `scenes/combat/`에서 신호를 보내거나 외부 콜백을 부른 뒤 전투 상태를 바꾸는 루프에 `_revision`·`is_over()` 세대 검사가 빠지면 P1이다(적용: `scenes/combat/`, 출처: [PR #810](https://github.com/minjunkim-labs/BGLike/pull/810)).
+- 2026-11-27 `GLOSSARY.md`에 용어 정의와 설계 문서 링크를 넘어 지속 턴·시계 슬롯 조건 같은 처리 규칙이나 수치를 복제해 넣으면 P2다(적용: `GLOSSARY.md`, 출처: [PR #810](https://github.com/minjunkim-labs/BGLike/pull/810)).
+- 2026-11-27 규칙이나 용어를 삭제할 때 고친 문서의 나머지 절과 링크된 하위 문서(`rg` 검색 결과 포함)에 옛 규칙이 모순되게 남으면 P1이다(적용: `docs/`·`GLOSSARY.md`, 출처: [PR #810](https://github.com/minjunkim-labs/BGLike/pull/810)).
 
 <!-- baseline:start -->
 ## 입력
