@@ -43,6 +43,8 @@
 
 리뷰가 놓친 버그나 반복된 오탐이 생기면 한 줄씩 더한다. 사용자가 승인한 것만 넣는다.
 
+- `scenes/combat/enemy_definitions.gd`의 주사위 면 수 축소나 `scenes/combat/stages/*_enemies.tscn` 배치 변경으로 저장 복원 범위·배치 수가 달라졌는데 [0003-save-files.md](docs/adr/0003-save-files.md)의 `GameSave.FORMAT_VERSION`을 올리지 않으면 P1이다.
+
 <!-- baseline:start -->
 ## 입력
 

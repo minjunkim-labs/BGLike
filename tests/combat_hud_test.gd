@@ -2353,6 +2353,18 @@ func _test_unit_panel_status_hover() -> void:
 		"#796: 과부하 대기 설명은 CombatActionRules.overload_text()를 재사용")
 	_check("기절 상태에 걸리지 않습니다" in boss_buttons["기절 면역"].tooltip_text,
 		"#796: 기절 면역 설명 포함")
+	var previous_poison_tick: int = CombatActionRules.poison_tick_damage
+	_check(("중첩당 피해 %d" % previous_poison_tick) in boss_buttons["독1(기간 없음)"].tooltip_text,
+		"#702: 독 상태 툴팁이 현재 poison_tick_damage(%d)를 표시" % previous_poison_tick)
+	CombatActionRules.poison_tick_damage = 3
+	hud.show_unit(boss)
+	await process_frame
+	var updated_poison_buttons: Array[Button] = hud.status_buttons().filter(
+		func(button: Button) -> bool: return button.text == "독1(기간 없음)")
+	_check(updated_poison_buttons.size() == 1
+		and "중첩당 피해 3" in updated_poison_buttons[0].tooltip_text,
+		"#702: poison_tick_damage 변경 후 독 상태 툴팁도 새 수치(3)로 갱신됨")
+	CombatActionRules.poison_tick_damage = previous_poison_tick
 	# 키보드·컨트롤러 포커스로도 같은 위치에 설명을 띄우고, 6개 해상도에서 화면 안·C/로그 비겹침을 확인한다.
 	boss.hit_points = boss.overload_threshold()
 	hud.show_unit(boss)

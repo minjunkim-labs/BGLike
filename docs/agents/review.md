@@ -70,7 +70,7 @@ Standards와 Spec 리뷰는 repo-baseline `prompts/review.md` 4단계대로 저�
 CodeQL 경고 수정 PR은 workflow 성공이 아니라 code scanning API로 판정한다.
 `refs/pull/<PR>/merge`의 Actions·Python 분석은 최종 base와 최종 head를 부모로 둔 merge 커밋에서 끝나야 한다. 각 분석의 `error`·`warning` 필드는 비어 있어야 한다. 그 ref의 열린 경고는 0건이어야 한다.
 code scanning API는 분석이 없는 ref에도 열린 경고 0건을 반환한다. 경고 수만 보고 판정하지 않는다.
-`gh api graphql -f query='mutation($id:ID!,$sha:GitObjectID!){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$sha}){mergeQueueEntry{position}}}' -f id="$(gh pr view <PR> --repo <OWNER/REPO> --json id --jq .id)" -f sha=<FINAL_HEAD_SHA>`로 리뷰한 head를 큐에 넣는다. PR head가 그 SHA가 아니면 GitHub가 거부한다. 사람은 웹의 「Merge when ready」 버튼을 써도 된다. `gh pr merge`와 `--admin` 같은 큐 우회는 쓰지 않는다. 충돌 때문에 PR 브랜치에 `main`을 합쳐야 하면 head가 바뀌므로 다시 리뷰한다.
+`gh api graphql -f query='mutation($id:ID!,$sha:GitObjectID!){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$sha}){mergeQueueEntry{position}}}' -f id="$(gh pr view <PR> --repo <OWNER/REPO> --json id --jq .id)" -f sha=<FINAL_HEAD_SHA>`로 리뷰한 head를 큐에 넣는다. PR head가 그 SHA가 아니면 GitHub가 거부한다. 사람은 웹의 「Merge when ready」 버튼을 써도 된다. `gh pr merge`와 `--admin` 같은 큐 우회는 쓰지 않는다. 충돌 때문에 PR 브랜치에 `main`을 합쳐야 하면 head가 바뀌므로 다시 리뷰한다. 참고로 `gh pr view --json`은 `mergeQueueEntry`·`isInMergeQueue`를 지원하지 않으므로 상태 조회에는 `state,mergedAt,statusCheckRollup` 또는 GraphQL을 쓴다.
 
 ## 변경 영역별 자료 선택
 
@@ -79,7 +79,7 @@ code scanning API는 분석이 없는 ref에도 열린 경고 0건을 반환한�
 
 | 변경 영역 | 로컬 리뷰가 선택할 상세 문서 |
 | --- | --- |
-| 게임·입력·화면 | `GLOSSARY.md`, `docs/design/combat/combat-ui.md`, 관련 Issue가 연결한 기획 문서·ADR |
+| 게임·입력·화면 | `GLOSSARY.md`, `docs/design/combat/combat-ui.md`, 관련 Issue가 연결한 기획 문서·ADR (`enemy_definitions.gd` 주사위 축소·`stages/*_enemies.tscn` 배치 변경 시 `docs/adr/0003-save-files.md` 포함) |
 | 게임 검사 | 현재 티켓의 합격 조건·재현 기록 |
 | GitHub·CI·Draft | `docs/process/ci/ci.md`, `docs/process/ci/draft-release.md`, `docs/process/ci/repository-setup.md`, 엔진 잠금 값 |
 | 작업·검증 | `docs/process/workflow.md`, `docs/process/git-conventions.md`, `docs/agents/domain.md` |
