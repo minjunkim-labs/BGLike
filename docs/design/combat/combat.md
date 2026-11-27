@@ -70,7 +70,7 @@
 | 전사 | 근접 | 힘 | 0 | 힘 d20 | 1 (인접) | 가능 |
 | 궁수 | 원거리 | 솜씨 (임시, [#386](https://github.com/minjunkim-labs/BGLike/issues/386)) | 0 | 솜씨 d20 | 1~6 | 불가 |
 
-공격·방어 장비는 결과에 가산하고, 능력치 가감은 굴림값과 표준값에 더합니다([능력치 기획서 4-6](ability.md#4-6-장비-가산과-능력치-가감)). HP·사거리·행동 수는 이번 판정 개편으로 바꾸지 않습니다. 피해는 명중하면 공격 능력치 주사위를 새로 굴린 굴림값(max(1, 눈 + 레벨 + 능력치 가감)) + 피해 보정입니다([능력치 기획서 4-9](ability.md#4-9-피해와-회복), [#388](https://github.com/minjunkim-labs/BGLike/issues/388)). 몬스터 시험값은 [능력치 기획서 7장](ability.md#7-몬스터-시험값)을 따릅니다. 장비 범위 재조정은 #205에서 기획자가 정합니다.
+공격·방어 장비는 결과에 가산하고, 능력치 가감은 굴림값과 표준값에 더합니다([능력치 기획서 4-6](ability.md#4-6-장비-가산과-능력치-가감)). HP·사거리·행동 수는 이번 판정 개편으로 바꾸지 않습니다. 피해는 명중하면 공격 능력치 주사위를 새로 굴린 굴림값(max(1, 눈 + 레벨 + 능력치 가감)) + 피해 보정입니다([능력치 기획서 4-9](ability.md#4-9-피해와-회복), [#388](https://github.com/minjunkim-labs/BGLike/issues/388)). 몬스터 수치는 [능력치 기획서 7장](ability.md#7-몬스터-시험값)을 따릅니다. 장비 범위 재조정은 M7에서 현행 유지하고 12/23~12/24 최종 튜닝으로 넘깁니다([#205](https://github.com/minjunkim-labs/BGLike/issues/205)).
 
 전사의 의지 주사위(d8), 최대 HP 식, 이동력 4(#616), 기본 공격 피해(`힘 d20 + 레벨 + 기타 가산치 0`)는 2026-10-30 재디자인으로 [전사 문서](../characters/warrior.md)를 따르며 [#423](https://github.com/minjunkim-labs/BGLike/issues/423)에서 구현했습니다(레벨은 파티 레벨, [#477](https://github.com/minjunkim-labs/BGLike/issues/477)). 위 표는 현재 구현입니다. 궁수의 피해는 2026-11-09 재디자인으로 전사와 같은 식(`솜씨 d20 + 레벨 + 기타 가산치 0`)이 되었고 [#528](https://github.com/minjunkim-labs/BGLike/issues/528)에서 구현했습니다([#407](https://github.com/minjunkim-labs/BGLike/issues/407) 질문 3의 답, [궁수 문서](../characters/archer.md#수치)).
 
@@ -366,7 +366,7 @@ DC는 `(시전 능력치 표준값 + 그 능력치 가감) + 공격 가산 + 스
 
 ### 6-1. 실제 턴 시작과 공통 규칙
 
-[#138 변경 결정](https://github.com/minjunkim-labs/BGLike/issues/138#issuecomment-6249957040)을 따릅니다. 지속 시간은 시전자의 실제 턴 시작에 줄고, 화상·독의 틱은 대상의 실제 턴 시작에 일어납니다. 아래 세부 수치는 [사용자 선택 위임으로 채택한 초기 권장안](https://github.com/minjunkim-labs/BGLike/issues/138#issuecomment-6297067934)입니다. 구현과 검증 범위는 [#178](https://github.com/minjunkim-labs/BGLike/issues/178)을 따릅니다. 최종 밸런스 승인을 뜻하지 않습니다.
+[#138 변경 결정](https://github.com/minjunkim-labs/BGLike/issues/138#issuecomment-6249957040)을 따릅니다. 지속 시간은 시전자의 실제 턴 시작에 줄고, 화상·독의 틱은 대상의 실제 턴 시작에 일어납니다. 6-2·6-3의 세부 수치(기절·화상·독)는 [#138](https://github.com/minjunkim-labs/BGLike/issues/138#issuecomment-6297067934)의 초기값을 바탕으로 [#205](https://github.com/minjunkim-labs/BGLike/issues/205)에서 M7 확정값으로 정했습니다. 구현과 검증 범위는 [#178](https://github.com/minjunkim-labs/BGLike/issues/178)을 따릅니다.
 
 처리 순서는 [3-5](#3-5-턴-시작종료-처리-순서)의 **발동이 먼저, 기간 감소가 나중**입니다([2026-11-02 #407 답](https://github.com/minjunkim-labs/BGLike/issues/407#issuecomment-6568715948), [#437](https://github.com/minjunkim-labs/BGLike/issues/437)).
 
@@ -392,7 +392,7 @@ DC는 `(시전 능력치 표준값 + 그 능력치 가감) + 공격 가산 + 스
 - 기절한 유닛도 실제 턴 시작을 처리합니다. 기절이 유지되면 아무것도 하지 못하고 자동으로 넘어갑니다. 대상 턴 종료로 기절을 해제하지 않습니다.
 - 턴 묶음의 지연된 유닛은 처음 조작하거나 기절로 차례를 건너뛸 때 실제 턴을 시작합니다. 단순 선택 전환이나 턴 종료 취소는 이미 시작한 턴을 다시 시작하지 않습니다.
 - 시전자가 전투 불능이 되어도 그 시전자가 건 기절을 즉시 해제하지 않고, 시계 슬롯으로 시전자의 다음 이니셔티브 순서 자리 시작까지 유지합니다([#359](https://github.com/minjunkim-labs/BGLike/issues/359)).
-- 시전자 시계는 [#138 최종 결정](https://github.com/minjunkim-labs/BGLike/issues/138#issuecomment-6249957040)을, 시전자 사후 유지는 [#359 결정](https://github.com/minjunkim-labs/BGLike/issues/359)을 따릅니다. 초기값 1과 최신 시전자 기준 갱신은 [위임된 권장안](https://github.com/minjunkim-labs/BGLike/issues/138#issuecomment-6294655890)입니다.
+- 시전자 시계는 [#138 최종 결정](https://github.com/minjunkim-labs/BGLike/issues/138#issuecomment-6249957040)을, 시전자 사후 유지는 [#359 결정](https://github.com/minjunkim-labs/BGLike/issues/359)을 따릅니다. 지속 시간 1과 최신 시전자 기준 갱신은 [#138](https://github.com/minjunkim-labs/BGLike/issues/138#issuecomment-6294655890)에서 제안한 값을 [#205](https://github.com/minjunkim-labs/BGLike/issues/205)에서 M7 확정값으로 정했습니다.
 
 ### 6-3. 화상과 독
 
@@ -412,7 +412,7 @@ DC는 `(시전 능력치 표준값 + 그 능력치 가감) + 공격 가산 + 스
 
 ### 6-4. 범위 스킬의 첫 모양과 높이
 
-[#138의 위임된 초기 권장안](https://github.com/minjunkim-labs/BGLike/issues/138#issuecomment-6300011116)을 [#182](https://github.com/minjunkim-labs/BGLike/issues/182)에서 적용합니다. 기획자의 새 직접 답변과 최종 밸런스 승인을 뜻하지 않습니다.
+평면 반경과 중심과 높이 차이 1 이하 규칙은 [#182](https://github.com/minjunkim-labs/BGLike/issues/182)에서 적용했고, [#205](https://github.com/minjunkim-labs/BGLike/issues/205)에서 M7 확정값으로 정했습니다.
 
 - 첫 모양은 중심에서 `가로 차 + 세로 차`로 잰 **평면 반경**입니다. 반경1은 중심과 상하좌우입니다. 중심과 영향 칸은 맵 안의 막히지 않은 바닥이어야 합니다. 맵 밖·낭떠러지·막힌 칸을 제외합니다.
 - 영향 칸은 **중심 바닥과 높이 차이1 이하**여야 합니다. 중간 칸의 높이·벽을 따라 퍼뜨리지 않습니다. 시야·엄폐 판정은 범위 영향 칸에 쓰지 않습니다(엄폐는 직사 동작의 선분 판정에만 적용합니다. [은/엄폐](cover.md)).
@@ -422,7 +422,7 @@ DC는 `(시전 능력치 표준값 + 그 능력치 가감) + 공격 가산 + 스
 
 ### 6-5. 지속 장판의 첫 두 종류
 
-> **구현됨([#186](https://github.com/minjunkim-labs/BGLike/issues/186), [#698](https://github.com/minjunkim-labs/BGLike/issues/698)).** 초기 6-5에 있던 독 장판은 실제 전투 공급원이 없고 독안개 장판(6-6)과 역할이 겹쳐 [#698](https://github.com/minjunkim-labs/BGLike/issues/698)에서 삭제했습니다. 불 장판의 실제 공급원은 기름 장판 점화(6-7)로 정했고, 불 장판과 화상 상태 이상은 시전자가 전투 불능이 되어도 시계 슬롯으로 유지하도록 이관했습니다.
+> **구현됨([#186](https://github.com/minjunkim-labs/BGLike/issues/186), [#698](https://github.com/minjunkim-labs/BGLike/issues/698)).** 초기 6-5에 있던 독 장판은 실제 전투 공급원이 없고 독안개 장판(6-6)과 역할이 겹쳐 [#698](https://github.com/minjunkim-labs/BGLike/issues/698)에서 삭제했습니다. 불 장판의 실제 공급원은 기름 장판 점화(6-7)로 정했고, 지속 시간 2 시전자 턴은 [#205](https://github.com/minjunkim-labs/BGLike/issues/205)에서 M7 확정값으로 정했으며, 불 장판과 화상 상태 이상은 시전자가 전투 불능이 되어도 시계 슬롯으로 유지합니다.
 
 | 장판 | 공급원 | 진입·대상 실제 턴 시작의 부여 | 장판 지속 시간 | 시전자 전투 불능 |
 |---|---|---|---|---|
@@ -440,7 +440,7 @@ DC는 `(시전 능력치 표준값 + 그 능력치 가감) + 공격 가산 + 스
 
 ### 6-6. 독안개 장판
 
-> **구현됨.** 독안개 시전과 장판은 [#461](https://github.com/minjunkim-labs/BGLike/issues/461), 시전하는 독안개 거미와 AI는 [#462](https://github.com/minjunkim-labs/BGLike/issues/462), 3막 스테이지 1 교체는 [#463](https://github.com/minjunkim-labs/BGLike/issues/463)에서 구현했습니다. [#305 기획자 답](https://github.com/minjunkim-labs/BGLike/issues/305#issuecomment-6581920839)으로 정한 규칙입니다. 칸 조준·곡사·반경(기준점 목표 칸)은 [#466](https://github.com/minjunkim-labs/BGLike/issues/466)에서 도입했고, 수치는 모두 시험값입니다([#205](https://github.com/minjunkim-labs/BGLike/issues/205)). 몬스터 시트는 [독안개 거미](../monsters/fog-spider.md)입니다.
+> **구현됨.** 독안개 시전과 장판은 [#461](https://github.com/minjunkim-labs/BGLike/issues/461), 시전하는 독안개 거미와 AI는 [#462](https://github.com/minjunkim-labs/BGLike/issues/462), 3막 스테이지 1 교체는 [#463](https://github.com/minjunkim-labs/BGLike/issues/463)에서 구현했습니다. [#305 기획자 답](https://github.com/minjunkim-labs/BGLike/issues/305#issuecomment-6581920839)으로 정한 규칙입니다. 칸 조준·곡사·반경(기준점 목표 칸)은 [#466](https://github.com/minjunkim-labs/BGLike/issues/466)에서 도입했고, 수치는 모두 [#205](https://github.com/minjunkim-labs/BGLike/issues/205)에서 M7 확정값으로 정했습니다. 몬스터 시트는 [독안개 거미](../monsters/fog-spider.md)입니다.
 
 독안개는 독안개 거미의 스킬이 남기는 장판입니다. 6-5에 있던 독 장판은 [#698](https://github.com/minjunkim-labs/BGLike/issues/698)에서 삭제해 독안개 장판 하나로 통일했습니다.
 
@@ -450,7 +450,7 @@ DC는 `(시전 능력치 표준값 + 그 능력치 가감) + 공격 가산 + 스
 | 영역 | 지정 칸과 상하좌우 1칸(최대 5칸). 지정 칸 바닥과 높이 차이 1 이하인 칸만 포함 (6-4) |
 | 부여 | 장판 위에 들어설 때와 그 위에서 턴을 시작할 때 건강 내성굴림. 건강 주사위 + 건강 가감 + 방어 가산이 DC 이상이면 버팀(동점 성공), 실패하면 독 중첩 +1. 독 면역인 유닛은 굴리지 않음 |
 | 시전 즉시 | 시전 순간 영역 안에 있던 유닛도 바로 굴리며, 이 굴림은 그 장판의 진입 시도 1회로 소비. 턴 시작 굴림은 별개 |
-| DC | (시전자의 건강 표준값 + 건강 가감) + 공격 가산 + 스킬의 DC 보정, 하한 1(능력치 기획서 4-3). 시전 때 기록. 독안개 거미의 시험값은 5 + 3 + 0 = 8 |
+| DC | (시전자의 건강 표준값 + 건강 가감) + 공격 가산 + 스킬의 DC 보정, 하한 1(능력치 기획서 4-3). 시전 때 기록. 독안개 거미의 M7 확정 기준은 5 + 3 + 0 = 8 |
 | 지속 | 4 시전자 턴. 시전 때 장판이 기간 시계를 기억하며, 시전 시점의 시전자 이니셔티브 위치의 턴 시작마다 줄임. 시전자의 네 번째 순서 시작(그 시작의 틱을 처리한 뒤)에 사라짐 |
 | 시전자 사후 | 장판은 사라지지 않고 시계 슬롯이 줄임. 같은 자리의 슬롯이 여럿이면 먼저 시전한 장판부터 줄임. 턴 묶음·라운드 경계로 초상 순서가 바뀌어도 시전 시점의 이니셔티브 자리를 고정해 쓰므로 정확히 네 번째 순서에 소멸 |
 | 독 중첩 | 독안개로 얻은 중첩은 기간이 없고(줄지 않음) 독 제거 굴림으로만 사라짐. 시전자가 쓰러져도 해제하지 않음. 제거 DC는 고정 4 |
