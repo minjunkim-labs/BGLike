@@ -489,7 +489,7 @@ func incapacitate(target: CombatUnit) -> void:
 
 
 ## 쓰러지는 target의 턴 자리를 시계 슬롯으로 보관하고, target 바로 뒤에 걸린 슬롯을 그다음 유닛으로 옮긴다.
-## 기존 상태 이상·장판은 시전자 전투 불능에서 해제하므로 슬롯을 쓰지 않는다 (동작 유형 기획서 4-5, 8-1).
+## 기절은 시전자 전투 불능에서 즉시 해제하므로 슬롯을 쓰지 않는다 (동작 유형 기획서 4-5, 8-1).
 func _keep_clock_slot(target: CombatUnit) -> void:
 	var next: CombatUnit = turns.next_unit(target)
 	# next의 다음 턴 시작이 target 자리의 이번 순환 바로 뒤인지. next가 순서의 처음으로 돌면 다음 라운드 첫 시작이 그렇다.

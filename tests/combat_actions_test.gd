@@ -384,12 +384,12 @@ func _test_rock_interruptions() -> void:
 		target.cell = Vector2i(8, 8)
 		target.hit_points = target.get_max_hit_points()
 		f.actions.create_prop(Vector2i(1, 1), "rock")
-		f.actions.create_ground(f.units[3], target.cell, "poison")
+		f.actions.create_ground(f.units[3], target.cell, "burn")
 	f.actions.changed.connect(callback)
 	f.actions.dice = _dice_for([], []).then_seeded()
 	await f.actions.attack_prop(f.units[0], rock)
 	f.actions.changed.disconnect(callback)
-	_check(reset[0] and target.hit_points == 12 and target.get_status_count("poison") == 0
+	_check(reset[0] and target.hit_points == 12 and target.get_status_count("burn") == 0
 		and f.actions.get_props().size() == 1 and f.actions.grid.prop_at(Vector2i(1, 1)) != null,
 		"물의 화상 해제 callback이 전투를 초기화하면 지난 낙하/새 장판을 적용하지 않는다")
 

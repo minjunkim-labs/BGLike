@@ -191,7 +191,7 @@ func _test_saving_throws() -> void:
 		result = CombatChecks.saving_throw(20, 0, 10, mode, ScriptedDice.new([3, 17], [20, 20]))
 		_check(result.rolls == [3, 17] and result.success == (mode == CombatChecks.RollMode.ADVANTAGE)
 			and result.mode == mode, "내성굴림의 유리/불리는 굴리는 대상이 두 번 굴림")
-	# 8장: 회전회오리 DC 10(고철로봇-3000 힘 d12 표준값 7 + 공격 가산 3), 독 장판 고정 DC 4.
+	# 8장: 회전회오리 DC 10(고철로봇-3000 힘 d12 표준값 7 + 공격 가산 3), 독 제거 고정 DC 4.
 	_check(is_equal_approx(CombatChecks.save_chance(20, 0, 10, normal), 0.55)
 		and CombatChecks.save_chance(6, 0, 10, normal) == 0.0,
 		"회전회오리 DC 10 민첩 내성 표본: d20 55%, d6 0%")
