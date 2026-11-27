@@ -36,7 +36,7 @@
 
 - **독 면역**: 거미 계열이라 독에 면역입니다 ([독안개 거미](fog-spider.md#독-면역)). 몬스터 정의의 `poison_immune` 속성이며, 독안개 장판 칸은 이동 경로 비용 0으로 보고 불 장판은 기존대로 피합니다 ([#460](https://github.com/minjunkim-labs/BGLike/issues/460), [#465](https://github.com/minjunkim-labs/BGLike/issues/465)에서 구현).
 
-- 종전 HP 20의 라운드·생성 수 추정은 [#109](https://github.com/minjunkim-labs/BGLike/issues/109)의 이전 결정 기록입니다. 새 증식 구조 검토는 #205에서 다룹니다.
+- 종전 HP 20의 라운드·생성 수 추정은 [#109](https://github.com/minjunkim-labs/BGLike/issues/109)의 이전 결정 기록입니다. [#205](https://github.com/minjunkim-labs/BGLike/issues/205) 결정에 따라 동시 생존 새끼 거미 상한 10마리([#702](https://github.com/minjunkim-labs/BGLike/issues/702))를 M7 확정 규칙으로 두고, 추가 증식 구조 재설계는 보류한 뒤 12/23~12/24 최종 튜닝 때 다시 봅니다.
 
 ## 스킬
 
@@ -75,4 +75,4 @@
 
 | 항목 | 임시 규칙 | 결정 Issue |
 |---|---|---|
-| 3-1 증식 구조 재설계 | 현재는 맵 전체 새끼 거미 상한 10마리(#702)로 조절 | [#205](https://github.com/minjunkim-labs/BGLike/issues/205) |
+| 3-1 증식 구조 재설계 | 동시 생존 새끼 거미 상한 10마리([#702](https://github.com/minjunkim-labs/BGLike/issues/702))를 M7 확정 규칙으로 두고 추가 재설계는 보류 | 12/23~12/24 최종 튜닝([#205](https://github.com/minjunkim-labs/BGLike/issues/205)에서 이관) |
