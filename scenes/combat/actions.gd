@@ -322,18 +322,15 @@ func _emit_overload_burn(robot: CombatUnit) -> void:
 func _decrease_durations(unit: CombatUnit) -> void:
 	_tick_unit_effects(unit)
 	_clock_slots = _clock_slots.filter(func(slot: ClockSlot) -> bool: return _has_unit_effects(slot.caster))
-	var ground_messages: Array[String] = grounds.tick_non_persistent(unit)
 	for target: CombatUnit in units:
 		for effect: CombatUnit.StatusEffect in target.status_effects.duplicate():
-			if effect.source == unit and effect.turns_left > 0:
+			if effect.source == unit and effect.kind != "burn" and effect.turns_left > 0:
 				effect.turns_left -= 1
 				if effect.turns_left == 0:
 					target.status_effects.erase(effect)
-	for message: String in ground_messages:
-		logged.emit(message)
 
 
-## 시전자 기준 시계의 유닛 효과(성스러운 장막, 전투의 함성)를 1턴 줄인다 (동작 유형 기획서 4-5).
+## 시전자 기준 시계의 유닛 효과(성스러운 장막, 전투의 함성, 산만함, 화상)와 장판을 1턴 줄인다 (동작 유형 기획서 4-5).
 func _tick_unit_effects(caster: CombatUnit) -> void:
 	if caster.shield_turns > 0:
 		caster.shield_turns -= 1
@@ -359,19 +356,29 @@ func _tick_unit_effects(caster: CombatUnit) -> void:
 				calmed.append(target.get_display_name())
 	if not calmed.is_empty():
 		logged.emit(tr("산만함 만료: %s") % ", ".join(calmed))
-	# 독안개·기름 장판은 시전 순서대로 줄인다. 시전자가 쓰러졌어도 시계 슬롯이 이 길로 줄인다.
+	# 화상 상태 이상도 시전자가 쓰러졌어도 시계 슬롯으로 줄인다(#698). 장판 만료 로그 전에 정리한다.
+	for target: CombatUnit in units:
+		for effect: CombatUnit.StatusEffect in target.status_effects.duplicate():
+			if effect.source == caster and effect.kind == "burn" and effect.turns_left > 0:
+				effect.turns_left -= 1
+				if effect.turns_left == 0:
+					target.status_effects.erase(effect)
+	# 불·독안개·기름 장판은 시전 순서대로 줄인다. 시전자가 쓰러졌어도 시계 슬롯이 이 길로 줄인다.
 	grounds.tick_persistent(caster)
 
 
 func _has_unit_effects(caster: CombatUnit) -> bool:
-	return (units.any(func(unit: CombatUnit) -> bool: return unit.battle_cry_source == caster or unit.distracted_source == caster)
+	return (units.any(func(unit: CombatUnit) -> bool:
+		return (unit.battle_cry_source == caster or unit.distracted_source == caster
+			or unit.status_effects.any(func(effect: CombatUnit.StatusEffect) -> bool:
+				return effect.kind == "burn" and effect.source == caster and effect.turns_left > 0)))
 		or grounds.has_persistent_for(caster))
 
 
 func apply_status(source: CombatUnit, target: CombatUnit, kind: String,
-	dc: int = CombatGrounds.POISON_DC) -> bool:
+	dc: int = CombatGrounds.POISON_DC, allow_downed_source: bool = false) -> bool:
 	if (not is_instance_valid(source) or not is_instance_valid(target)
-		or source not in units or target not in units or source.hit_points <= 0 or target.hit_points <= 0
+		or source not in units or target not in units or (not allow_downed_source and source.hit_points <= 0) or target.hit_points <= 0
 		or kind not in ["stun", "burn", "poison"]
 		or kind == "poison" and (dc < 1 or dc > CombatUnit.SAVED_INT_LIMIT)):
 		return false
@@ -466,17 +473,13 @@ func incapacitate(target: CombatUnit) -> void:
 	target.clear_unit_effects()
 	target.stealthed = false
 	_keep_clock_slot(target)
-	var ground_messages: Array[String] = grounds.on_caster_incapacitated(target)
+	grounds.on_caster_incapacitated(target)
 	for unit: CombatUnit in units:
 		if unit.stun_source == target:
 			unit.is_stunned = false
 		for effect: CombatUnit.StatusEffect in unit.status_effects.duplicate():
-			if effect.source == target and effect.turns_left > 0:
+			if effect.source == target and effect.kind != "burn" and effect.turns_left > 0:
 				unit.status_effects.erase(effect)
-	for message: String in ground_messages:
-		logged.emit(message)
-		if not _same_combat(target, revision):
-			return
 	if not _same_combat(target, revision):
 		return
 	turns.remove_unit(target)
@@ -486,7 +489,7 @@ func incapacitate(target: CombatUnit) -> void:
 
 
 ## 쓰러지는 target의 턴 자리를 시계 슬롯으로 보관하고, target 바로 뒤에 걸린 슬롯을 그다음 유닛으로 옮긴다.
-## 기존 상태 이상·장판은 시전자 전투 불능에서 해제하므로 슬롯을 쓰지 않는다 (동작 유형 기획서 4-5, 8-1).
+## 기절은 시전자 전투 불능에서 즉시 해제하므로 슬롯을 쓰지 않는다 (동작 유형 기획서 4-5, 8-1).
 func _keep_clock_slot(target: CombatUnit) -> void:
 	var next: CombatUnit = turns.next_unit(target)
 	# next의 다음 턴 시작이 target 자리의 이번 순환 바로 뒤인지. next가 순서의 처음으로 돌면 다음 라운드 첫 시작이 그렇다.

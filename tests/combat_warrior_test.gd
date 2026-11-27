@@ -497,12 +497,12 @@ func _test_battle_cry_clock_slot() -> void:
 	wrap.turns.end_turn()
 	_check(wrap.turns.current_unit == wrap.units[3] and wrap.turns.round_number == 2
 		and wrap.units[1].battle_cry_turns == 2, "옮긴 유닛의 다음 라운드 시작은 이미 줄인 자리라 건너뜀")
-	# 기존 상태 이상은 시전자 전투 불능에서 해제한다.
+	# 화상 상태 이상은 시전자 전투 불능 뒤에도 시계 슬롯으로 유지한다(#698).
 	var burn: Fixture = _fixture()
 	burn.units[0].status_effects.append(CombatUnit.StatusEffect.new("burn", burn.units[2], 2))
 	burn.actions.incapacitate(burn.units[2])
-	_check(burn.units[0].status_effects.is_empty() and burn.actions.save_state().clock_slots.is_empty(),
-		"기존 화상은 시전자 전투 불능에 해제하고 시계 슬롯을 쓰지 않음")
+	_check(burn.units[0].get_status_count("burn") == 1 and not burn.actions.save_state().clock_slots.is_empty(),
+		"화상은 시전자 전투 불능 뒤에도 시계 슬롯으로 유지됨")
 	_test_clock_slot_with_spawn()
 	_test_clock_slot_in_group()
 

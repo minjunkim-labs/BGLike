@@ -116,8 +116,8 @@ func _battle(stage_index: int) -> Node2D:
 	# 지금 게임에는 장판을 만드는 적이 없다. 아군 발밑에 깔아 장판 위의 저장을 만든다.
 	var actions: CombatActions = battle.get("actions")
 	var source: CombatUnit = actions.units.filter(func(unit: CombatUnit) -> bool: return not unit.is_ally)[0]
-	_check(actions.create_ground(source, party[0].cell, "poison")
-		and actions.create_ground(source, party[1].cell, "burn"), "검사용 장판 생성")
+	actions.grounds.add(source, party[0].cell, "fog", 8)
+	_check(actions.create_ground(source, party[1].cell, "burn"), "검사용 장판 생성")
 	return battle
 
 
@@ -136,8 +136,8 @@ func _test_format_state() -> void:
 		"형식 3 검사용 독·화상 부여")
 	var state: Dictionary = battle.call("combat_state")
 	_check(state.grounds.size() == 2 and state.grounds.all(func(ground: Array) -> bool:
-		return ground.size() == 6 and ground[5] == (4 if ground[2] == "poison" else 0)),
-		"장판은 여섯 값에 독 DC 4·화상 DC 0을 저장")
+		return ground.size() == 6 and ground[5] == (8 if ground[2] == "fog" else 0)),
+		"장판은 여섯 값에 독안개 DC 8·화상 DC 0을 저장")
 	_check(state.units[0].statuses == [["poison", actions.units.find(source), 4, 4]]
 		and state.units[1].statuses == [["burn", actions.units.find(source), 2, 0]],
 		"상태 이상은 부여한 장판의 독 DC 4·화상 DC 0을 저장")
@@ -506,9 +506,11 @@ func _test_rejects_bad_saves() -> void:
 		"모르는 물체": func(state: Dictionary) -> void: state.props.append(["bomb", Vector2i.ZERO, 1]),
 		"장판의 유닛 번호 밖": func(state: Dictionary) -> void: state.grounds.append([99, Vector2i.ZERO, "burn", 2, [], 0]),
 		"이전 형식의 장판": func(state: Dictionary) -> void: state.grounds.append([0, Vector2i.ZERO, "burn", 2, []]),
-		"장판 DC가 정수가 아님": func(state: Dictionary) -> void: state.grounds.append([0, Vector2i.ZERO, "poison", 4, [], 4.0]),
-		"장판 독 DC가 없음": func(state: Dictionary) -> void: state.grounds.append([0, Vector2i.ZERO, "poison", 4, [], 0]),
-		"한도 밖 장판 DC": func(state: Dictionary) -> void: state.grounds.append([0, Vector2i.ZERO, "poison", 4, [], 1 << 60]),
+		"장판 DC가 정수가 아님": func(state: Dictionary) -> void: state.grounds.append([0, Vector2i.ZERO, "fog", 4, [], 4.0]),
+		"장판 독안개 DC가 없음": func(state: Dictionary) -> void: state.grounds.append([0, Vector2i.ZERO, "fog", 4, [], 0]),
+		"한도 밖 장판 DC": func(state: Dictionary) -> void: state.grounds.append([0, Vector2i.ZERO, "fog", 4, [], 1 << 60]),
+		"삭제된 독 장판": func(state: Dictionary) -> void: state.grounds.append([0, Vector2i.ZERO, "poison", 4, [], 4]),
+		"불 장판 기간 초과": func(state: Dictionary) -> void: state.grounds.append([0, Vector2i.ZERO, "burn", 3, [], 0]),
 		"난수 상태가 정수가 아님": func(state: Dictionary) -> void: state.dice = "seed",
 		"아이콘 경로를 바꾼 아이템": func(state: Dictionary) -> void: state.bag[0].icon = "../../../../project",
 		"수치가 정수가 아닌 장비": func(state: Dictionary) -> void: state.units[0].weapon.stats.attack_bonus = [1],

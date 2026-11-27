@@ -161,7 +161,7 @@ func _test_create_oil() -> void:
 	_check(not h.actions.create_oil(h.units[0], Vector2i(-1, 0)), "맵 밖 중심은 거부")
 
 
-## 점화: 이어진 기름 칸 전체가 타고, 그 칸 위 모든 유닛이 화상 2중첩, 물 칸 유닛은 화상 없음.
+## 점화: 이어진 기름 칸 전체가 타고, 그 칸 위 모든 유닛이 화상 2중첩, 물 칸을 제외한 불탄 칸에 불 장판 생성.
 func _test_ignite() -> void:
 	var f: Fixture = _fixture()
 	var archer: CombatUnit = f.units[0]
@@ -174,6 +174,8 @@ func _test_ignite() -> void:
 		"점화하면 이어진 기름 칸이 모두 사라짐")
 	_check(archer.get_status_count("burn") == 2 and f.units[1].get_status_count("burn") == 2
 		and archer.status_effects[0].source == archer, "점화로 그 칸 위 유닛이 화상 2중첩, 화상 시전자는 점화한 유닛")
+	_check(_grounds_of(f, "burn") == 6,
+		"점화한 기름 5칸에 불 장판이 생성되고 다른 칸의 기존 불 장판도 유지")
 	var g: Fixture = _fixture()
 	g.actions.create_oil(g.units[0], Vector2i(4, 4))
 	g.actions.grid.water_cells = [Vector2i(3, 4)]
@@ -185,19 +187,50 @@ func _test_ignite() -> void:
 	w.actions.create_oil(w.units[0], Vector2i(4, 4))
 	_check(Vector2i(4, 5) in _oil_cells(w) and w.actions.ignite(Vector2i(4, 4), w.units[0]) and _grounds_of(w, "oil") == 0,
 		"물 칸의 기름도 이어진 기름과 함께 점화")
-	_check(not w.actions.create_ground(w.units[0], Vector2i(4, 5), "burn") and _grounds_of(w, "burn") == 0,
-		"물 칸에는 불 장판이 생기지 않음")
-	_check(f.actions.get_grounds().filter(func(ground: CombatGrounds.Ground) -> bool: return ground.kind == "burn").size() == 1,
-		"점화는 다른 칸의 불 장판을 건드리지 않음")
-	# 불 장판이 기름 칸에 닿으면 점화하고 그 칸에 불 장판을 새로 두지 않는다.
+	_check(not w.actions.create_ground(w.units[0], Vector2i(4, 5), "burn") and _grounds_of(w, "burn") == 4
+		and not w.actions.get_grounds().any(func(ground: CombatGrounds.Ground) -> bool: return ground.cell == Vector2i(4, 5)),
+		"물 칸에는 불 장판이 생기지 않고 나머지 불탄 4칸에만 생김")
+	# 불 장판이 기름 칸에 닿으면 점화하고 불탄 기름 칸에 불 장판을 남긴다.
 	var h: Fixture = _fixture()
 	h.actions.create_oil(h.units[0], Vector2i(4, 4))
 	_check(h.actions.create_ground(h.units[3], Vector2i(4, 4), "burn") and _grounds_of(h, "oil") == 0
-		and _grounds_of(h, "burn") == 0, "불 장판이 기름 칸에 생기면 점화하고 불 장판은 남지 않음")
+		and _grounds_of(h, "burn") == 5, "불 장판이 기름 칸에 생기면 점화하고 불탄 5칸에 불 장판이 남음")
 	var k: Fixture = _fixture()
 	k.actions.create_ground(k.units[3], Vector2i(4, 5), "burn")
 	_check(k.actions.create_oil(k.units[0], Vector2i(4, 4)) and _grounds_of(k, "oil") == 0
-		and _grounds_of(k, "burn") == 0, "불 장판 칸에 기름이 생기면 점화하고 두 장판 모두 남지 않음")
+		and _grounds_of(k, "burn") == 5, "불 장판 칸에 기름이 생기면 즉시 점화하고 불탄 5칸에 새 불 장판이 남음")
+	await _test_fire_ground_supply_and_persistence()
+
+
+## 실제 전투 경로(기름병 던지기 -> 화염 점화 -> 불 장판 생성 -> 진입 화상·물 속성 삭제·시전자 사후 유지).
+func _test_fire_ground_supply_and_persistence() -> void:
+	var f: Fixture = _fixture()
+	var archer: CombatUnit = f.units[0]
+	var enemy: CombatUnit = f.units[2]
+	enemy.cell = Vector2i(6, 4)
+	_check(f.actions.throw_oil(archer, Vector2i(5, 4)), "기름병 던지기로 십자 5칸 기름 장판 생성")
+	# 장난스러운 화살(지능 d6=5 화염)로 빈 기름 칸을 쏘아 점화한다.
+	f.actions.dice = _dice([5], [6])
+	_check(await f.actions.trick_arrow(archer, Vector2i(5, 4)) and _grounds_of(f, "oil") == 0
+		and _grounds_of(f, "burn") == 5, "화염 속성 장난스러운 화살이 기름을 점화해 불 장판 5칸을 만듦")
+	_check(enemy.get_status_count("burn") == 2, "점화 순간 기름 위 적은 화상 2중첩만 받고 불 장판 추가 화상은 없음")
+	# 시전자가 쓰러져도 불 장판과 화상 상태 이상은 시계 슬롯으로 유지된다.
+	f.actions.incapacitate(archer)
+	_check(archer.hit_points == 0 and _grounds_of(f, "burn") == 5 and enemy.get_status_count("burn") == 2,
+		"시전자 전투 불능 뒤에도 불 장판과 화상 상태 이상 유지")
+	# 시전자가 쓰러진 뒤에도 다른 유닛이 살아 있는 불 장판에 들어가면 화상을 받는다.
+	var walker: CombatUnit = f.turns.current_unit
+	walker.cell = Vector2i(5, 6)
+	walker.movement_left = 4
+	f.actions.dice = _dice([], [])
+	_check(await f.actions.move_to(walker, Vector2i(5, 5)) and walker.get_status_count("burn") == 1,
+		"시전자 사후에도 살아 있는 불 장판 진입 시 화상 부여")
+	# 쓰러진 시전자의 시계 슬롯이 두 번 지나면 불 장판이 만료된다.
+	f.actions.dice = _dice([1, 1, 1, 1, 1, 1, 1, 1, 1], [4, 4, 4, 4, 4, 4, 4, 4, 4])
+	for turn: int in range(6):
+		f.turns.end_turn()
+	_check(_grounds_of(f, "burn") == 0 and f.logs.any(func(message: String) -> bool: return "불 장판 만료" in message),
+		"쓰러진 시전자의 시계 슬롯 두 번째 순서에 불 장판 만료")
 
 
 ## 속성 반응표를 칸에 적용: 화염은 기름을 점화, 물은 닿은 칸의 기름·불 장판만 지운다.
