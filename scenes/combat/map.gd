@@ -518,20 +518,17 @@ func show_grounds(grounds: Array[CombatGrounds.Ground]) -> void:
 		var center: Vector2 = map_to_surface(ground.cell) - marker.position
 		center.x += -7 if ground.kind == "burn" else 7
 		marker.draw.connect(func() -> void:
-			var color: Color = {"burn": Color("ffb653"), "poison": Color("b3e86c"), "fog": Color("8fd6c4"), "oil": Color("6b5a3e")}[ground.kind]
+			var color: Color = {"burn": Color("ffb653"), "fog": Color("8fd6c4"), "oil": Color("6b5a3e")}[ground.kind]
 			if ground.kind == "fog":
 				marker.draw_circle(center + Vector2(-2, 0), 3.0, color, false)
 				marker.draw_circle(center + Vector2(2, 1), 2.5, color, false)
 			elif ground.kind == "oil":
-				# 기름은 어두운 물방울 점으로 그린다. 불·독·안개와 색과 모양이 다르다.
+				# 기름은 어두운 물방울 점으로 그린다. 불·안개와 색과 모양이 다르다.
 				marker.draw_circle(center, 3.0, color)
-			elif ground.kind == "burn":
+			else:
 				marker.draw_colored_polygon(PackedVector2Array([
 					center + Vector2(-4, 2), center + Vector2(-2, -3), center + Vector2(0, -1),
 					center + Vector2(2, -5), center + Vector2(4, 2), center + Vector2(0, 4)]), color)
-			else:
-				marker.draw_line(center + Vector2(-3, -3), center + Vector2(3, 3), color, 2.0)
-				marker.draw_line(center + Vector2(3, -3), center + Vector2(-3, 3), color, 2.0)
 			for index: int in range(ground.turns_left):
 				marker.draw_circle(center + Vector2(-3 + index * 2, 6), 0.75, color))
 		add_child(marker)

@@ -174,34 +174,9 @@ func _test_boss_oil_immunity() -> void:
 		turns.turn_started.disconnect(actions._on_turn_started)
 
 
-## 독 장판과 독안개 모두에서 독 중첩 1개당 대상 턴 시작 피해는 3이다.
+## 독안개에서 부여된 독 중첩 1개당 대상 턴 시작 피해는 3이다.
 func _test_poison_tick_damage() -> void:
-	# 1) 독 장판에서 부여된 독 중첩 1개의 턴 시작 피해 = 3.
-	var ground_units: Array[CombatUnit] = []
-	var warrior: CombatUnit = CombatUnit.new()
-	warrior.kind = CombatUnit.Kind.WARRIOR
-	warrior.is_ally = true
-	warrior.cell = Vector2i(1, 1)
-	warrior.hit_points = warrior.get_max_hit_points()
-	var enemy: CombatUnit = _enemy(CombatUnit.Kind.WARRIOR, Vector2i(8, 8))
-	_created.append(warrior)
-	ground_units = [warrior, enemy]
-	var g_turns: CombatTurns = CombatTurns.new()
-	var g_actions: CombatActions = CombatActions.new()
-	g_actions.initialize(ground_units, g_turns)
-	ScriptedDice.arrange_turns(g_turns, ground_units, [warrior, enemy])
-	g_actions.create_ground(enemy, Vector2i(2, 1), "poison")
-	_check(await g_actions.move_to(warrior, Vector2i(2, 1)) and warrior.get_status_count("poison") == 1,
-		"독 장판 진입으로 독 1중첩 부여")
-	_check(await g_actions.move_to(warrior, Vector2i(3, 1)), "독 장판 밖으로 이동")
-	g_turns.end_turn()
-	g_actions.dice = ScriptedDice.new([1], [12])
-	g_turns.end_turn()
-	_check(g_turns.current_unit == warrior and warrior.hit_points == warrior.get_max_hit_points() - 3,
-		"독 장판 독 1중첩의 턴 시작 피해는 3 (실제 HP %d / %d)" % [warrior.hit_points, warrior.get_max_hit_points()])
-	g_turns.turn_started.disconnect(g_actions._on_turn_started)
-
-	# 2) 독안개에서 부여된 독 중첩 1개의 턴 시작 피해 = 3.
+	# 독안개에서 부여된 독 중첩 1개의 턴 시작 피해 = 3.
 	var fog_warrior: CombatUnit = CombatUnit.new()
 	fog_warrior.kind = CombatUnit.Kind.WARRIOR
 	fog_warrior.is_ally = true
