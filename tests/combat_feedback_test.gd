@@ -280,12 +280,10 @@ func _test_hit_effects() -> void:
 			flash = child
 	_check(flash != null and flash.material == shader and absf(flash.scale.x - 0.5) < 0.001,
 		"명중하면 pixel_art 재질의 0.5배 섬광이 생긴다")
-	_check(flash != null and absf(flash.sprite_frames.get_animation_speed(&"flash") - CombatPresentation.fps(CombatHitEffects.FLASH_FPS)) < 0.001,
-		"타격 섬광 속도는 전체 속도 계수를 따른다(#811)")
+	_check_effect_fps(flash, &"flash", "타격 섬광 속도는 전체 속도 계수를 따른다(#811)")
 	var paused_seen: bool = false
 	var recoil_seen: float = 0.0
-	var hit_started: int = Time.get_ticks_msec()
-	var deadline: int = hit_started + 2000
+	var deadline: int = Time.get_ticks_msec() + 2000
 	while effects.get_child_count() > 0 and Time.get_ticks_msec() < deadline:
 		paused_seen = paused_seen or target.get_node("Sprite").speed_scale == 0.0
 		recoil_seen = maxf(recoil_seen, absf(target.recoil_offset.x))
@@ -337,7 +335,7 @@ func _test_hit_effects() -> void:
 	actions.struck.emit(attacker, temporary, temporary.cell, true)
 	await process_frame
 	temporary.free()
-	var temporary_cleared: bool = await _wait_for(func() -> bool: return effects.get_child_count() == 0, CombatPresentation.duration(0.4) + 0.5)
+	var temporary_cleared: bool = await _wait_effects_clear(effects)
 	_check(temporary_cleared, "이펙트 도중 대상이 해제되어도 정리된다")
 
 
@@ -366,7 +364,7 @@ func _test_status_effects() -> void:
 		var path: String = found[0].sprite_frames.get_frame_texture(&"play", 0).resource_path if found.size() == 1 else ""
 		_check(found.size() == 1 and ("/%s/" % entry[0]) in path and found[0].material == shader and absf(found[0].scale.x - 0.5) < 0.001,
 			"상태 효과 %s는 pixel_art 재질의 0.5배 효과 하나: %s" % [entry[0], path])
-		_check(found.size() == 1 and absf(found[0].sprite_frames.get_animation_speed(&"play") - CombatPresentation.fps(CombatHitEffects.FLASH_FPS)) < 0.001,
+		_check_effect_fps(found[0] as AnimatedSprite2D if found.size() == 1 else null, &"play",
 			"상태 효과 %s 속도는 전체 속도 계수를 따른다(#811)" % entry[0])
 		var finished: bool = await _wait_for(func() -> bool: return effects.get_child_count() == 0, 1.0)
 		_check(finished, "상태 효과 %s는 한 번 재생하고 사라진다" % entry[0])
@@ -695,7 +693,7 @@ func _test_skill_effects() -> void:
 	var shield: Array[Node] = _sprites(effects)
 	_check(shield.size() == 1 and shield[0].material == shader and absf(shield[0].scale.x - 0.5) < 0.001,
 		"성스러운 장막은 pixel_art 재질의 0.5배 효과 하나를 만든다")
-	_check(shield.size() == 1 and absf(shield[0].sprite_frames.get_animation_speed(&"play") - CombatPresentation.fps(CombatHitEffects.FLASH_FPS)) < 0.001,
+	_check_effect_fps(shield[0] as AnimatedSprite2D if shield.size() == 1 else null, &"play",
 		"스킬 효과 속도는 전체 속도 계수를 따른다(#811)")
 	await _wait_for(func() -> bool: return effects.get_child_count() == 0, 1.0)
 	_check(effects.get_child_count() == 0, "방어막 효과는 한 번 재생하고 사라진다")
@@ -782,8 +780,17 @@ func _test_skill_effects() -> void:
 	actions.healed.emit(temporary, 2)
 	await process_frame
 	temporary.free()
-	var skill_cleared: bool = await _wait_for(func() -> bool: return effects.get_child_count() == 0, CombatPresentation.duration(0.4) + 0.5)
+	var skill_cleared: bool = await _wait_effects_clear(effects)
 	_check(skill_cleared, "효과 도중 유닛이 해제되어도 정리된다")
+
+
+func _check_effect_fps(sprite: AnimatedSprite2D, animation: StringName, message: String) -> void:
+	_check(sprite != null and absf(sprite.sprite_frames.get_animation_speed(animation) - CombatPresentation.fps(12.0)) < 0.001,
+		message)
+
+
+func _wait_effects_clear(effects: Node) -> bool:
+	return await _wait_for(func() -> bool: return effects.get_child_count() == 0, CombatPresentation.duration(0.4) + 0.5)
 
 
 func _sprites(effects: Node) -> Array[Node]:
