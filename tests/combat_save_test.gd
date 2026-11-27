@@ -174,6 +174,18 @@ func _test_format_state() -> void:
 	state.units[0].cell = Vector2i(3, 4)
 	_check(restored.call("restore_combat", state) and restored.call("combat_state") == state,
 		"재배치 전 저장의 물체 좌표·상자 HP와 새 초기 상자 칸의 유닛 위치를 그대로 복원")
+	# 쓰러진 시전자의 기절도 시계 슬롯과 함께 저장·복원된다(#359).
+	var stunned_battle: Node2D = _battle(0)
+	var stunned_actions: CombatActions = stunned_battle.get("actions")
+	var stunned_party: Array[CombatUnit] = stunned_battle.get("party")
+	var stun_caster: CombatUnit = stunned_actions.units.filter(func(unit: CombatUnit) -> bool: return not unit.is_ally)[0]
+	_check(stunned_actions.apply_status(stun_caster, stunned_party[0], "stun"), "저장 검사용 기절 부여")
+	stunned_actions.incapacitate(stun_caster)
+	var slotted_state: Dictionary = stunned_battle.call("combat_state")
+	_check(stunned_party[0].is_stunned and not slotted_state.clock_slots.is_empty()
+		and restored.call("restore_combat", slotted_state) and restored.call("combat_state") == slotted_state,
+		"쓰러진 시전자의 기절과 시계 슬롯을 그대로 저장·복원")
+	await _free(stunned_battle)
 	await _free(restored)
 	await _free(battle)
 
@@ -533,7 +545,7 @@ func _test_rejects_bad_saves() -> void:
 		"시전자 없는 기절": func(state: Dictionary) -> void:
 			state.units[0].stunned = true
 			state.units[0].stun_source = -1,
-		"쓰러진 시전자의 기절": func(state: Dictionary) -> void:
+		"시계 슬롯 없는 쓰러진 시전자의 기절": func(state: Dictionary) -> void:
 			state.units[0].stunned = true
 			state.units[0].stun_source = enemy
 			state.units[enemy].hit_points = 0,

@@ -119,14 +119,18 @@ func _test_cross_invariants() -> void:
 	alive_clock.clock_slots = [[0, 1, false]]
 	_check(not CombatSnapshot.is_valid_combat(alive_clock, 9, f.lookup, f.loot),
 		"살아 있는 시전자의 시계 슬롯 거부")
-	# 3. 쓰러진 시전자의 기절 거부
+	# 3. 시계 슬롯 없는 쓰러진 시전자의 기절 거부, 시계 슬롯이 있으면 허용
 	var dead_stun_source: Dictionary = base.duplicate(true)
 	dead_stun_source.units[2].hit_points = 0
 	dead_stun_source.turns.order = [0, 1]
 	dead_stun_source.units[0].stunned = true
 	dead_stun_source.units[0].stun_source = 2
 	_check(not CombatSnapshot.is_valid_combat(dead_stun_source, 9, f.lookup, f.loot),
-		"쓰러진 시전자의 기절 거부")
+		"시계 슬롯 없는 쓰러진 시전자의 기절 거부")
+	var slotted_stun_source: Dictionary = dead_stun_source.duplicate(true)
+	slotted_stun_source.clock_slots = [[2, 0, false]]
+	_check(CombatSnapshot.is_valid_combat(slotted_stun_source, 9, f.lookup, f.loot),
+		"시계 슬롯에 보관된 쓰러진 시전자의 기절 허용")
 	# 4. 남은 상자 칸과 겹치는 바닥 아이템 거부
 	var overlap_loot: Dictionary = base.duplicate(true)
 	var potion: Dictionary = f.loot.roll_item(CombatDice.new(), 1)

@@ -120,11 +120,13 @@ static func _validate_combat_with_meta(state: Dictionary, meta: StageMeta,
 	for slot: Array in state.clock_slots:
 		if slot[0] in order or slot[1] not in order:
 			return false
-	# 기절은 시전자의 턴이 와야 풀린다. 시전자가 살아서 순서에 있어야 턴이 끝없이 넘어가지 않는다.
+	# 기절은 시전자의 차례나 쓰러진 시전자의 시계 슬롯이 와야 풀린다.
 	for saved: Dictionary in saved_units:
-		if saved.stunned and saved.hit_points > 0 and (saved_units[saved.stun_source].hit_points <= 0
-				or saved.stun_source not in state.turns.order):
-			return false
+		if saved.stunned and saved.hit_points > 0:
+			var has_clock_slot: bool = state.clock_slots.any(func(slot: Array) -> bool: return slot[0] == saved.stun_source)
+			if not has_clock_slot and (saved_units[saved.stun_source].hit_points <= 0
+					or saved.stun_source not in state.turns.order):
+				return false
 	var replay: Variant = state.get("replay", {})
 	if not (replay is Dictionary and replay.get("actions", 0) is int
 			and replay.get("actions", 0) <= CombatUnit.SAVED_INT_LIMIT and replay.get("reactions", []) is Array

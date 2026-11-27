@@ -3041,8 +3041,17 @@ func _test_stun_landing_incapacitation() -> void:
 		else:
 			f.actions.grid.heights[source.cell] = 9
 			_check(await f.actions.jump_to(source, Vector2i(3, 5)), "기절을 건 뒤 치명적인 낙하 점프")
-		_check(source.hit_points == 0 and not source.visible and not target.is_stunned,
-			"시전자의 실제 착지 전투 불능은 기절을 즉시 해제: " + str(pit))
+		_check(source.hit_points == 0 and not source.visible and target.is_stunned
+			and not f.actions.save_state().clock_slots.is_empty(),
+			"시전자의 실제 착지 전투 불능 뒤에도 기절을 시계 슬롯으로 유지: " + str(pit))
+		f.turns.end_turn()
+		_check(target.is_stunned and f.turns.is_turn_finished(target) and f.turns.current_unit == f.units[3],
+			"시전자 탈락 라운드에서 기절 대상은 차례를 건너뜀: " + str(pit))
+		f.turns.end_turn()
+		f.turns.end_turn()
+		_check(not target.is_stunned and f.turns.current_unit == target
+			and f.actions.save_state().clock_slots.is_empty(),
+			"시계 슬롯이 시전자 자리에 닿으면 기절이 풀려 대상이 차례를 진행: " + str(pit))
 
 
 func _test_finished_stun_removal() -> void:
@@ -3057,8 +3066,12 @@ func _test_finished_stun_removal() -> void:
 	_check(f.turns.is_turn_finished(target) and f.turns.current_unit == f.units[3],
 		"시전자 탈락 전 이미 기절 대상의 차례를 건너뜀")
 	f.actions.incapacitate(source)
-	_check(not target.is_stunned and f.turns.is_turn_finished(target)
-		and f.turns.current_unit == f.units[3], "기절 해제는 이미 완료한 차례를 소급하지 않음")
+	_check(target.is_stunned and f.turns.is_turn_finished(target)
+		and f.turns.current_unit == f.units[3], "시전자 탈락 뒤에도 시계 슬롯 자리 전까지 기절 유지")
+	f.turns.end_turn()
+	f.turns.end_turn()
+	_check(not target.is_stunned and f.turns.current_unit == target
+		and f.actions.save_state().clock_slots.is_empty(), "기준 유닛인 대상의 다음 라운드 시작에 시계 슬롯이 기절을 해제")
 
 
 func _test_stun_reapplication() -> void:
@@ -3276,13 +3289,23 @@ func _test_status_caster_incapacitation() -> void:
 	var f: Fixture = _fixture()
 	var target: CombatUnit = f.units[2]
 	f.actions.apply_status(f.units[1], target, "burn")
-	f.actions.apply_status(f.units[0], target, "poison")
+	f.actions.apply_status(f.units[1], target, "poison")
 	f.actions.incapacitate(f.units[1])
 	_check(not f.actions.apply_status(f.units[1], target, "burn"), "전투 불능 시전자의 새 부여 거부")
 	f.actions.dice = _dice_for([2, 1], [4, 4])
 	f.turns.end_turn()
-	_check(f.turns.current_unit == target and target.hit_points == 9,
-		"시전자 전투 불능 뒤에도 화상은 시계 슬롯으로 유지되고 다른 시전자의 독도 유지")
+	_check(f.turns.current_unit == target and target.hit_points == 9
+		and target.get_status_count("burn") == 1 and target.get_status_count("poison") == 1,
+		"시전자 전투 불능 뒤에도 화상과 기간 있는 독 모두 시계 슬롯으로 유지됨")
+	# 독은 남은 2·3번째 시전자 슬롯 동안 계속 틱한 뒤 4번째 슬롯 처리에서 만료한다.
+	f.actions.dice = _dice_for([1, 1], [4, 4])
+	for expected_hp: int in [8, 7, 7]:
+		f.turns.end_turn()
+		f.turns.end_turn()
+		f.turns.end_turn()
+		_check(target.hit_points == expected_hp, "쓰러진 시전자의 독은 시계 슬롯 기간 동안 틱: HP" + str(expected_hp))
+	_check(target.get_status_count("poison") == 0 and f.actions.save_state().clock_slots.is_empty(),
+		"쓰러진 시전자의 독 4턴이 끝나면 만료되고 시계 슬롯을 정리")
 
 
 func _test_status_stage_reset() -> void:
@@ -3722,7 +3745,8 @@ func _test_common_stun_application() -> void:
 	_check(f.actions.apply_status(f.units[1], f.units[2], "stun") and f.units[2].is_stunned,
 		"공통 부여는 기존 기절도 지원")
 	f.actions.incapacitate(f.units[1])
-	_check(not f.units[2].is_stunned, "공통 기절 부여도 시전자 전투 불능에 즉시 해제")
+	_check(f.units[2].is_stunned and not f.actions.save_state().clock_slots.is_empty(),
+		"공통 기절 부여도 시전자 전투 불능 뒤 시계 슬롯으로 유지")
 	f.units[3].kind = CombatUnit.Kind.SCRAP_ROBOT_1000
 	_check(not f.actions.apply_status(f.units[0], f.units[3], "stun") and not f.units[3].is_stunned,
 		"공통 기절 부여도 기존 보스 면역 보존")
@@ -3855,20 +3879,23 @@ func _test_status_removed_during_tick() -> void:
 	f.actions.apply_status(f.units[3], target, "poison")
 	f.actions.feedback.connect(func(unit: CombatUnit, text: String) -> void:
 		if unit == target and text == "화상 2":
+			# 시전자 탈락은 독을 지우지 않지만, 콜백이 직접 제거한 뒤 효과는 실행하지 않는다.
 			f.actions.incapacitate(f.units[3])
+			target.status_effects = target.status_effects.filter(
+				func(effect: CombatUnit.StatusEffect) -> bool: return effect.kind != "poison")
 	)
 	f.actions.dice = _dice_for([2], [4])
 	f.turns.end_turn()
 	f.turns.end_turn()
-	_check(target.hit_points == 10, "앞 틱의 피드백 중 시전자가 탈락하면 제거된 뒤 효과를 실행하지 않음")
+	_check(target.hit_points == 10, "앞 틱의 피드백 중 제거된 뒤 효과를 실행하지 않음")
 
 
 func _test_poison_removed_during_save() -> void:
-	for boundary: int in range(3):
+	for boundary: int in range(4):
 		var f: Fixture = _fixture()
 		var target: CombatUnit = f.units[2]
 		f.turns.select_unit(f.units[1])
-		f.actions.apply_status(f.units[1] if boundary == 0 else f.units[3], target, "poison")
+		f.actions.apply_status(f.units[1] if boundary in [0, 3] else f.units[3], target, "poison")
 		var damage_messages: Array[String] = []
 		# 제거 실패는 팝업이 없으므로 같은 시점의 제거 로그에서 끼어든다.
 		var interrupt: Callable = func(message: String) -> void:
@@ -3878,9 +3905,11 @@ func _test_poison_removed_during_save() -> void:
 				f.actions.incapacitate(f.units[1])
 			elif boundary == 1:
 				f.actions.incapacitate(target)
-			else:
+			elif boundary == 2:
 				f.actions.incapacitate(f.units[0])
 				f.actions.incapacitate(f.units[1])
+			else:
+				target.status_effects.clear()
 		var record: Callable = func(unit: CombatUnit, text: String) -> void:
 			if unit == target and text.begins_with("독 "):
 				damage_messages.append(text)
@@ -3892,8 +3921,12 @@ func _test_poison_removed_during_save() -> void:
 		# 픽스처를 잡은 콜백이 순환 참조로 남지 않게 끊는다.
 		f.actions.logged.disconnect(interrupt)
 		f.actions.feedback.disconnect(record)
-		_check(target.hit_points == (0 if boundary == 1 else 12) and damage_messages.is_empty(),
-			"독 제거 로그 중 시전자·대상 탈락 또는 전투 종료 뒤 독 피해를 실행하지 않음: " + str(boundary))
+		if boundary == 0:
+			_check(target.hit_points == 11 and damage_messages == ["독 1"],
+				"독 제거 로그 중 시전자가 탈락해도 독이 시계 슬롯으로 남아 피해를 줌")
+		else:
+			_check(target.hit_points == (0 if boundary == 1 else 12) and damage_messages.is_empty(),
+				"독 제거 로그 중 대상 탈락·전투 종료·직접 제거 뒤 독 피해를 실행하지 않음: " + str(boundary))
 
 
 func _test_water_stage() -> void:
@@ -3990,10 +4023,18 @@ func _test_stun_source_incapacitation() -> void:
 	_check(f.turns.current_unit == f.units[2] and not f.turns.is_turn_finished(target),
 		"같은 적 묶음의 기절 대상 차례는 아직 남음")
 	f.actions.incapacitate(source)
-	_check(not target.is_stunned, "시전자 전투 불능 시 그 시전자의 기절을 즉시 해제")
+	_check(target.is_stunned and f.actions.save_state().clock_slots == [[1, 2, false]],
+		"시전자 전투 불능 시 기절을 즉시 해제하지 않고 시계 슬롯으로 유지")
 	f.turns.end_turn()
-	_check(f.turns.current_unit == target and f.turns.round_number == 1,
-		"해제된 기절 대상은 오래된 건너뛰기 기록 없이 남은 차례를 받음")
+	_check(target.is_stunned and f.turns.current_unit == f.units[0] and f.turns.round_number == 2,
+		"유지된 기절 대상은 남은 1라운드 차례를 건너뛰고 2라운드로 넘어감")
+	f.turns.end_turn()
+	_check(not target.is_stunned and f.turns.current_unit == f.units[2]
+		and f.actions.save_state().clock_slots.is_empty(),
+		"기준 유닛의 다음 순환 시작에 시계 슬롯이 기절을 해제하고 슬롯을 정리")
+	f.turns.end_turn()
+	_check(f.turns.current_unit == target and not target.is_stunned,
+		"기절이 풀린 대상은 2라운드 차례를 정상 진행")
 
 
 ## 표식·충격 화살은 #528에서 없앴다. 기절 규칙은 남아 apply_status로 건다.
