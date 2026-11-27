@@ -114,6 +114,7 @@ func initialize(combat_units: Array[CombatUnit], combat_turns: CombatTurns) -> v
 	_clock_slots.clear()
 	turns = combat_turns
 	turns.turn_started.connect(_on_turn_started)
+	turns.stun_clears_on_turn_start = _clears_stun_on_turn_start
 	dice.randomize()
 
 
@@ -254,9 +255,7 @@ func _on_turn_started(unit: CombatUnit) -> void:
 	if unit.stealthed:
 		unit.stealthed = false
 		logged.emit(tr("%s 은신 해제") % unit.get_display_name())
-	for target: CombatUnit in units:
-		if target.stun_source == unit:
-			target.is_stunned = false
+	_clear_stun_from(unit)
 	grounds.clear_entered_for(unit)
 	_clear_burn_in_water(unit)
 	if unit.overloaded and unit.hit_points > 0 and not is_over():
@@ -328,9 +327,7 @@ func _decrease_durations(unit: CombatUnit) -> void:
 func _tick_unit_effects(caster: CombatUnit) -> void:
 	# 살아 있는 시전자의 기절은 턴 시작 1단계(6-1)에서 이미 풀린다. 시전자가 쓰러졌으면 시계 슬롯이 여기서 푼다(#359).
 	if caster.hit_points <= 0:
-		for target: CombatUnit in units:
-			if target.stun_source == caster:
-				target.is_stunned = false
+		_clear_stun_from(caster)
 	if caster.shield_turns > 0:
 		caster.shield_turns -= 1
 		if caster.shield_turns == 0:
@@ -366,6 +363,18 @@ func _tick_unit_effects(caster: CombatUnit) -> void:
 	grounds.tick_persistent(caster)
 
 
+func _clear_stun_from(caster: CombatUnit) -> void:
+	for target: CombatUnit in units:
+		if target.stun_source == caster:
+			target.is_stunned = false
+
+
+func _clears_stun_on_turn_start(unit: CombatUnit) -> bool:
+	return (unit.is_stunned and unit.stun_source != null
+		and _clock_slots.any(func(slot: ClockSlot) -> bool:
+			return slot.anchor == unit and not slot.skip and slot.caster == unit.stun_source))
+
+
 func _has_unit_effects(caster: CombatUnit) -> bool:
 	return (units.any(func(unit: CombatUnit) -> bool:
 		return ((unit.hit_points > 0 and unit.is_stunned and unit.stun_source == caster)
@@ -391,6 +400,7 @@ func apply_status(source: CombatUnit, target: CombatUnit, kind: String,
 			return false
 		target.is_stunned = true
 		target.stun_source = source
+		_clock_slots = _clock_slots.filter(func(slot: ClockSlot) -> bool: return _has_unit_effects(slot.caster))
 	else:
 		if target.get_status_count(kind) >= 3:
 			return false

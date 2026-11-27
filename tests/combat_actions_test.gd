@@ -4035,6 +4035,43 @@ func _test_stun_source_incapacitation() -> void:
 	f.turns.end_turn()
 	_check(f.turns.current_unit == target and not target.is_stunned,
 		"기절이 풀린 대상은 2라운드 차례를 정상 진행")
+	# [A0, A1, E0, T(E0에 기절), A2]에서 E0 탈락으로 T·A2가 지연 결합해도 T 차례 시작에 시계 슬롯이 기절을 먼저 푼다.
+	var g: Fixture = _fixture()
+	var a2: CombatUnit = CombatUnit.new()
+	a2.kind = CombatUnit.Kind.ARCHER
+	a2.is_ally = true
+	a2.cell = Vector2i(1, 4)
+	a2.hit_points = a2.get_max_hit_points()
+	g.units.append(a2)
+	_created.append(a2)
+	var e1: CombatUnit = CombatUnit.new()
+	e1.kind = CombatUnit.Kind.WARRIOR
+	e1.is_ally = false
+	e1.cell = Vector2i(8, 4)
+	e1.hit_points = e1.get_max_hit_points()
+	g.units.append(e1)
+	_created.append(e1)
+	var t_unit: CombatUnit = g.units[1]
+	var e0: CombatUnit = g.units[2]
+	g.units[3].is_ally = true
+	g.actions.initialize(g.units, g.turns)
+	ScriptedDice.arrange_turns(g.turns, g.units, [g.units[0], g.units[3], e0, t_unit, a2, e1])
+	g.actions.apply_status(e0, t_unit, "stun")
+	g.actions.incapacitate(e0)
+	_check(t_unit.is_stunned and g.turns.current_unit == g.units[0], "E0 탈락 직후 아직 A1 전이라 T 기절 유지")
+	g.turns.end_turn()
+	_check(g.turns.current_unit == g.units[3] and t_unit.is_stunned, "A1 차례 동안에도 T 기절 유지")
+	g.turns.end_turn()
+	_check(g.turns.current_unit == t_unit and not t_unit.is_stunned
+		and g.actions.save_state().clock_slots.is_empty(),
+		"A1 종료 뒤 T가 A2보다 먼저 시계 슬롯으로 기절 해제되어 차례를 진행")
+	# 쓰러진 시전자의 기절을 다른 시전자가 덮어쓰면 쓸모없는 옛 슬롯을 정리한다.
+	var overwrite: Fixture = _fixture()
+	overwrite.actions.apply_status(overwrite.units[2], overwrite.units[0], "stun")
+	overwrite.actions.incapacitate(overwrite.units[2])
+	_check(not overwrite.actions.save_state().clock_slots.is_empty(), "덮어쓰기 전 슬롯 존재")
+	overwrite.actions.apply_status(overwrite.units[3], overwrite.units[0], "stun")
+	_check(overwrite.actions.save_state().clock_slots.is_empty(), "새 시전자로 기절을 덮어쓰면 빈 옛 시계 슬롯 정리")
 
 
 ## 표식·충격 화살은 #528에서 없앴다. 기절 규칙은 남아 apply_status로 건다.

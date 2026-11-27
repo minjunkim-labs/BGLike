@@ -546,9 +546,19 @@ func _test_rejects_bad_saves() -> void:
 			state.units[0].stunned = true
 			state.units[0].stun_source = -1,
 		"시계 슬롯 없는 쓰러진 시전자의 기절": func(state: Dictionary) -> void:
-			state.units[0].stunned = true
-			state.units[0].stun_source = enemy
-			state.units[enemy].hit_points = 0,
+			var target_unit: int = state.turns.order[0] if state.turns.order[0] != enemy else state.turns.order[1]
+			state.units[target_unit].stunned = true
+			state.units[target_unit].stun_source = enemy
+			state.units[enemy].hit_points = 0
+			state.turns.order.erase(enemy)
+			if state.turns.current == enemy:
+				state.turns.current = target_unit
+				if state.units[target_unit].ally:
+					state.replay = {"actions": 0, "reactions": []}
+			var cur_idx: int = state.turns.order.find(state.turns.current)
+			state.turns.group = Vector2i(cur_idx, cur_idx)
+			for key: String in ["finished", "pending", "started", "activated", "deferred"]:
+				state.turns[key].erase(enemy),
 		"끝난 전투의 적 턴 다시 실행": func(state: Dictionary) -> void:
 			for unit: Dictionary in state.units:
 				if unit.ally:

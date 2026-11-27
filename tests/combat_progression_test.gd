@@ -898,7 +898,9 @@ func _test_stage_transition(battle: Node2D) -> void:
 	second.ally_cells = [Vector2i(1, 8), Vector2i(2, 8)]
 	stages[1] = second
 	_win(battle)
-	_check(not warrior.is_stunned, "승리 때 기절 시전자 탈락을 먼저 반영")
+	_check(not warrior.is_stunned or (battle.get("actions") as CombatActions).save_state().clock_slots.any(
+		func(slot: Array) -> bool: return slot[0] == 2),
+		"승리 뒤 기절이 남았으면 시계 슬롯도 함께 유지됨")
 	_check(hud.result_label.text == "승리" and hud.restart_button.text == "보상 확인",
 		"스테이지 승리 결과에서 보상 확인 안내")
 	hud.restart_button.pressed.emit()
