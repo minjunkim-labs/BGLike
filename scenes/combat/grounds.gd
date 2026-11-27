@@ -257,19 +257,27 @@ func ignite(cell: Vector2i, igniter: CombatUnit) -> bool:
 	if (not is_instance_valid(igniter) or igniter not in units or igniter.hit_points <= 0 or _host.is_over()
 		or oil_at(cell) == null):
 		return false
+	var revision: int = _host._revision
 	var burned: Array[Vector2i] = connected(cell, _oil_cells())
 	for ground: Ground in _entries.duplicate():
 		if ground.kind == "oil" and ground.cell in burned:
 			_entries.erase(ground)
 	_host.logged.emit(tr("%s 점화: 기름 %d칸") % [igniter.get_display_name(), burned.size()])
+	if revision != _host._revision or _host.is_over():
+		return true
 	_host.oil_ignited.emit(burned)
 	for unit: CombatUnit in units.duplicate():
+		if revision != _host._revision or _host.is_over():
+			return true
 		if unit.hit_points > 0 and unit.cell in burned and _host.apply_status(igniter, unit, "burn"):
 			_host.apply_status(igniter, unit, "burn")
 			_host.logged.emit(tr("%s 점화: 화상 2중첩") % unit.get_display_name())
 	for burned_cell: Vector2i in burned:
+		if revision != _host._revision or _host.is_over():
+			return true
 		create_ground(igniter, burned_cell, "burn")
-	_host.changed.emit()
+	if revision == _host._revision:
+		_host.changed.emit()
 	return true
 
 
@@ -313,17 +321,22 @@ func _slip_roll(unit: CombatUnit) -> bool:
 
 func apply_to_unit(unit: CombatUnit, entering: bool) -> void:
 	var revision: int = _host._revision
-	apply_fog(unit, entering)
 	if entering:
 		enter_oil(unit)
 	if not _host._same_combat(unit, revision):
 		return
+	var fog_applied: bool = false
 	for ground: Ground in _entries.duplicate():
-		if not is_instance_valid(unit) or unit.hit_points <= 0 or _host.is_over():
+		if not _host._same_combat(unit, revision) or unit.hit_points <= 0 or _host.is_over():
 			break
-		if ground.kind != "burn":
+		if ground not in _entries or ground.cell != unit.cell:
 			continue
-		if ground not in _entries or ground.cell != unit.cell or not is_instance_valid(ground.source):
+		if ground.kind == "fog":
+			if not fog_applied:
+				fog_applied = true
+				apply_fog(unit, entering)
+			continue
+		if ground.kind != "burn" or not is_instance_valid(ground.source):
 			continue
 		if entering:
 			if unit in ground.entered:

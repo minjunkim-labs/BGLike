@@ -3464,7 +3464,8 @@ func _test_ground_start_and_expiry() -> void:
 	var target: CombatUnit = f.units[2]
 	f.actions.create_ground(f.units[1], target.cell, "burn")
 	f.actions.grounds.add(f.units[1], target.cell, "fog", 8)
-	f.actions.dice = _dice_for([1, 1, 2, 1, 1, 2], [4, 4, 4, 4, 4, 4])
+	# 생성 순서(불 -> 독안개)대로 부여되므로 첫 턴은 독안개 내성 1, 화상 2, 독 제거 내성 1 순으로 소비한다.
+	f.actions.dice = _dice_for([1, 2, 1, 1, 2, 1], [4, 4, 4, 4, 4, 4])
 	f.turns.end_turn()
 	_check(f.actions.get_grounds()[0].turns_left == 1 and f.actions.get_grounds()[1].turns_left == 3,
 		"시전자의 실제 시작에 장판 기간 감소")
