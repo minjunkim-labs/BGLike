@@ -4072,6 +4072,30 @@ func _test_stun_source_incapacitation() -> void:
 	_check(not overwrite.actions.save_state().clock_slots.is_empty(), "덮어쓰기 전 슬롯 존재")
 	overwrite.actions.apply_status(overwrite.units[3], overwrite.units[0], "stun")
 	_check(overwrite.actions.save_state().clock_slots.is_empty(), "새 시전자로 기절을 덮어쓰면 빈 옛 시계 슬롯 정리")
+	# [E0, C, E1(기절), T(C에 기절), A]에서 E0가 C를 쓰러뜨려 E1·T가 지연되면, 두 번째 순회에서 E1 슬롯이 T 기절을 풀고 T 차례를 준다.
+	var h: Fixture = _fixture()
+	var e_extra: CombatUnit = CombatUnit.new()
+	e_extra.kind = CombatUnit.Kind.WARRIOR
+	e_extra.is_ally = false
+	e_extra.cell = Vector2i(8, 4)
+	e_extra.hit_points = e_extra.get_max_hit_points()
+	h.units.append(e_extra)
+	_created.append(e_extra)
+	var c_ally: CombatUnit = h.units[0]
+	var a_ally: CombatUnit = h.units[1]
+	var e0_enemy: CombatUnit = h.units[2]
+	var e1_enemy: CombatUnit = h.units[3]
+	h.actions.initialize(h.units, h.turns)
+	ScriptedDice.arrange_turns(h.turns, h.units, [e0_enemy, c_ally, e1_enemy, e_extra, a_ally])
+	h.actions.apply_status(c_ally, e_extra, "stun")
+	h.actions.apply_status(a_ally, e1_enemy, "stun")
+	h.actions.incapacitate(c_ally)
+	_check(e1_enemy.is_stunned and e_extra.is_stunned and h.turns.current_unit == e0_enemy,
+		"E0 차례 동안 C 탈락 뒤 E1과 T 모두 기절 유지")
+	h.turns.end_turn()
+	_check(h.turns.current_unit == e_extra and not e_extra.is_stunned and e1_enemy.is_stunned
+		and h.turns.is_turn_finished(e1_enemy) and h.actions.save_state().clock_slots.is_empty(),
+		"지연된 E1의 시작에서 C 슬롯이 T 기절을 풀면 T가 차례를 잃지 않고 진행")
 
 
 ## 표식·충격 화살은 #528에서 없앴다. 기절 규칙은 남아 apply_status로 건다.

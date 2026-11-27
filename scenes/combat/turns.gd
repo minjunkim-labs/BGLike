@@ -234,7 +234,7 @@ func _select_next_or_advance() -> void:
 			return
 		_finished_units.append(unit)
 	for unit: CombatUnit in get_current_group():
-		if unit not in _deferred_units or not unit.is_stunned or is_turn_finished(unit):
+		if unit not in _deferred_units or is_turn_finished(unit):
 			continue
 		current_unit = unit
 		_activate_current_unit()
