@@ -1,7 +1,7 @@
 class_name CombatHitEffects
 extends Node2D
-## 타격 섬광·히트스톱·빗나감 잔상(#559). 표시만 하고 전투 진행은 기다리지 않는다.
-## 모든 시간은 게임 시간이라 4배속(Engine.time_scale)에서 같은 비율로 줄어든다.
+## 타격 섬광·히트스톱·빗나감 잔상(#559) 및 스킬·상태·전투 불능 효과(#634~#636). 표시만 하고 전투 진행은 기다리지 않는다.
+## 모든 시간은 전체 속도 계수(CombatPresentation.PRESENTATION_SPEED)와 게임 시간(Engine.time_scale)을 따른다.
 
 const HITSTOP_TIME: float = 0.05
 const FLASH_FPS: float = 12.0
@@ -73,7 +73,7 @@ func play_miss(attacker: CombatUnit, target: CombatUnit) -> void:
 		+ Vector2(_away(attacker, target) * AFTERIMAGE_OFFSET, 0))
 	add_child(ghost)
 	var tween: Tween = ghost.create_tween()
-	tween.tween_property(ghost, "modulate:a", 0.0, AFTERIMAGE_TIME)
+	tween.tween_property(ghost, "modulate:a", 0.0, CombatPresentation.duration(AFTERIMAGE_TIME))
 	tween.tween_callback(ghost.queue_free)
 
 
@@ -158,7 +158,7 @@ func _skill_effect_frames(folder: String) -> SpriteFrames:
 		var frames: SpriteFrames = SpriteFrames.new()
 		frames.remove_animation("default")
 		frames.add_animation(&"play")
-		frames.set_animation_speed(&"play", CombatPresentation.fps(FLASH_FPS) if DOWN_FRAME_COUNTS.has(folder) else FLASH_FPS)
+		frames.set_animation_speed(&"play", CombatPresentation.fps(FLASH_FPS))
 		frames.set_animation_loop(&"play", false)
 		var count: int = (DOWN_FRAME_COUNTS[folder] if DOWN_FRAME_COUNTS.has(folder)
 				else SKILL_FRAME_COUNTS[folder] if SKILL_FRAME_COUNTS.has(folder) else STATUS_FRAME_COUNTS[folder])
@@ -173,7 +173,7 @@ func _frames() -> SpriteFrames:
 		_flash_frames = SpriteFrames.new()
 		_flash_frames.remove_animation("default")
 		_flash_frames.add_animation(&"flash")
-		_flash_frames.set_animation_speed(&"flash", FLASH_FPS)
+		_flash_frames.set_animation_speed(&"flash", CombatPresentation.fps(FLASH_FPS))
 		_flash_frames.set_animation_loop(&"flash", false)
 		for path: String in FLASH_FRAMES:
 			_flash_frames.add_frame(&"flash", load(path) as Texture2D)
@@ -190,13 +190,14 @@ func _away(attacker: CombatUnit, target: CombatUnit) -> float:
 func _hitstop(attacker: CombatUnit, target: CombatUnit) -> void:
 	var direction: float = _away(attacker, target)
 	target.set_hit_pause(true)
-	await get_tree().create_timer(HITSTOP_TIME, false).timeout
+	await get_tree().create_timer(CombatPresentation.duration(HITSTOP_TIME), false).timeout
 	if not is_instance_valid(target):
 		return
 	target.set_hit_pause(false)
+	var recoil_time: float = CombatPresentation.duration(RECOIL_TIME)
 	var tween: Tween = create_tween()
-	tween.tween_property(target, "recoil_offset", Vector2(direction * RECOIL_DISTANCE, 0), RECOIL_TIME)
-	tween.tween_property(target, "recoil_offset", Vector2.ZERO, RECOIL_TIME)
+	tween.tween_property(target, "recoil_offset", Vector2(direction * RECOIL_DISTANCE, 0), recoil_time)
+	tween.tween_property(target, "recoil_offset", Vector2.ZERO, recoil_time)
 	await tween.finished
 	if is_instance_valid(target):
 		target.recoil_offset = Vector2.ZERO
