@@ -34,7 +34,7 @@ setup은 고정한 Godot을 받아 해시를 확인합니다. Git LFS와 `git co
 - 제품 사양: 관련 Issue의 목표·완료 조건과 연결한 기획 문서를 읽습니다. 용어·ADR은 [문서 길잡이](docs/agents/domain.md)를 따릅니다.
 - 검증: [CI 구성](docs/process/ci/ci.md)의 범위 규칙을 확인합니다. 플레이 변경의 직접 확인 기준은 [협업 규칙](docs/process/workflow.md#검증과-보고)을 따릅니다.
 - 작업 진입·초기 설정 확인·명세와 티켓의 통합: [개발 절차](docs/agents/development.md). 작은 수정에는 전체 명세 절차를 강제하지 않습니다.
-- 리뷰 절차: [리뷰 절차](docs/agents/review.md). PR 본문은 [PR 양식](.github/pull_request_template.md)을 따르며, 문서 전용 PR(`AGENTS.md`·`REVIEW.md`·`docs/agents/`·설정 제외) 외에는 머지 큐가 Review 칸의 「리뷰한 head:」 SHA를 검사합니다.
+- 리뷰 절차: [리뷰 절차](docs/agents/review.md). PR 본문은 [PR 양식](.github/pull_request_template.md)을 따르며, 순수 문서 PR(지침·에이전트·설정·의존성 제외) 외에는 머지 큐가 Review 칸의 「리뷰한 head:」 SHA를 검사합니다.
 - GitHub 설정: [설정 기준선](docs/process/ci/repository-setup.md). 권리·외부 자산: [COPYRIGHT](COPYRIGHT.md)와 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md).
 
 ## 병합
