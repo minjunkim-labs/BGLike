@@ -17,6 +17,8 @@ func _run() -> void:
 	preflight = "--fixture-precheck" in OS.get_cmdline_user_args()
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("--capture-dir="): directory = arg.trim_prefix("--capture-dir=")
+	if directory.is_empty() and preflight:
+		directory = OS.get_user_data_dir().path_join("soak_qa_precheck")
 	assert(not directory.is_empty())
 	DirAccess.make_dir_recursive_absolute(directory)
 	GameSave.autosave = false
@@ -30,7 +32,7 @@ func _run() -> void:
 	battle.call("_start_stage", true)
 	_equip()
 	var actions: CombatActions = battle.get("actions")
-	assert((battle.get("units") as Array).size() == 7 and battle.is_processing())
+	assert((battle.get("units") as Array).size() == 11 and battle.is_processing())
 	assert((battle.get("party") as Array).all(func(unit: CombatUnit) -> bool: return unit.hit_points == unit.get_max_hit_points()))
 	if preflight:
 		var bag: Array = (battle.get("loot") as CombatLoot).bag.duplicate(true)
@@ -39,9 +41,7 @@ func _run() -> void:
 			_equip()
 		assert((battle.get("loot") as CombatLoot).bag == bag)
 		print("[SOAK_FIXTURE_READY]")
-		game.queue_free()
-		await process_frame
-		quit()
+		await _shutdown()
 		return
 	GameSave.autosave = true
 	battle.connect("autosaved", func() -> void: saves += 1)
@@ -92,7 +92,7 @@ func _run() -> void:
 		"save_cost_usec": save_costs, "normal_process": battle.is_processing(), "time_scale": Engine.time_scale}
 	FileAccess.open(directory.path_join("summary.json"), FileAccess.WRITE).store_string(JSON.stringify(summary, "\t"))
 	print("[SOAK_DONE] ", JSON.stringify(summary))
-	quit()
+	await _shutdown()
 
 func _equip() -> void:
 	var loot: CombatLoot = battle.get("loot")
@@ -110,6 +110,22 @@ func _equip() -> void:
 	dice.seed = 10351 + fights
 	(battle.get("turns") as CombatTurns).start(battle.get("units"), dice)
 	battle.call("_update_turn_ui")
+
+func _shutdown() -> void:
+	await process_frame
+	_release_audio(root)
+	battle = null
+	current_scene = null
+	game.queue_free()
+	await create_timer(0.5).timeout
+	quit()
+
+func _release_audio(node: Node) -> void:
+	for child: Node in node.get_children():
+		_release_audio(child)
+	if node is AudioStreamPlayer:
+		(node as AudioStreamPlayer).stop()
+		(node as AudioStreamPlayer).stream = null
 
 ## combat_save_test의 단순 정책을 재사용한다. 적 턴은 직접 호출하지 않는다.
 func _step() -> void:
