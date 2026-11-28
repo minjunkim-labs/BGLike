@@ -152,9 +152,12 @@ class GodotCheckTests(unittest.TestCase):
     def test_clean_output_passes_every_step(self):
         result, calls = self.run_check()
         self.assertEqual(result.returncode, 0, result.stderr)
+        qa_files = sorted(path.relative_to(ROOT).as_posix() for path in (ROOT / "tests").glob("*_qa.gd"))
         test_files = sorted(path.relative_to(ROOT).as_posix() for path in (ROOT / "tests").glob("*_test.gd"))
-        # --version, --import, --quit-after, every tests/*_test.gd (combat_save_test.gd in two halves).
-        self.assertEqual(len(calls), 3 + len(test_files) + 1)
+        # --version, --import, --quit-after, every tests/*_qa.gd --check-only, every tests/*_test.gd (combat_save_test.gd in two halves).
+        self.assertEqual(len(calls), 3 + len(qa_files) + len(test_files) + 1)
+        for qa_file in qa_files:
+            self.assertIn(f"--headless --path . --check-only --script {qa_file}", calls)
         for share in ("0/2", "1/2"):
             self.assertIn(f"--headless --path . --script tests/combat_save_test.gd -- {share}", calls)
         for test_file in test_files:
@@ -162,6 +165,13 @@ class GodotCheckTests(unittest.TestCase):
                 continue
             self.assertIn(f"--headless --path . --script {test_file}", calls)
         self.assertIn("Fixture: 1 checks, 0 failures", result.stdout)
+
+    def test_qa_script_error_fails_full_check(self):
+        result, calls = self.run_check("layout_qa.gd", SCRIPT_ERROR)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(SCRIPT_ERROR, result.stdout)
+        self.assertIn("Godot script error during: --check-only --script tests/layout_qa.gd", result.stderr)
+        self.assertFalse(any("combat_save_test" in call for call in calls))
 
     def test_script_error_fails_each_step(self):
         steps = ["--import", "--quit-after", "combat_turns_test", "combat_loot_test",

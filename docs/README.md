@@ -73,6 +73,7 @@
 | [adr/0002-resolution.md](adr/0002-resolution.md) | 기준 화면과 최소 창 크기 |
 | [adr/0003-save-files.md](adr/0003-save-files.md) | 저장 파일 형식 |
 | [agents/domain.md](agents/domain.md) | 작업 시작 시 읽을 문서와 기획 결정 기준 |
+| [agents/code-map.md](agents/code-map.md) | `scenes/` 모듈 책임과 `tests/` 회귀·QA 매핑 |
 | [agents/development.md](agents/development.md) | 작업 크기별 진입 절차 |
 | [agents/review.md](agents/review.md) | 독립 리뷰 절차 |
 | [agents/issue-tracker.md](agents/issue-tracker.md) | 이슈 운영 규칙 |

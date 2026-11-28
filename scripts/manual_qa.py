@@ -152,12 +152,14 @@ def preflight(godot, project, case, log):
                         pass
                     process.wait()
         text = output_path.read_text(errors="replace")
+        error = ERROR.search(text)
+        cause = f"; first error: {text[text.rfind(chr(10), 0, error.start()) + 1:].splitlines()[0]}" if error else ""
         if result is None:
-            error = ERROR.search(text)
-            cause = f"; first error: {text[text.rfind(chr(10), 0, error.start()) + 1:].splitlines()[0]}" if error else ""
             raise ValueError(f"Preflight timed out after 30 seconds; game launch blocked: {output_path}{cause}")
-        if result or ERROR.search(text) or (marker is not None and marker not in text):
-            raise ValueError(f"Preflight failed; game launch blocked: {output_path}")
+        if result or error or (marker is not None and marker not in text):
+            if not cause and marker is not None and marker not in text:
+                cause = f"; missing marker: {marker}"
+            raise ValueError(f"Preflight failed; game launch blocked: {output_path}{cause}")
 
 
 def docker_preflight():
