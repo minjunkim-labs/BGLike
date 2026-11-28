@@ -144,16 +144,19 @@ layout_mode = 2
 show_percentage = false
 mouse_filter = 2
 
-[node name="Vitals" type="Label" parent="UI/TurnHud/UnitDetails/UnitPanel/Info"]
+[node name="Vitals" type="RichTextLabel" parent="UI/TurnHud/UnitDetails/UnitPanel/Info"]
 layout_mode = 2
 mouse_filter = 2
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
 
 [node name="Abilities" type="GridContainer" parent="UI/TurnHud/UnitDetails/UnitPanel/Info"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/h_separation = 4
 theme_override_constants/v_separation = 1
-columns = 3
+columns = 2
 
 [node name="Resources" type="RichTextLabel" parent="UI/TurnHud/UnitDetails/UnitPanel/Info"]
 layout_mode = 2
@@ -186,10 +189,13 @@ offset_bottom = -54.0
 grow_horizontal = 0
 grow_vertical = 0
 
-[node name="Message" type="Label" parent="UI/TurnHud/CombatLog"]
+[node name="Message" type="RichTextLabel" parent="UI/TurnHud/CombatLog"]
 layout_mode = 2
 text = "전투 시작"
 mouse_filter = 2
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
 autowrap_mode = 3
 
 [node name="Skills" type="PanelContainer" parent="UI/TurnHud"]

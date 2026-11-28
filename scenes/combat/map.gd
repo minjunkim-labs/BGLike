@@ -40,10 +40,16 @@ const EDGE_CONTACT_ALPHA: float = 0.55
 ## 이동 범위 칸 윤곽의 폭(#556, 0.5에서 1px 굵게)과 꼭짓점 꺾쇠가 변을 따라 가는 비율.
 const EDGE_WIDTH: float = 1.5
 const CORNER_LENGTH: float = 0.25
-## 아군 이동 가능(파랑), 기본 공격 도달 바깥 칸(빨간 윤곽), 선택 동작 사거리(붉은 면·윤곽·꺾쇠) 색(#761).
+## 아군 이동 가능(파랑), 기본 공격 도달 바깥 칸(주황·호박색 윤곽), 선택 동작 사거리(주황·호박색 면·윤곽·꺾쇠) 색(#761, #824).
 const MOVE_OVERLAY_COLOR: Color = Color(0.22, 0.56, 0.92, 0.1)
-const ACTION_RANGE_COLOR: Color = Color(0.92, 0.34, 0.3, 0.12)
-const REACH_OUTLINE_COLOR: Color = Color(0.92, 0.34, 0.3, 0.85)
+const ACTION_RANGE_COLOR: Color = Color(0.96, 0.62, 0.14, 0.12)
+const REACH_OUTLINE_COLOR: Color = Color(0.96, 0.62, 0.14, 0.85)
+## 이동 미리보기 경로 색(#824): y_sort 가림을 피하려고 z_index를 올리고 어두운 외곽선 + 밝은 실선 + 도착 화살표로 그린다.
+const PATH_OUTLINE_COLOR: Color = Color(0.07, 0.05, 0.09, 0.92)
+const PATH_LINE_COLOR: Color = Color("fff3c4")
+const PATH_LINE_WIDTH: float = 2.0
+const PATH_OUTLINE_WIDTH: float = 4.0
+const PATH_Z_INDEX: int = 2
 ## 이동 경로의 기회 공격 사전 경고 아이콘 색(#733).
 const OPPORTUNITY_WARNING_BG: Color = Color(0.16, 0.06, 0.05, 0.92)
 const OPPORTUNITY_WARNING_BORDER: Color = Color("ff5a36")
@@ -311,24 +317,54 @@ func show_movement(cells: Array[Vector2i], reach_cells: Array[Vector2i],
 	var action_edge: Color = Color(ACTION_RANGE_COLOR.r, ACTION_RANGE_COLOR.g, ACTION_RANGE_COLOR.b, 0.75)
 	for cell: Vector2i in action_cells:
 		_add_tile_overlay(cell, half, ACTION_RANGE_COLOR, action_edge, true)
-	var previous: Vector2 = map_to_surface(origin)
-	for cell: Vector2i in path:
-		var line: Line2D = Line2D.new()
-		line.position = map_to_local(cell)
-		var destination: Vector2 = map_to_surface(cell)
-		line.points = PackedVector2Array([previous - line.position, destination - line.position])
-		line.width = 1.0
-		line.default_color = Color("f4cf69")
-		add_child(line)
-		_overlays.append(line)
-		previous = destination
 	if not path.is_empty():
-		var marker: Node2D = Node2D.new()
-		marker.position = map_to_local(path[-1])
-		var center: Vector2 = previous - marker.position
-		marker.draw.connect(func() -> void: marker.draw_circle(center, 3.0, Color("f4cf69"), false))
-		add_child(marker)
-		_overlays.append(marker)
+		var points: PackedVector2Array = PackedVector2Array([map_to_surface(origin)])
+		for cell: Vector2i in path:
+			points.append(map_to_surface(cell))
+		var path_root: Node2D = Node2D.new()
+		path_root.name = "MovementPath"
+		path_root.z_index = PATH_Z_INDEX
+		var outline: Line2D = Line2D.new()
+		outline.name = "Outline"
+		outline.points = points
+		outline.width = PATH_OUTLINE_WIDTH
+		outline.default_color = PATH_OUTLINE_COLOR
+		outline.joint_mode = Line2D.LINE_JOINT_ROUND
+		outline.begin_cap_mode = Line2D.LINE_CAP_ROUND
+		outline.end_cap_mode = Line2D.LINE_CAP_ROUND
+		path_root.add_child(outline)
+		var fill: Line2D = Line2D.new()
+		fill.name = "Line"
+		fill.points = points
+		fill.width = PATH_LINE_WIDTH
+		fill.default_color = PATH_LINE_COLOR
+		fill.joint_mode = Line2D.LINE_JOINT_ROUND
+		fill.begin_cap_mode = Line2D.LINE_CAP_ROUND
+		fill.end_cap_mode = Line2D.LINE_CAP_ROUND
+		path_root.add_child(fill)
+		var tip: Vector2 = points[-1]
+		var prev_pt: Vector2 = points[-2]
+		var dir: Vector2 = (tip - prev_pt).normalized()
+		if dir != Vector2.ZERO:
+			var perp: Vector2 = dir.orthogonal()
+			var head: Node2D = Node2D.new()
+			head.name = "ArrowHead"
+			head.draw.connect(func() -> void:
+				var outer: PackedVector2Array = PackedVector2Array([
+					tip + dir * 2.0,
+					tip - dir * 5.5 + perp * 4.5,
+					tip - dir * 5.5 - perp * 4.5,
+				])
+				var inner: PackedVector2Array = PackedVector2Array([
+					tip + dir * 0.5,
+					tip - dir * 4.5 + perp * 3.0,
+					tip - dir * 4.5 - perp * 3.0,
+				])
+				head.draw_colored_polygon(outer, PATH_OUTLINE_COLOR)
+				head.draw_colored_polygon(inner, PATH_LINE_COLOR))
+			path_root.add_child(head)
+		add_child(path_root)
+		_overlays.append(path_root)
 	var warned: Array[Vector2i] = []
 	for cell: Vector2i in warning_cells:
 		if cell in warned:

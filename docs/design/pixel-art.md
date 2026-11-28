@@ -161,7 +161,7 @@ Godot 리소스 경로는 앞에 `res://`를 붙인다.
 
 ## 능력치 아이콘 (#795)
 
-[#795](https://github.com/minjunkim-labs/BGLike/issues/795), 2026-11-25: [능력치와 주사위 판정 기획서 3-4절](combat/ability.md#3-4-대표-색과-아이콘)의 능력치 6종 아이콘을 `scenes/combat/art/icons/abilities/<ability_id>.png`에 둔다. 48×48 RGBA 원본을 0.25배(12 논리px)로 표시하며 sharp bilinear 셰이더(`pixel_art.tres`)를 적용한다. 1차 적용 자리는 유닛 패널 능력치 줄(3열 2줄, `[아이콘] d20` + 호버·포커스 이름)과 주사위 굴림 연출(`CombatDiceRollView`, 주사위 왼쪽) 두 곳이다. 호버 설명과 전투 로그의 작은 글씨는 대비비 원칙에 따라 제외한다.
+[#795](https://github.com/minjunkim-labs/BGLike/issues/795), 2026-11-25 ([`#824`](https://github.com/minjunkim-labs/BGLike/issues/824) 확장): [능력치와 주사위 판정 기획서 3-4절](combat/ability.md#3-4-대표-색과-아이콘)의 능력치 6종 아이콘을 `scenes/combat/art/icons/abilities/<ability_id>.png`에 둔다. 48×48 RGBA 원본을 0.25배(12 논리px)로 표시하며 sharp bilinear 셰이더(`pixel_art.tres`)를 적용한다. 유닛 패널 능력치 줄(2열 3줄, `[아이콘] 이름 d20` + 고대비 능력치 색), 주사위 굴림 연출(`CombatDiceRollView`, 주사위 왼쪽), 스킬 호버 설명과 전투 로그의 능력치 판정 표기(12 논리px 인라인 아이콘 + 어두운 패널 대비비 7+ 고대비 색), 정비 화면 캐릭터 카드에 적용한다. 같은 규격(48×48 RGBA, 12 논리px)의 전투 수치 5종 아이콘(`hp`, `ac`, `attack`, `range`, `movement`)은 `scenes/combat/art/sources/icons/draw_stat_icons.py`로 `scenes/combat/art/icons/stats/`에 생성한다.
 
 `scenes/combat/art/sources/icons/draw_ability_icons.py`가 Python 표준 라이브러리만으로 64px 설계 격자를 48px 캔버스에 찍어 결정론적으로 같은 바이트를 만든다(2px `#120d16` 어두운 윤곽, 왼쪽 위 광원, 안티앨리어싱·축소·생성 모델 없음). 규격은 `ability_icon_generation.json`에 기록한다.
 

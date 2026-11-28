@@ -379,11 +379,9 @@ func _fill_highlights(snapshot: Preview, actor: CombatUnit, actions: CombatActio
 		if _selected_action == "move":
 			if not actions.move_reactors(actor, snapshot.path).is_empty():
 				snapshot.warning_cells = actions.move_opportunity_cells(actor, snapshot.path)
-				if snapshot.path[-1] not in snapshot.warning_cells:
-					snapshot.warning_cells.append(snapshot.path[-1])
 		elif _selected_action == "jump":
 			if not actions.jump_reactors(actor, _preview_cell).is_empty():
-				snapshot.warning_cells.append(_preview_cell)
+				snapshot.warning_cells.append(actor.cell)
 
 
 func _fill_cover_blocks(snapshot: Preview, actor: CombatUnit, actions: CombatActions, units: Array[CombatUnit],

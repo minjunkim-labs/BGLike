@@ -130,9 +130,6 @@ func _ready() -> void:
 		"on_victory_downed": _on_victory_downed,
 	})
 	actions.reaction_requested.connect(_on_reaction_requested)
-	hud.reflex_selected.connect(_on_reflex_selected)
-	hud.reflex_previewed.connect(_on_reflex_previewed)
-	hud.reflex_label = _reflex_arrow
 	hud.grid = actions.grid
 	turns.changed.connect(_on_turn_changed)
 	turns.order_rotated.connect(hud.prepare_order_rotation)
@@ -145,8 +142,13 @@ func _on_victory_downed(unit: CombatUnit) -> void:
 		_begin_victory_wait()
 
 
+## 반사신경 키보드·컨트롤러 선택 후보 인덱스(#824). -1이면 미선택.
+var _reflex_index: int = -1
+
+
 ## 반응 확인 창을 띄운다. 반사신경이면 후보 칸을 맵에 보인다.
 func _on_reaction_requested(kind: String, prompt: String) -> void:
+	_reflex_index = -1
 	hud.show_reaction(kind, prompt, actions.pending_cells)
 	if kind == "reflex":
 		_update_turn_ui()
@@ -157,7 +159,7 @@ func _on_reflex_selected(cell: Vector2i) -> void:
 	_update_turn_ui()
 
 
-## 칸 버튼에 올린 칸으로 가는 경로를 미리 보인다. 벗어나면 후보 칸만 보인다.
+## 후보 칸에 올린 칸으로 가는 경로를 미리 보인다. 벗어나면 후보 칸만 보인다.
 func _on_reflex_previewed(cell: Vector2i) -> void:
 	if actions.pending_kind != "reflex" or actions.pending_reactor == null:
 		return
@@ -165,14 +167,6 @@ func _on_reflex_previewed(cell: Vector2i) -> void:
 	if cell != Vector2i(-1, -1):
 		path.append(cell)
 	map.show_movement(actions.pending_cells, [], path, actions.pending_reactor.cell)
-
-
-## 반사신경 칸 버튼의 글자: 화면에서 본 방향이다. 칸 좌표가 아니라 맵 투영의 화면 위치로 정한다.
-func _reflex_arrow(cell: Vector2i) -> String:
-	if actions.pending_reactor == null:
-		return "%d, %d" % [cell.x, cell.y]
-	var delta: Vector2 = map.map_to_local(cell) - map.map_to_local(actions.pending_reactor.cell)
-	return ("↖" if delta.y < 0 else "↙") if delta.x < 0 else ("↗" if delta.y < 0 else "↘")
 
 
 func _exit_tree() -> void:
@@ -389,7 +383,7 @@ func _desired_time_scale() -> float:
 		return LAST_KILL_SLOWMO_SCALE
 	# 반응 확인 창과 전투 종료·승리 대기 중에는 가속하지 않고 보통 속도로 둔다.
 	if (_enemy_turn_running and not actions.is_over() and not _victory_waiting
-			and not hud.reaction_dialog.visible and Input.is_key_pressed(KEY_SPACE)):
+			and not hud.is_reaction_open() and Input.is_key_pressed(KEY_SPACE)):
 		return ENEMY_FAST_SPEED
 	return 1.0
 
@@ -614,6 +608,41 @@ func _refresh_threat() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if actions.pending_kind == "reflex" and hud.reflex_banner.visible:
+		if event is InputEventMouseMotion:
+			var world_pos: Vector2 = get_canvas_transform().affine_inverse() * event.position
+			var hovered: Vector2i = map.surface_to_map(map.to_local(world_pos))
+			_reflex_index = actions.pending_cells.find(hovered)
+			_on_reflex_previewed(hovered if _reflex_index >= 0 else Vector2i(-1, -1))
+			return
+		if (event.is_action_pressed("ui_left") or event.is_action_pressed("ui_up")) and not actions.pending_cells.is_empty():
+			get_viewport().set_input_as_handled()
+			_reflex_index = wrapi((_reflex_index if _reflex_index >= 0 else 0) - 1, 0, actions.pending_cells.size())
+			_on_reflex_previewed(actions.pending_cells[_reflex_index])
+			return
+		if (event.is_action_pressed("ui_right") or event.is_action_pressed("ui_down")) and not actions.pending_cells.is_empty():
+			get_viewport().set_input_as_handled()
+			_reflex_index = wrapi(_reflex_index + 1, 0, actions.pending_cells.size())
+			_on_reflex_previewed(actions.pending_cells[_reflex_index])
+			return
+		if event.is_action_pressed("ui_accept") and _reflex_index >= 0 and _reflex_index < actions.pending_cells.size():
+			get_viewport().set_input_as_handled()
+			var chosen: Vector2i = actions.pending_cells[_reflex_index]
+			_reflex_index = -1
+			hud.hide_reaction()
+			_on_reflex_selected(chosen)
+			return
+		if event.is_action_pressed("ui_cancel"):
+			get_viewport().set_input_as_handled()
+			_reflex_index = -1
+			hud.hide_reaction()
+			actions.resolve_reaction(false)
+			_update_turn_ui()
+			return
+		# 패드 Start 등 pause 입력은 반응 대기 중 일시정지 창을 열지 않고 소비만 한다.
+		if event.is_action_pressed("pause"):
+			get_viewport().set_input_as_handled()
+			return
 	if event is InputEventMouseMotion and not preparation.visible:
 		_hover_floor_loot(event.position)
 		_hover_enemy_body(event.position)
@@ -677,7 +706,7 @@ func _ally_input_open() -> bool:
 	var actor: CombatUnit = turns.current_unit
 	return (not waiting_for_start and actor != null and actor.is_ally and not actions.busy and not actions.is_over()
 		and not _victory_waiting
-		and not hud.reaction_dialog.visible and not hud.get_node("Result").visible and not preparation.visible)
+		and not hud.is_reaction_open() and not hud.get_node("Result").visible and not preparation.visible)
 
 
 ## 방향 동작(휩쓸기·효시)의 클릭이 가리키는 방향 칸. 인접 칸의 몸통이나 사물을 눌러도 그 칸을 방향으로 고른다.
@@ -701,6 +730,15 @@ func _facing_at(actor: CombatUnit, cell: Vector2i, candidates: Array[CombatUnit]
 func _unhandled_input(event: InputEvent) -> void:
 	if (event is not InputEventMouseButton or not event.pressed
 		or event.button_index not in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]):
+		return
+	if actions.pending_kind == "reflex" and hud.reflex_banner.visible:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			var reflex_world: Vector2 = get_canvas_transform().affine_inverse() * event.position
+			var reflex_cell: Vector2i = map.surface_to_map(map.to_local(reflex_world))
+			if reflex_cell in actions.pending_cells:
+				get_viewport().set_input_as_handled()
+				hud.hide_reaction()
+				_on_reflex_selected(reflex_cell)
 		return
 	if actions.busy or actions.is_over() or _victory_waiting:
 		return

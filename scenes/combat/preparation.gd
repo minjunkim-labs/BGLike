@@ -182,9 +182,14 @@ func _continue() -> void:
 	elif not state.needs_finish_confirmation(_confirm_finish):
 		_finish()
 	else:
+		var lines: PackedStringArray = [tr("받지 않은 아이템이 있습니다.")]
+		var unassigned_potions: int = state.unassigned_bag_potion_count()
+		if unassigned_potions > 0:
+			lines.append(tr("공용 가방에 물약 %d개가 남아 있습니다. 전투에서 쓰려면 캐릭터 물약 칸에 넣어 두세요.") % unassigned_potions)
+		lines.append(tr("마치시겠습니까?"))
 		discard_dialog.title = tr("정비 종료 확인")
 		discard_dialog.ok_button_text = tr("마치기")
-		discard_dialog.dialog_text = tr("받지 않은 아이템이 있습니다. 마치시겠습니까?")
+		discard_dialog.dialog_text = "\n".join(lines)
 		skip_confirmation.button_pressed = false
 		skip_confirmation.show()
 		_show_confirmation()
@@ -298,6 +303,12 @@ func _render() -> void:
 			empty.name = "EmptyBag%d" % index
 			_drag_slot(empty, "empty_bag", index)
 	_label(content, tr("남은 보상은 정비를 마칠 때 공용 가방에 보관합니다."), DIM_COLOR)
+	var unassigned_potions: int = state.unassigned_bag_potion_count()
+	if unassigned_potions > 0:
+		var notice: Label = _label(content,
+			tr("공용 가방에 물약 %d개가 남아 있습니다. 전투에서 쓰려면 캐릭터 물약 칸에 넣어 두세요.") % unassigned_potions,
+			Color("f4cf69"))
+		notice.name = "UnassignedPotionNotice"
 	_render_detail()
 	# 상태를 바꾸는 동작과 화면 단계 전환만 다시 그린다.
 	changed.emit()
@@ -321,7 +332,8 @@ func _render_card(index: int) -> void:
 	if unit.hit_points <= 0:
 		portrait.modulate = Color(0.35, 0.35, 0.35)
 	area.add_child(portrait)
-	_label(area, unit.get_display_name(), TEXT_COLOR, false).position = Vector2(76, 1)
+	_label(area, tr("%s  AC %d · 이동 %d") % [unit.get_display_name(), unit.get_armor_class(), unit.get_movement()],
+		TEXT_COLOR, false).position = Vector2(76, 1)
 	var hit_points: Label = _label(area, tr("HP %d / %d") % [unit.hit_points, unit.get_max_hit_points()],
 		TEXT_COLOR, false)
 	if unit.hit_points <= 0:
@@ -378,6 +390,29 @@ func _render_card(index: int) -> void:
 		_drag_slot(cell, "potion", index, slot)
 		cell.pressed.connect(func() -> void: _select("potion", index, slot))
 	_label(potions, tr("물약 %d/%d") % [unit.potions.size(), int(loot.data["potion_limit"])], DIM_COLOR, false).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var abilities_row: RichTextLabel = RichTextLabel.new()
+	abilities_row.name = "Abilities%d" % index
+	abilities_row.bbcode_enabled = true
+	abilities_row.scroll_active = false
+	abilities_row.autowrap_mode = TextServer.AUTOWRAP_OFF
+	abilities_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	abilities_row.add_theme_constant_override("line_spacing", -2)
+	abilities_row.position = Vector2(128, 68)
+	abilities_row.size = Vector2(168, 28)
+	var row1: PackedStringArray = []
+	var row2: PackedStringArray = []
+	for ab_idx: int in range(CombatUnit.ABILITY_IDS.size()):
+		var ability: CombatUnit.Ability = ab_idx as CombatUnit.Ability
+		var entry: String = "[img=12x12]%s[/img]%s" % [
+			CombatUnit.ABILITY_ICON_DIR + CombatUnit.ABILITY_IDS[ability] + ".png",
+			CombatActionRules.colorize(CombatUnit.ability_die_text(unit, ability)),
+		]
+		if ab_idx < 3:
+			row1.append(entry)
+		else:
+			row2.append(entry)
+	abilities_row.text = " ".join(row1) + "\n" + " ".join(row2)
+	area.add_child(abilities_row)
 
 
 func _select(kind: String, index: int, slot: int = -1) -> void:

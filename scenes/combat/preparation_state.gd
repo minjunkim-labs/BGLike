@@ -55,6 +55,24 @@ func bag_shortage() -> int:
 	return maxi(0, loot.bag.size() + rewards.size() - bag_limit())
 
 
+func unassigned_bag_potion_count() -> int:
+	if loot == null:
+		return 0
+	var limit: int = potion_limit()
+	var has_open_slot: bool = false
+	for unit: CombatUnit in party:
+		if unit.potions.size() < limit:
+			has_open_slot = true
+			break
+	if not has_open_slot:
+		return 0
+	var count: int = 0
+	for item: Dictionary in loot.bag:
+		if str(item.get("kind", "")) == "potion":
+			count += 1
+	return count
+
+
 func needs_finish_confirmation(confirm_finish: bool) -> bool:
 	return active and maintaining and not rewards.is_empty() and confirm_finish
 
