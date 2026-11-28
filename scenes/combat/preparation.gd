@@ -182,9 +182,7 @@ func _continue() -> void:
 	elif not state.needs_finish_confirmation(_confirm_finish):
 		_finish()
 	else:
-		var lines: PackedStringArray = []
-		if not state.rewards.is_empty():
-			lines.append(tr("받지 않은 아이템이 있습니다."))
+		var lines: PackedStringArray = [tr("받지 않은 아이템이 있습니다.")]
 		var unassigned_potions: int = state.unassigned_bag_potion_count()
 		if unassigned_potions > 0:
 			lines.append(tr("공용 가방에 물약 %d개가 남아 있습니다. 전투에서 쓰려면 캐릭터 물약 칸에 넣어 두세요.") % unassigned_potions)
@@ -398,12 +396,13 @@ func _render_card(index: int) -> void:
 	abilities_row.scroll_active = false
 	abilities_row.autowrap_mode = TextServer.AUTOWRAP_OFF
 	abilities_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	abilities_row.position = Vector2(130, 74)
-	abilities_row.size = Vector2(166, 20)
+	abilities_row.add_theme_font_size_override("normal_font_size", 9)
+	abilities_row.position = Vector2(126, 75)
+	abilities_row.size = Vector2(170, 18)
 	var parts: PackedStringArray = []
 	for ab_idx: int in range(CombatUnit.ABILITY_IDS.size()):
 		var ability: CombatUnit.Ability = ab_idx as CombatUnit.Ability
-		parts.append("[img=10x10]%s[/img]%s" % [
+		parts.append("[img=9x9]%s[/img]%s" % [
 			CombatUnit.ABILITY_ICON_DIR + CombatUnit.ABILITY_IDS[ability] + ".png",
 			CombatActionRules.colorize(CombatUnit.ability_die_text(unit, ability)),
 		])

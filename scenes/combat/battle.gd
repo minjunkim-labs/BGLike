@@ -130,9 +130,6 @@ func _ready() -> void:
 		"on_victory_downed": _on_victory_downed,
 	})
 	actions.reaction_requested.connect(_on_reaction_requested)
-	hud.reflex_selected.connect(_on_reflex_selected)
-	hud.reflex_previewed.connect(_on_reflex_previewed)
-	hud.reflex_label = _reflex_arrow
 	hud.grid = actions.grid
 	turns.changed.connect(_on_turn_changed)
 	turns.order_rotated.connect(hud.prepare_order_rotation)
@@ -157,7 +154,7 @@ func _on_reflex_selected(cell: Vector2i) -> void:
 	_update_turn_ui()
 
 
-## 칸 버튼에 올린 칸으로 가는 경로를 미리 보인다. 벗어나면 후보 칸만 보인다.
+## 후보 칸에 올린 칸으로 가는 경로를 미리 보인다. 벗어나면 후보 칸만 보인다.
 func _on_reflex_previewed(cell: Vector2i) -> void:
 	if actions.pending_kind != "reflex" or actions.pending_reactor == null:
 		return
@@ -165,14 +162,6 @@ func _on_reflex_previewed(cell: Vector2i) -> void:
 	if cell != Vector2i(-1, -1):
 		path.append(cell)
 	map.show_movement(actions.pending_cells, [], path, actions.pending_reactor.cell)
-
-
-## 반사신경 칸 버튼의 글자: 화면에서 본 방향이다. 칸 좌표가 아니라 맵 투영의 화면 위치로 정한다.
-func _reflex_arrow(cell: Vector2i) -> String:
-	if actions.pending_reactor == null:
-		return "%d, %d" % [cell.x, cell.y]
-	var delta: Vector2 = map.map_to_local(cell) - map.map_to_local(actions.pending_reactor.cell)
-	return ("↖" if delta.y < 0 else "↙") if delta.x < 0 else ("↗" if delta.y < 0 else "↘")
 
 
 func _exit_tree() -> void:
@@ -619,11 +608,16 @@ func _input(event: InputEvent) -> void:
 			var world_pos: Vector2 = get_canvas_transform().affine_inverse() * event.position
 			var hovered: Vector2i = map.surface_to_map(map.to_local(world_pos))
 			_on_reflex_previewed(hovered if hovered in actions.pending_cells else Vector2i(-1, -1))
-		if event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel"):
+			return
+		if event.is_action_pressed("ui_cancel"):
 			get_viewport().set_input_as_handled()
 			hud.hide_reaction()
 			actions.resolve_reaction(false)
 			_update_turn_ui()
+			return
+		# 패드 Start 등 pause 입력은 반응 대기 중 일시정지 창을 열지 않고 소비만 한다.
+		if event.is_action_pressed("pause"):
+			get_viewport().set_input_as_handled()
 			return
 	if event is InputEventMouseMotion and not preparation.visible:
 		_hover_floor_loot(event.position)

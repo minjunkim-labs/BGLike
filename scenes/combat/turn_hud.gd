@@ -8,10 +8,6 @@ signal unit_hovered(unit: CombatUnit)
 signal end_turn_requested
 signal action_selected(action: String)
 signal reaction_selected(use_reaction: bool)
-## 반사신경 확인 창에서 회피할 칸을 골랐다.
-signal reflex_selected(cell: Vector2i)
-## 반사신경 창의 칸 버튼에 마우스·포커스가 올라 미리 보일 칸. 벗어나면 (-1, -1)이다.
-signal reflex_previewed(cell: Vector2i)
 signal restart_requested
 
 # Space는 적 턴 가속 키다. 반응 확인 창의 포커스된 버튼을 누르지 않는다.
@@ -120,10 +116,6 @@ var reaction_dialog: ConfirmationDialog = ConfirmationDialog.new()
 var reflex_banner: PanelContainer = PanelContainer.new()
 var _reflex_prompt_label: Label = Label.new()
 var reflex_skip_button: Button = Button.new()
-## 칸을 화면 방향 글자(↖ ↗ ↙ ↘)로 바꾸는 함수. battle이 맵 투영으로 정한다. 없으면 좌표를 보인다.
-var reflex_label: Callable
-var _reflex_buttons: Array[Button] = []
-var _reflex_cells: Dictionary[StringName, Vector2i] = {}
 ## 기름에서 넘어진 아군이 자기 턴에 이동력을 내고 일어나는 버튼(#500 2a). 턴 종료 버튼 바로 위에 둔다.
 var stand_button: Button = Button.new()
 ## 유닛 패널의 AC와 팔랑크스 상태를 위치로 계산한다. 없으면 유닛 AC만 보인다.
@@ -304,7 +296,6 @@ func _ready() -> void:
 	reaction_dialog.dialog_hide_on_ok = false
 	reaction_dialog.confirmed.connect(_finish_reaction.bind(true))
 	reaction_dialog.canceled.connect(_finish_reaction.bind(false))
-	reaction_dialog.custom_action.connect(_on_reflex_action)
 	_build_reflex_banner()
 
 
@@ -339,7 +330,7 @@ func _build_reflex_banner() -> void:
 	add_child(reflex_banner)
 
 
-## 유닛 패널의 3열 2줄 능력치 칸 6개를 만든다(#795).
+## 유닛 패널의 2열 3줄 능력치 칸 6개를 만든다(#795, #824).
 func _build_ability_slots() -> void:
 	for index: int in range(CombatUnit.ABILITY_IDS.size()):
 		var slot: AbilitySlot = AbilitySlot.new(index as CombatUnit.Ability)
@@ -540,14 +531,13 @@ func action_tooltip(actions: CombatActions, actor: CombatUnit, action: String) -
 
 
 func add_log(message: String) -> void:
-	_log_lines.append(CombatUnit.decorate_abilities(message.replace("\n", " ")))
+	_log_lines.append(CombatUnit.decorate_abilities(message.replace("\n", " ").replace("[", "[lb]")))
 	while _log_lines.size() > 3:
 		_log_lines.pop_front()
 	message_label.text = "\n".join(_log_lines)
 
 
 func show_reaction(kind: String, prompt: String, _cells: Array[Vector2i] = []) -> void:
-	_clear_reflex_buttons()
 	if kind == "reflex":
 		hide_reaction()
 		_reflex_prompt_label.text = prompt
@@ -560,22 +550,6 @@ func show_reaction(kind: String, prompt: String, _cells: Array[Vector2i] = []) -
 	reaction_dialog.get_cancel_button().text = tr("넘기기")
 	reaction_dialog.exclusive = true
 	reaction_dialog.popup_centered(Vector2i(360, 110))
-
-
-## 반사신경 창에서 만든 칸 버튼을 지운다. 다른 반응 창에는 남지 않는다.
-func _clear_reflex_buttons() -> void:
-	for button: Button in _reflex_buttons:
-		reaction_dialog.remove_button(button)
-		button.queue_free()
-	_reflex_buttons.clear()
-	_reflex_cells.clear()
-
-
-func _on_reflex_action(action: StringName) -> void:
-	if action in _reflex_cells:
-		var cell: Vector2i = _reflex_cells[action]
-		hide_reaction()
-		reflex_selected.emit(cell)
 
 
 func hide_reaction() -> void:

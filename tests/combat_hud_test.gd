@@ -1034,35 +1034,57 @@ func _test_resources() -> void:
 	await process_frame
 
 
-## 반사신경 비모달 안내 배너(#824): 맵 클릭을 막지 않고 배너와 넘기기 버튼만 표시한다. 다른 반응은 기존 확인 창을 쓴다.
+## 반사신경 비모달 안내 배너(#824): 맵 클릭을 막지 않고 배너와 넘기기 버튼만 표시한다. 호버 미리보기·맵 좌클릭 확정·Esc 넘기기를 검증한다.
 func _test_reflex_dialog() -> void:
 	var cells: Array[Vector2i] = [Vector2i(3, 9), Vector2i(5, 9)]
-	var picked: Array[Vector2i] = []
 	var skipped: Array[bool] = []
-	hud.reflex_selected.connect(func(cell: Vector2i) -> void: picked.append(cell))
 	hud.reaction_selected.connect(func(use_reaction: bool) -> void: skipped.append(use_reaction))
 	hud.show_reaction("reflex", "적의 공격이 명중했습니다.", cells)
 	var dialog: ConfirmationDialog = hud.reaction_dialog
 	_check(hud.reflex_banner.visible and not dialog.visible and hud.is_reaction_open()
 		and hud.reflex_skip_button.text == "넘기기", "반사신경: 중앙 모달 대신 비모달 배너와 넘기기 버튼 표시")
 	hud.reflex_skip_button.pressed.emit()
-	_check(not hud.reflex_banner.visible and not hud.is_reaction_open() and skipped == [false] and picked.is_empty(),
+	_check(not hud.reflex_banner.visible and not hud.is_reaction_open() and skipped == [false],
 		"넘기기 버튼을 누르면 배너를 닫고 반응을 넘김")
 	hud.show_reaction("opportunity", "벗어납니다.")
 	_check(dialog.visible and not hud.reflex_banner.visible and dialog.get_ok_button().visible
 		and dialog.get_ok_button().text == "공격", "기회 공격은 기존 중앙 확인 창 유지")
 	hud.hide_reaction()
-	# battle 배선: 반사신경 대기 중에는 비모달 배너가 열리고, 넘기기로 대기를 해제한다.
+	# battle 배선: 반사신경 대기 중 호버 미리보기, Esc(ui_cancel) 넘기기(일시정지 창 열지 않음), 맵 좌클릭 확정.
+	var map: CombatMap = battle.get_node("Map") as CombatMap
 	var at: Vector2i = units[1].cell
+	var candidate: Vector2i = at + Vector2i(1, 0)
 	actions.pending_reactor = units[1]
 	actions.pending_kind = "reflex"
-	actions.pending_cells = [at + Vector2i(-1, 0), at + Vector2i(1, 0)]
+	actions.pending_cells = [at + Vector2i(-1, 0), candidate]
 	actions.reaction_requested.emit("reflex", "배선 확인")
 	_check(hud.reflex_banner.visible and not dialog.visible, "battle 배선에서도 반사신경은 비모달 배너 표시")
-	hud.reflex_skip_button.pressed.emit()
+	var screen_pos: Vector2 = battle.get_canvas_transform() * map.to_global(map.map_to_surface(candidate))
+	var motion: InputEventMouseMotion = InputEventMouseMotion.new()
+	motion.position = screen_pos
+	battle._input(motion)
+	_check(map.get_node_or_null("MovementPath") != null, "반사신경 후보 칸 호버 시 1칸 경로 미리보기 표시")
+	var esc: InputEventKey = InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	battle._input(esc)
+	_check(actions.pending_reactor == null and not hud.reflex_banner.visible
+		and not (battle.get("pause_menu") as Control).visible,
+		"반사신경 대기 중 Esc(ui_cancel)는 일시정지 창을 열지 않고 반응을 넘김")
+	# 맵 좌클릭으로 후보 칸 즉시 확정.
+	actions.pending_reactor = units[1]
+	actions.pending_kind = "reflex"
+	actions.pending_cells = [at + Vector2i(-1, 0), candidate]
+	actions.reaction_requested.emit("reflex", "맵 클릭 확인")
+	var click: InputEventMouseButton = InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = screen_pos
+	battle._unhandled_input(click)
+	_check(actions.pending_reactor == null and not hud.reflex_banner.visible,
+		"반사신경 후보 칸 좌클릭으로 배너를 닫고 대기를 확정함")
 	actions.pending_kind = ""
 	actions.pending_cells = []
-	_check(actions.pending_reactor == null and not hud.reflex_banner.visible, "넘기기로 대기 해제")
 
 
 func _test_archer_and_enemy() -> void:
