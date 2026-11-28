@@ -8,7 +8,8 @@ import sys
 
 ENEMY_DEFS_PATH = "scenes/combat/enemy_definitions.gd"
 GAME_SAVE_PATH = "scenes/save/game_save.gd"
-STAGES_GLOB = "scenes/combat/stages/*_enemies.tscn"
+STAGES_DIR = "scenes/combat/stages"
+STAGES_GLOB = f"{STAGES_DIR}/*_enemies.tscn"
 
 ENEMY_BLOCK = re.compile(
     r'^static\s+var\s+([A-Z0-9_]+)\s*:\s*Dictionary\s*=\s*\{(.*?)^\}',
@@ -131,8 +132,8 @@ def check_repo(root, base_ref="origin/main"):
     new_save = new_save_path.read_text(encoding="utf-8") if new_save_path.is_file() else ""
 
     base_stage_names = [
-        line for line in _git_output(root, "ls-tree", "-r", "--name-only", base, "--", STAGES_GLOB).splitlines()
-        if line
+        line for line in _git_output(root, "ls-tree", "-r", "--name-only", base, "--", STAGES_DIR).splitlines()
+        if line.endswith("_enemies.tscn")
     ]
     old_stages = {name: (_git_show(root, base, name) or "") for name in base_stage_names}
     new_stages = {
