@@ -396,17 +396,22 @@ func _render_card(index: int) -> void:
 	abilities_row.scroll_active = false
 	abilities_row.autowrap_mode = TextServer.AUTOWRAP_OFF
 	abilities_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	abilities_row.add_theme_font_size_override("normal_font_size", 9)
-	abilities_row.position = Vector2(126, 75)
-	abilities_row.size = Vector2(170, 18)
-	var parts: PackedStringArray = []
+	abilities_row.add_theme_constant_override("line_spacing", -2)
+	abilities_row.position = Vector2(128, 68)
+	abilities_row.size = Vector2(168, 28)
+	var row1: PackedStringArray = []
+	var row2: PackedStringArray = []
 	for ab_idx: int in range(CombatUnit.ABILITY_IDS.size()):
 		var ability: CombatUnit.Ability = ab_idx as CombatUnit.Ability
-		parts.append("[img=9x9]%s[/img]%s" % [
+		var entry: String = "[img=12x12]%s[/img]%s" % [
 			CombatUnit.ABILITY_ICON_DIR + CombatUnit.ABILITY_IDS[ability] + ".png",
 			CombatActionRules.colorize(CombatUnit.ability_die_text(unit, ability)),
-		])
-	abilities_row.text = " ".join(parts)
+		]
+		if ab_idx < 3:
+			row1.append(entry)
+		else:
+			row2.append(entry)
+	abilities_row.text = " ".join(row1) + "\n" + " ".join(row2)
 	area.add_child(abilities_row)
 
 

@@ -142,8 +142,13 @@ func _on_victory_downed(unit: CombatUnit) -> void:
 		_begin_victory_wait()
 
 
+## 반사신경 키보드·컨트롤러 선택 후보 인덱스(#824). -1이면 미선택.
+var _reflex_index: int = -1
+
+
 ## 반응 확인 창을 띄운다. 반사신경이면 후보 칸을 맵에 보인다.
 func _on_reaction_requested(kind: String, prompt: String) -> void:
+	_reflex_index = -1
 	hud.show_reaction(kind, prompt, actions.pending_cells)
 	if kind == "reflex":
 		_update_turn_ui()
@@ -607,10 +612,29 @@ func _input(event: InputEvent) -> void:
 		if event is InputEventMouseMotion:
 			var world_pos: Vector2 = get_canvas_transform().affine_inverse() * event.position
 			var hovered: Vector2i = map.surface_to_map(map.to_local(world_pos))
-			_on_reflex_previewed(hovered if hovered in actions.pending_cells else Vector2i(-1, -1))
+			_reflex_index = actions.pending_cells.find(hovered)
+			_on_reflex_previewed(hovered if _reflex_index >= 0 else Vector2i(-1, -1))
+			return
+		if (event.is_action_pressed("ui_left") or event.is_action_pressed("ui_up")) and not actions.pending_cells.is_empty():
+			get_viewport().set_input_as_handled()
+			_reflex_index = wrapi((_reflex_index if _reflex_index >= 0 else 0) - 1, 0, actions.pending_cells.size())
+			_on_reflex_previewed(actions.pending_cells[_reflex_index])
+			return
+		if (event.is_action_pressed("ui_right") or event.is_action_pressed("ui_down")) and not actions.pending_cells.is_empty():
+			get_viewport().set_input_as_handled()
+			_reflex_index = wrapi(_reflex_index + 1, 0, actions.pending_cells.size())
+			_on_reflex_previewed(actions.pending_cells[_reflex_index])
+			return
+		if event.is_action_pressed("ui_accept") and _reflex_index >= 0 and _reflex_index < actions.pending_cells.size():
+			get_viewport().set_input_as_handled()
+			var chosen: Vector2i = actions.pending_cells[_reflex_index]
+			_reflex_index = -1
+			hud.hide_reaction()
+			_on_reflex_selected(chosen)
 			return
 		if event.is_action_pressed("ui_cancel"):
 			get_viewport().set_input_as_handled()
+			_reflex_index = -1
 			hud.hide_reaction()
 			actions.resolve_reaction(false)
 			_update_turn_ui()

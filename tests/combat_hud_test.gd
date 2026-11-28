@@ -1083,6 +1083,22 @@ func _test_reflex_dialog() -> void:
 	battle._unhandled_input(click)
 	_check(actions.pending_reactor == null and not hud.reflex_banner.visible,
 		"반사신경 후보 칸 좌클릭으로 배너를 닫고 대기를 확정함")
+	# 키보드·컨트롤러 방향키로 후보 칸을 순회하고 Enter(ui_accept)로 확정한다.
+	actions.pending_reactor = units[1]
+	actions.pending_kind = "reflex"
+	actions.pending_cells = [at + Vector2i(-1, 0), candidate]
+	actions.reaction_requested.emit("reflex", "키보드 선택 확인")
+	var right_key: InputEventKey = InputEventKey.new()
+	right_key.keycode = KEY_RIGHT
+	right_key.pressed = true
+	battle._input(right_key)
+	_check(map.get_node_or_null("MovementPath") != null, "반사신경 방향키 입력 시 후보 칸 경로 미리보기 표시")
+	var enter_key: InputEventKey = InputEventKey.new()
+	enter_key.keycode = KEY_ENTER
+	enter_key.pressed = true
+	battle._input(enter_key)
+	_check(actions.pending_reactor == null and not hud.reflex_banner.visible,
+		"반사신경 방향키 선택 뒤 Enter로 대기를 확정함")
 	actions.pending_kind = ""
 	actions.pending_cells = []
 
