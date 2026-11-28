@@ -43,7 +43,7 @@ Standards와 Spec 리뷰는 repo-baseline `prompts/review.md` 4단계대로 저�
 2. 지적마다 위치, 실패 조건, 영향과 수정 근거를 적습니다. 불확실하거나 범위 밖인 문제는 근거와 함께 보고합니다. 구현 범위를 늘리거나 제품 규칙을 확정하지 않습니다.
 3. 확실한 결함에는 수정 전 실패하는 동작 검사를 재사용하거나 추가합니다. 수정한 범위의 검사와 저장소 필수 검사를 실행합니다.
 4. 모든 수정을 커밋한 뒤 최종 head의 전체 diff를 다시 독립 검토합니다. 같은 SHA에서 이미 통과한 검사는 근거를 재사용합니다. 입력 변경이나 실패가 없으면 반복하지 않습니다.
-5. PR의 Evidence에 실행한 검사를, Review에 리뷰어(컨텍스트·모델)·고친 것·남은 지적을 적습니다. 최종 필수 CI와 합격 기준을 확인한 뒤 [병합 정책](../process/workflow.md#브랜치와-병합)에 따라 사람에게 병합을 넘깁니다.
+5. PR의 Evidence에 실행한 검사를, Review에 리뷰어(컨텍스트·모델)·고친 것·남은 지적을 적습니다. PR 본문 Review 칸은 `python3 -I .baseline/baseline.py review-report <PR> --file <경로> [--thread <댓글id>=<판정>]`로 형식 검증과 스레드 판정·해결을 함께 처리할 수 있고, 등급 확인은 `python3 -I .baseline/baseline.py review-preflight <PR>`을 씁니다. 최종 필수 CI와 합격 기준을 확인한 뒤 [병합 정책](../process/workflow.md#브랜치와-병합)에 따라 사람에게 병합을 넘깁니다.
 
 ## CI 실패 처리
 
@@ -64,7 +64,7 @@ Standards와 Spec 리뷰는 repo-baseline `prompts/review.md` 4단계대로 저�
 
 병합은 머지 큐로 한다. 큐는 `main`과 합친 결과에서 필수 CI를 다시 돌리고 squash로 병합한다. 그래서 PR 브랜치에 `main`을 합치지 않는다. 큐에 들어간 PR의 브랜치에는 push할 수 없다. 큐의 CI가 실패하면 PR이 큐에서 빠진다. 고친 뒤에는 다시 리뷰한다.
 
-에이전트는 [AGENTS.md](../../AGENTS.md#병합)의 상시 지시대로 문서·쉬움 PR만 `python3 -I .baseline/baseline.py enqueue <PR> <리뷰한 head>`로 큐에 넣는다. `enqueue`는 어려움 PR을 넣지 않는다. 어려움 PR은 소유자가 넣는다. 자동 병합은 쓰지 않는다. 저장소 `Allow auto-merge`는 Off다. `.claude/settings.json`의 거부 규칙이 `gh pr merge`, `main` push, 큐에 넣는 `gh api`를 막는다. 이것은 습관이지 보안 경계가 아니다.
+에이전트는 [AGENTS.md](../../AGENTS.md#병합)의 상시 지시대로 문서·쉬움 PR만 `python3 -I .baseline/baseline.py enqueue <PR> <리뷰한 head>`로 큐에 넣습니다. 큐에 넣기 전에 `gh pr view <PR> --json comments,reviews`와 `gh api graphql -f query='query($o:String!,$n:String!,$p:Int!){repository(owner:$o,name:$n){pullRequest(number:$p){reviewThreads(first:100){nodes{isResolved,comments(first:1){nodes{databaseId,author{login}}}}}}}}' -f o=<OWNER> -f n=<REPO> -F p=<PR>`로 미해결 스레드와 판정하지 않은 외부 봇 리뷰가 없는지 먼저 확인합니다. `enqueue`는 어려움 PR을 넣지 않습니다. 어려움 PR은 소유자가 넣는다. 자동 병합은 쓰지 않는다. 저장소 `Allow auto-merge`는 Off다. `.claude/settings.json`의 거부 규칙이 `gh pr merge`, `main` push, 큐에 넣는 `gh api`를 막는다. 이것은 습관이지 보안 경계가 아니다.
 
 병합하는 사람은 병합 직전에 head·base와 필수 검사 결과를 다시 확인한다. 되돌리기 어려움이거나 [민감한 파일](../../REVIEW.md#민감한-파일)을 건드리면 diff를 직접 읽고 그 head에서 병합한다.
 CodeQL 경고 수정 PR은 workflow 성공이 아니라 code scanning API로 판정한다.
