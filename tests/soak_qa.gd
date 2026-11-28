@@ -114,6 +114,7 @@ func _equip() -> void:
 func _shutdown() -> void:
 	await process_frame
 	_release_audio(root)
+	battle = null
 	current_scene = null
 	game.queue_free()
 	await create_timer(0.5).timeout
