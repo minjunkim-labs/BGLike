@@ -8,7 +8,9 @@ tests=(
   tests/combat_{hud,ai,turns,checks,actions,selection,snapshot,progression,loot,capture,feedback,preparation_save,staging,dice_roll,warrior,archer,oil,sound,cover,monster_stats}_test.gd
   tests/{save,title,pause,continue,ui_theme,music}_test.gd
 )
+check_qa=true
 if [ "$#" -gt 0 ]; then
+  check_qa=false
   selected=()
   for arg in "$@"; do
     registered=false
@@ -71,6 +73,12 @@ run_godot() {
 }
 run_godot --import
 run_godot --quit-after 2
+if [ "$check_qa" = true ]; then
+  for qa_script in tests/*_qa.gd; do
+    [ -e "$qa_script" ] || continue
+    run_godot --check-only --script "$qa_script"
+  done
+fi
 rm -f "$log"
 trap - EXIT
 # Separate process groups let cancellation stop each owned test and its children.

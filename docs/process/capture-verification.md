@@ -19,8 +19,10 @@ Issue·PR·기획 문서의 확인 항목과 체크박스는 아래 등급 중 �
 ## 자동 검사
 
 ```sh
-GODOT=/Applications/Godot.app/Contents/MacOS/Godot make check
+make check
 ```
+
+설치한 Godot이 비표준 경로에 있으면 `GODOT=<실행 파일 경로> make check`로 지정합니다.
 
 기존 Godot 검사에 `tests/combat_capture_test.gd`를 포함한다. 실제 게임 장면 `scenes/game.tscn`을 불러온다. 3-3 스테이지로 진입한다. 이니셔티브만 아군 먼저로 고정한다. 자동 검사는 주사위 seed를 고정한다. 자동 검사는 아군의 반응 횟수를 소진해 선택 창 대기를 피한다. 실제 AI와 이동·공격 연출을 유지한다.
 

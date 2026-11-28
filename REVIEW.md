@@ -9,7 +9,7 @@
 
 | 영역 | 실패 |
 | --- | --- |
-| 게임·장면 | 메인 장면이 열리지 않거나 실행이 깨진다(리소스 경로, `.uid`, 필요한 `*.import` 누락 포함) |
+| 게임·장면 | 메인 장면이 열리지 않거나 실행이 깨진다(리소스 경로, `.gd` 외 `.uid`, 필요한 `*.import` 누락 포함. `.gd.uid`·`translations_pot_files`는 `make repository-check`가 검사한다) |
 | 기획 | `docs/` 기획 문서의 규칙·수치와 다르게 구현했는데 Issue에 근거가 없다. 기획에서 정하지 않은 장르 규칙·이야기·기능을 임의로 확정한다. 미확정 수치를 새 규칙으로 만든다 |
 | 전투 | action·턴·주사위·사각 높이 격자·진행·loot의 공개 동작이나 호출자 호환성이 깨진다. 입력·표시·tooltip·후속 상태와 실제 애니메이션 완료를 구분하지 않는다 |
 | 검증 | 게임 동작이 바뀌는데 PR 본문에 실행한 검증, 직접 확인하지 못한 항목, [확인 등급](docs/process/capture-verification.md#확인-등급)의 사람 판단 항목과 위임받지 않은 직접 조작 항목이 빠졌다. 상수 재단언·소스 문자열 순서·성공만 반환하는 mock을 동작 검증의 근거로 쓴다. 부정·오류 테스트가 앞선 다른 거부 조건(물 칸·삭제된 종류 등)에 가려 검사 대상 분기에 닿지 않는다. 설계 규칙과 달라 실패한 테스트를 구현 대신 기대값만 고쳐 맞춘다 |
@@ -27,7 +27,6 @@
 
 - 새 GDScript에 넣을 수 있는 타입이 빠짐.
 - 사용처 없는 Autoload·추상화·기능 플래그를 추가함.
-- 리소스 파일이나 폴더 이름이 소문자 `snake_case`가 아님.
 
 ## 건너뛸 것
 
@@ -47,6 +46,8 @@
 - 2026-11-27 `scenes/combat/`에서 신호를 보내거나 외부 콜백을 부른 뒤 전투 상태를 바꾸는 루프에 `_revision`·`is_over()` 세대 검사가 빠지면 P1이다(적용: `scenes/combat/`, 출처: [PR #810](https://github.com/minjunkim-labs/BGLike/pull/810)).
 - 2026-11-27 `GLOSSARY.md`에 용어 정의와 설계 문서 링크를 넘어 지속 턴·시계 슬롯 조건 같은 처리 규칙이나 수치를 복제해 넣으면 P2다(적용: `GLOSSARY.md`, 출처: [PR #810](https://github.com/minjunkim-labs/BGLike/pull/810)).
 - 2026-11-27 규칙이나 용어를 삭제할 때 고친 문서의 나머지 절과 링크된 하위 문서(`rg` 검색 결과 포함)에 옛 규칙이 모순되게 남으면 P1이다(적용: `docs/`·`GLOSSARY.md`, 출처: [PR #810](https://github.com/minjunkim-labs/BGLike/pull/810)).
+- 2026-11-28 피해·회복·비용·스택 수식에 음수 가감이나 0 경계가 추가됐는데 하한(`maxi(1, ...)`)·상한 경계 테스트가 빠지면 P1이다(적용: `scenes/combat/`, 출처: [PR #789](https://github.com/minjunkim-labs/BGLike/pull/789)·[PR #804](https://github.com/minjunkim-labs/BGLike/pull/804)).
+- 2026-11-28 연출 속도 계수나 지속 시간 상수를 바꿨는데 인용한 `docs/` 설명(괄호 안 초 환산·적용 범위 포함)이 옛 값이면 P1이다(적용: `scenes/`·`docs/`, 출처: [PR #794](https://github.com/minjunkim-labs/BGLike/pull/794)·[PR #813](https://github.com/minjunkim-labs/BGLike/pull/813)).
 
 <!-- baseline:start -->
 ## 입력

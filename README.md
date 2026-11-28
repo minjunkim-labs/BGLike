@@ -28,7 +28,7 @@ make godot-install
 make check
 ```
 
-기존 편집기는 `GODOT=/Applications/Godot.app/Contents/MacOS/Godot make check`로 검사합니다.
+`make check`는 `.cache/godot`, macOS `/Applications/Godot.app`, `PATH`의 `godot` 순서로 설치된 4.7.2 편집기를 자동 탐색합니다. 다른 위치에 둔 실행 파일은 `GODOT=<실행 파일 경로> make check`로 지정합니다.
 플랫폼별 설치, 버전 검사와 캐시 없는 실행은 [공통 환경](docs/process/ci/environment.md)을 따릅니다.
 전투 캡처의 차례 복귀 검사와 에이전트의 Forward+ 직접 확인(기본은 Docker 화면 밖 실행)은 [캡처 검증](docs/process/capture-verification.md)을 따릅니다.
 

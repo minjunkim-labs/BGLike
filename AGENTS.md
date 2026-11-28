@@ -20,10 +20,10 @@ setup은 고정한 Godot을 받아 해시를 확인합니다. Git LFS와 `git co
 
 | 경로 | 무엇 |
 | --- | --- |
-| `scenes/`, `project.godot` | 게임 장면·GDScript·자산 |
-| `tests/` | Godot 회귀 검사 |
+| `scenes/`, `project.godot` | 게임 장면·GDScript·자산. [코드·테스트 지도](docs/agents/code-map.md) |
+| `tests/` | Godot 회귀 검사·QA 시나리오. [코드·테스트 지도](docs/agents/code-map.md) |
 | `scripts/` | 검사·CI·Draft 도구와 Python 테스트 |
-| `docs/` | 기획·ADR·작업 규칙. [문서 길잡이](docs/agents/domain.md) |
+| `docs/` | 기획·ADR·작업 규칙. [전체 문서 색인](docs/README.md), [문서 길잡이](docs/agents/domain.md) |
 | `docs/agents/ops.md` | ops 규칙. 배포·SDK·비밀값을 다룰 때 읽는다 |
 | `.mise.toml` | 툴체인 판(Python). `run`이 이 판으로 돈다 |
 | `scripts/godot.env` | mise가 다루지 못하는 Godot의 판(4.7.2 Standard)과 공식 archive 해시. `make godot-install`이 받아 확인한다. 이미 설치한 Godot은 `GODOT`로 가리킨다 |

@@ -127,7 +127,7 @@ func _step() -> void:
 	targets.sort_custom(func(a: CombatUnit, b: CombatUnit) -> bool: return actor.cell.distance_squared_to(a.cell) < actor.cell.distance_squared_to(b.cell))
 	for target: CombatUnit in targets:
 		if actions.can_target(actor, target, "attack"):
-			await actions.attack(actor, target, actions.can_target(actor, target, "shock"))
+			await actions.attack(actor, target)
 			return
 	var cell: Vector2i = CombatEnemyAi.new().approach_cell(actor, actions)
 	if cell != actor.cell and actions.can_move(actor, cell):

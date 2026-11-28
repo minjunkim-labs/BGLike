@@ -628,6 +628,22 @@ class ManualQATests(unittest.TestCase):
                 self.assertEqual(self.cli("run"), 1)
                 self.assertEqual(run.call_count, 1)
 
+    def test_preflight_failure_includes_first_error_or_missing_marker(self):
+        self.binary.write_text('#!/bin/sh\nif [ "$1" = --version ]; then echo 4.7.2.stable.official.fixture; '
+                               'else echo "SCRIPT ERROR: Parse Error: bad token"; fi\n')
+        with patch.object(qa, "launch") as launch:
+            with self.assertRaisesRegex(ValueError, r"Preflight failed; game launch blocked: .*first error: SCRIPT ERROR: Parse Error"):
+                qa.run_case(self.app, self.case, self.directory, self.state)
+            launch.assert_not_called()
+
+        self.case.update(preflight_args=["--fixture-precheck"], preflight_success_marker="FIXTURE_SETUP_PASS")
+        self.binary.write_text('#!/bin/sh\nif [ "$1" = --version ]; then echo 4.7.2.stable.official.fixture; '
+                               'else case "$*" in *--check-only*) ;; *) echo "NO_MARKER" ;; esac; fi\n')
+        with patch.object(qa, "launch") as launch:
+            with self.assertRaisesRegex(ValueError, r"Preflight failed; game launch blocked: .*missing marker: FIXTURE_SETUP_PASS"):
+                qa.run_case(self.app, self.case, self.directory, self.state)
+            launch.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
