@@ -896,7 +896,7 @@ func _test_ability_icons() -> void:
 					if pixel.is_equal_approx(color):
 						has_rep_color = true
 		_check(float(filled) / float(48 * 48) >= 0.15 and has_rep_color,
-			"능력치 아이콘 칠 비율(15% 이상)과 대표 색 포함: %s (filled=%d)" % [CombatUnit.ABILITY_IDS[index], filled])
+			"능력치 아이콘 칠 비율(15%% 이상)과 대표 색 포함: %s (filled=%d)" % [CombatUnit.ABILITY_IDS[index], filled])
 
 
 func _check_ability_slots(expected_dice: Array[String], label: String) -> void:
