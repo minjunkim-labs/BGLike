@@ -73,6 +73,38 @@ class ReviewedHeadTests(unittest.TestCase):
         old = "b" * 40
         self.assertEqual(reviewed_head(f"리뷰한 head: {HEAD}\n등급: 어려움\n\n리뷰한 head와 되돌리기: {old}, 어려움\n"), HEAD)
 
+    def test_doc_only_pr_passes_without_reviewed_head(self):
+        v1_unreviewed = "## Review\n리뷰어(구현과 다른 컨텍스트, 도구/모델): 아직 없음.\n"
+        v2_empty = "## Review\n리뷰어(구현과 다른 컨텍스트):\n리뷰한 head:\n등급: 문서\n"
+        for text in ["", v1_unreviewed, v2_empty]:
+            with self.subTest(text=text):
+                self.assertIsNone(verdict(REF, HEAD, "x", text, ["docs/design/combat/environment.md", "README.md"], ""))
+
+    def test_doc_only_pr_still_checks_recorded_sha_and_escalated_grade(self):
+        self.assertIsNone(verdict(REF, HEAD, "x", f"리뷰한 head: {HEAD}\n등급: 문서\n", ["docs/a.md"], ""))
+        self.assertIn("다릅니다", verdict(REF, HEAD, "x", f"리뷰한 head: {OTHER}\n등급: 문서\n", ["docs/a.md"], ""))
+        for grade in ("쉬움", "어려움"):
+            with self.subTest(grade=grade):
+                self.assertIn("없습니다", verdict(REF, HEAD, "x", f"리뷰한 head:\n등급: {grade}\n", ["docs/a.md"], ""))
+
+    def test_instruction_agent_config_and_mixed_paths_require_reviewed_head(self):
+        non_doc_sets = [
+            [],
+            ["docs/a.md", "scenes/a.gd"],
+            ["docs/a.md", "docs/img.png"],
+            ["AGENTS.md"],
+            ["CLAUDE.md"],
+            ["REVIEW.md"],
+            ["docs/agents/review.md"],
+            [".github/pull_request_template.md"],
+            [".claude/skills/pr/SKILL.md"],
+            ["prompts/review.md"],
+            [".env.example.md"],
+        ]
+        for paths in non_doc_sets:
+            with self.subTest(paths=paths):
+                self.assertIn("없습니다", verdict(REF, HEAD, "x", body(), paths, ""))
+
 
 if __name__ == "__main__":
     unittest.main()

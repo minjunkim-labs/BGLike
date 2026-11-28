@@ -7,11 +7,14 @@ SHA is the queue base, not the PR head, so only N is read from it. The script re
 A push to a queued PR removes it from the queue, so the head read here is the head that was queued.
 
 This catches a head that moved after review. It is not a security boundary: anyone who can edit the PR body
-can write any SHA there. Two kinds of PR carry no review and pass:
+can write any SHA there. Three kinds of PR pass without a review:
 - Dependabot, by the queue commit's author email (no other account can claim that noreply address).
 - repo-baseline sync PRs: the Author line names tools/sync_consumers.py, the base already has the manifest
   (migration PRs need review), and every changed path is the manifest or a path the base manifest records
   (POLICY §5 lets those go to the queue without review).
+- Documentation-only PRs (POLICY §3): every changed path is a regular doc file (not instruction/agent/config
+  paths), the body does not report a non-doc grade (쉬움/어려움), and no 「리뷰한 head:」 SHA was recorded
+  (if a SHA was recorded, it must still match the queued head).
 
 Usage (environment): QUEUE_REF, QUEUE_AUTHOR, BASE_SHA, GITHUB_REPOSITORY, GH_TOKEN.
 """
@@ -25,6 +28,9 @@ import sys
 DEPENDABOT = "49699333+dependabot[bot]@users.noreply.github.com"
 MANIFEST = ".github/repo-baseline.json"
 SYNC_AUTHOR = "tools/sync_consumers.py"
+DOC_SUFFIXES = (".md", ".mdx", ".rst", ".txt", ".adoc")
+INSTRUCTIONS = {"AGENTS.MD", "CLAUDE.MD", "REVIEW.MD"}
+NON_DOC_DIRS = {".claude", ".agents", ".codex", ".cursor", ".github", ".baseline", "prompts", "skills"}
 
 
 def queued(ref):
@@ -60,6 +66,31 @@ def is_sync(body, changed, manifest_text):
     return SYNC_AUTHOR in author and bool(changed) and set(changed) <= allowed
 
 
+def is_doc_path(path):
+    """True only for regular documentation files outside instruction, agent, and config paths."""
+    if not path:
+        return False
+    parts = path.split("/")
+    name = parts[-1]
+    if not name.endswith(DOC_SUFFIXES):
+        return False
+    if name.upper() in INSTRUCTIONS or name == "SKILL.md":
+        return False
+    if any(part in NON_DOC_DIRS or part.startswith(".env") for part in parts):
+        return False
+    return not path.startswith("docs/agents/")
+
+
+def is_doc_only(changed):
+    return bool(changed) and all(is_doc_path(path) for path in changed)
+
+
+def reported_grade(body):
+    """The last 「등급:」 value in the body, or None."""
+    lines = re.findall(r"^등급:(.*)$", (body or "").replace("\r\n", "\n"), re.M)
+    return lines[-1].strip().strip("`") if lines else None
+
+
 def verdict(ref, head, author_email, body, changed, manifest_text):
     """None when the queued head may merge, else the reason it may not.
 
@@ -73,6 +104,9 @@ def verdict(ref, head, author_email, body, changed, manifest_text):
     if is_sync(body, changed, manifest_text):
         return None
     review = reviewed_head(body)
+    grade = reported_grade(body) or ""
+    if not review and is_doc_only(changed) and not grade.startswith(("쉬움", "어려움")):
+        return None
     if not review:
         return f"PR #{number} 본문 Review 칸에 「리뷰한 head:」 SHA가 없습니다."
     if review != head:

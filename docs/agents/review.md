@@ -43,7 +43,7 @@ Standards와 Spec 리뷰는 repo-baseline `prompts/review.md` 4단계대로 저�
 2. 지적마다 위치, 실패 조건, 영향과 수정 근거를 적습니다. 불확실하거나 범위 밖인 문제는 근거와 함께 보고합니다. 구현 범위를 늘리거나 제품 규칙을 확정하지 않습니다.
 3. 확실한 결함에는 수정 전 실패하는 동작 검사를 재사용하거나 추가합니다. 수정한 범위의 검사와 저장소 필수 검사를 실행합니다.
 4. 모든 수정을 커밋한 뒤 최종 head의 전체 diff를 다시 독립 검토합니다. 같은 SHA에서 이미 통과한 검사는 근거를 재사용합니다. 입력 변경이나 실패가 없으면 반복하지 않습니다.
-5. PR의 Evidence에 실행한 검사를, Review에 리뷰어(컨텍스트·모델)·고친 것·남은 지적을 적습니다. PR 본문 Review 칸은 `python3 -I .baseline/baseline.py review-report <PR> --file <경로> [--thread <댓글id>=<판정>]`로 형식 검증과 스레드 판정·해결을 함께 처리할 수 있고, 등급 확인은 `python3 -I .baseline/baseline.py review-preflight <PR>`을 씁니다. 최종 필수 CI와 합격 기준을 확인한 뒤 [병합 정책](../process/workflow.md#브랜치와-병합)에 따라 사람에게 병합을 넘깁니다.
+5. PR의 Evidence에 실행한 검사를, Review에 리뷰어(컨텍스트·모델)·고친 것·남은 지적을 적습니다. PR 본문 Review 칸은 `python3 -I .baseline/baseline.py review-report <PR> --file <경로> [--thread <댓글id>=<판정>]`로 형식 검증과 스레드 판정·해결을 함께 처리할 수 있고, 등급 확인은 `python3 -I .baseline/baseline.py review-preflight <PR>`을 씁니다. 순수 `문서` 등급 PR(`AGENTS.md`·`CLAUDE.md`·`REVIEW.md`·`docs/agents/`·설정 파일 제외, `쉬움`/`어려움` 보고 없음)은 `scripts/reviewed_head.py`가 `리뷰한 head:` 없이도 통과시킵니다(적었으면 현재 head와 같아야 함). 최종 필수 CI와 합격 기준을 확인한 뒤 [병합 정책](../process/workflow.md#브랜치와-병합)에 따라 사람에게 병합을 넘깁니다.
 
 ## CI 실패 처리
 

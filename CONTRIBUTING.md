@@ -109,6 +109,7 @@ repo-baseline은 공통 규칙과 검사기의 원본이며 공개 저장소입�
 | 항목 | 방식 |
 |---|---|
 | PR 제목·브랜치 이름·공백·검사 범위 | Godot workflow가 재사용 `pr-lint`를 호출. 형식이 틀리면 CI 실패 |
+| 머지 큐 리뷰 head 검사 | `merge_group`에서 `scripts/reviewed_head.py`가 본문 `## Review`의 `리뷰한 head:` SHA를 확인. 순수 문서 PR(`AGENTS.md`·`REVIEW.md`·`docs/agents/`·설정 제외, `쉬움`/`어려움` 보고 없음)은 생략 가능하나 SHA를 적었으면 head와 일치해야 함 |
 | 커밋 메시지 검사, Git LFS | `.githooks/`. 1절의 설정 한 줄로 둘 다 켜짐 |
 | squash merge만 허용, 병합 후 브랜치 삭제 | 저장소 설정 |
 | Godot import·메인 장면·전투 회귀 검사 | GitHub Actions `godot`. 문서만 바뀌면 엔진 작업은 생략 |
