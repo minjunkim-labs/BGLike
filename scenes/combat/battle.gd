@@ -389,7 +389,7 @@ func _desired_time_scale() -> float:
 		return LAST_KILL_SLOWMO_SCALE
 	# 반응 확인 창과 전투 종료·승리 대기 중에는 가속하지 않고 보통 속도로 둔다.
 	if (_enemy_turn_running and not actions.is_over() and not _victory_waiting
-			and not hud.reaction_dialog.visible and Input.is_key_pressed(KEY_SPACE)):
+			and not hud.is_reaction_open() and Input.is_key_pressed(KEY_SPACE)):
 		return ENEMY_FAST_SPEED
 	return 1.0
 
@@ -614,6 +614,17 @@ func _refresh_threat() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if actions.pending_kind == "reflex" and hud.reflex_banner.visible:
+		if event is InputEventMouseMotion:
+			var world_pos: Vector2 = get_canvas_transform().affine_inverse() * event.position
+			var hovered: Vector2i = map.surface_to_map(map.to_local(world_pos))
+			_on_reflex_previewed(hovered if hovered in actions.pending_cells else Vector2i(-1, -1))
+		if event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel"):
+			get_viewport().set_input_as_handled()
+			hud.hide_reaction()
+			actions.resolve_reaction(false)
+			_update_turn_ui()
+			return
 	if event is InputEventMouseMotion and not preparation.visible:
 		_hover_floor_loot(event.position)
 		_hover_enemy_body(event.position)
@@ -677,7 +688,7 @@ func _ally_input_open() -> bool:
 	var actor: CombatUnit = turns.current_unit
 	return (not waiting_for_start and actor != null and actor.is_ally and not actions.busy and not actions.is_over()
 		and not _victory_waiting
-		and not hud.reaction_dialog.visible and not hud.get_node("Result").visible and not preparation.visible)
+		and not hud.is_reaction_open() and not hud.get_node("Result").visible and not preparation.visible)
 
 
 ## 방향 동작(휩쓸기·효시)의 클릭이 가리키는 방향 칸. 인접 칸의 몸통이나 사물을 눌러도 그 칸을 방향으로 고른다.
@@ -701,6 +712,15 @@ func _facing_at(actor: CombatUnit, cell: Vector2i, candidates: Array[CombatUnit]
 func _unhandled_input(event: InputEvent) -> void:
 	if (event is not InputEventMouseButton or not event.pressed
 		or event.button_index not in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]):
+		return
+	if actions.pending_kind == "reflex" and hud.reflex_banner.visible:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			var reflex_world: Vector2 = get_canvas_transform().affine_inverse() * event.position
+			var reflex_cell: Vector2i = map.surface_to_map(map.to_local(reflex_world))
+			if reflex_cell in actions.pending_cells:
+				get_viewport().set_input_as_handled()
+				hud.hide_reaction()
+				_on_reflex_selected(reflex_cell)
 		return
 	if actions.busy or actions.is_over() or _victory_waiting:
 		return

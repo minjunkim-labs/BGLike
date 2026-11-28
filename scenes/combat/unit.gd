@@ -16,12 +16,19 @@ const ABILITY_MODIFIER_KEYS: Array[String] = ["strength_modifier", "agility_modi
 const ABILITY_IDS: Array[String] = ["strength", "agility", "finesse", "intelligence", "will", "health"]
 const ABILITY_COLORS: Array[Color] = [Color("ef4444"), Color("10b981"), Color("fbbf24"),
 	Color("06b6d4"), Color("8b5cf6"), Color("ea0cc1")]
+## 어두운 패널(#121A22) 작은 글씨용 고대비 능력치 색(대비비 7+, #824).
+const ABILITY_TEXT_COLORS: Array[Color] = [Color("ff8a80"), Color("6ee7b7"), Color("fde047"),
+	Color("67e8f9"), Color("c4b5fd"), Color("f472b6")]
 const ABILITY_ICON_DIR: String = "res://scenes/combat/art/icons/abilities/"
+const STAT_ICON_DIR: String = "res://scenes/combat/art/icons/stats/"
+const STAT_IDS: Array[String] = ["hp", "ac", "attack", "range", "movement"]
 ## 능력치 아이콘 표시 크기(48×48 원본의 0.25배 = 12 논리px, #795).
 const ABILITY_ICON_SIZE: int = 12
 static var ABILITY_NAMES: Array[String] = [TranslationServer.tr("힘"), TranslationServer.tr("민첩"),
 	TranslationServer.tr("솜씨"), TranslationServer.tr("지능"), TranslationServer.tr("의지"), TranslationServer.tr("건강")]
 static var _ability_icons: Dictionary[int, Texture2D] = {}
+static var _stat_icons: Dictionary[String, Texture2D] = {}
+static var _ability_mention_regex: RegEx
 
 const MOVEMENT_PER_TURN: int = 8
 ## 전사의 이동력. 궁수와 이동력을 정하지 않은 몬스터는 MOVEMENT_PER_TURN이다.
@@ -213,6 +220,48 @@ static func ability_color(ability: Ability) -> Color:
 	return ABILITY_COLORS[ability]
 
 
+static func ability_text_color(ability: Ability) -> Color:
+	return ABILITY_TEXT_COLORS[ability]
+
+
+## 툴팁·전투 로그 본문의 능력치 판정 표기(예: "힘 d20", "민첩 내성")에 12px 아이콘과 고대비 색을 인라인으로 붙인다(#824).
+static func decorate_abilities(text: String) -> String:
+	if text.is_empty():
+		return text
+	if _ability_mention_regex == null:
+		_ability_mention_regex = RegEx.new()
+		var names: String = "|".join(ABILITY_NAMES)
+		var suffixes: String = "|".join([
+			"d\\d+",
+			TranslationServer.tr("내성"),
+			TranslationServer.tr("굴림"),
+			TranslationServer.tr("가감"),
+		])
+		_ability_mention_regex.compile("(^|[\\s(:·\\]])(%s)(?=\\s+(?:%s))" % [names, suffixes])
+	var matches: Array[RegExMatch] = _ability_mention_regex.search_all(text)
+	if matches.is_empty():
+		return text
+	var result: String = ""
+	var cursor: int = 0
+	for found: RegExMatch in matches:
+		var name_start: int = found.get_start(2)
+		var name_end: int = found.get_end(2)
+		var label: String = found.get_string(2)
+		var index: int = ABILITY_NAMES.find(label)
+		if index < 0:
+			continue
+		var ability: Ability = index as Ability
+		result += text.substr(cursor, name_start - cursor)
+		result += "[img=12x12]%s[/img][color=#%s]%s[/color]" % [
+			ability_icon_path(ability),
+			ability_text_color(ability).to_html(false),
+			label,
+		]
+		cursor = name_end
+	result += text.substr(cursor)
+	return result
+
+
 static func ability_icon_path(ability: Ability) -> String:
 	return "%s%s.png" % [ABILITY_ICON_DIR, ABILITY_IDS[ability]]
 
@@ -222,6 +271,16 @@ static func ability_icon(ability: Ability) -> Texture2D:
 	if not _ability_icons.has(key):
 		_ability_icons[key] = load(ability_icon_path(ability)) as Texture2D
 	return _ability_icons[key]
+
+
+static func stat_icon_path(stat_id: String) -> String:
+	return "%s%s.png" % [STAT_ICON_DIR, stat_id]
+
+
+static func stat_icon(stat_id: String) -> Texture2D:
+	if not _stat_icons.has(stat_id):
+		_stat_icons[stat_id] = load(stat_icon_path(stat_id)) as Texture2D
+	return _stat_icons[stat_id]
 
 
 ## 굴림값과 표준값에 더하는 값. 주사위 레벨(파티 공통)과 장비의 능력치 가감 합이다 (주사위 육성 4장, 아이템 기획 폼 3장).

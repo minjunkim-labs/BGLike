@@ -49,11 +49,11 @@ func _init() -> void:
 	add_child(_timer)
 
 
-## 글을 color로 칠한 BBCode. 수치 가감 색(#457)은 그 안에서 그대로 남는다. 빈 글은 빈 글이다.
+## 글을 color로 칠한 BBCode. 수치 가감 색(#457)과 능력치 아이콘·색(#824)은 그 안에서 그대로 남는다. 빈 글은 빈 글이다.
 static func paint(text: String, color: Color) -> String:
 	if text.is_empty():
 		return ""
-	return "[color=#%s]%s[/color]" % [color.to_html(false), CombatActionRules.colorize(text)]
+	return "[color=#%s]%s[/color]" % [color.to_html(false), CombatUnit.decorate_abilities(CombatActionRules.colorize(text))]
 
 
 ## 첫 줄은 강조 글자, 나머지 줄은 본문 글자로 칠한 BBCode. 초상·패시브 설명이 쓴다.

@@ -216,7 +216,13 @@ func _test_movement_overlay() -> void:
 	root.add_child(map)
 	map.build_grid(grid, load("res://scenes/combat/floor_tiles.tres") as TileSet)
 	map.show_movement([Vector2i.ZERO, Vector2i(1, 0)], [Vector2i(2, 0)], [Vector2i(1, 0)], Vector2i.ZERO)
-	_check(map._overlays.size() == 5, "이동 파랑 면2개·기본 공격 도달 빨간 윤곽1개·미리보기 선·도착점을 표시")
+	_check(map._overlays.size() == 4, "이동 파랑 면2개·기본 공격 도달 주황 윤곽1개·단일 이동 경로1개를 표시")
+	var path_root: Node2D = map._overlays[3] as Node2D
+	_check(path_root.name == "MovementPath" and path_root.z_index == CombatMap.PATH_Z_INDEX
+		and path_root.get_node_or_null("Outline") is Line2D
+		and path_root.get_node_or_null("Line") is Line2D
+		and path_root.get_node_or_null("ArrowHead") != null,
+		"이동 경로는 y_sort 가림을 피하는 단일 경로(z_index 상향·외곽선·실선·도착 화살표)")
 	for index: int in range(2):
 		var overlay: Polygon2D = map._overlays[index] as Polygon2D
 		_check(overlay.color.a > 0.0 and overlay.color.a <= 0.16, "이동 면 채움이 바닥 재질을 가리지 않음")
@@ -356,8 +362,8 @@ func _test_opportunity_attack_warning() -> void:
 	selection.reset()
 	selection.choose_move(ally, actions, Vector2i(2, 9))
 	battle.call("_update_turn_ui")
-	_check(map.opportunity_warning_cells() == [Vector2i(4, 9), Vector2i(2, 9)],
-		"걷기 미리보기에서 이탈 칸과 최종 도착 칸 위에 경고 아이콘 표시: " + str(map.opportunity_warning_cells()))
+	_check(map.opportunity_warning_cells() == [Vector2i(4, 9)],
+		"걷기 미리보기에서 실제 기회 공격이 발생하는 이탈 칸에만 경고 아이콘 표시: " + str(map.opportunity_warning_cells()))
 	_check(hud.preview_label.visible and "기회 공격 1명" in hud.preview_label.text,
 		"걷기 미리보기 우측 안내에 기회 공격 N명 표시: " + hud.preview_label.text)
 	# 면제 상태면 아이콘과 문구 모두 표시하지 않는다.
@@ -366,13 +372,13 @@ func _test_opportunity_attack_warning() -> void:
 	_check(map.opportunity_warning_cells().is_empty() and "기회 공격" not in hud.preview_label.text,
 		"면제 상태에서는 경고 아이콘과 안내 문구를 표시하지 않음")
 	ally.disengaged = false
-	# 점프 미리보기: 출발 칸 이탈로 기회 공격 유발 시 착지 칸 위에 경고 아이콘 표시.
+	# 점프 미리보기: 출발 칸 이탈로 기회 공격 유발 시 출발 칸 위에 경고 아이콘 표시.
 	selection.reset()
 	selection.choose_action(ally, actions, "jump")
 	selection.choose_move(ally, actions, Vector2i(2, 9))
 	battle.call("_update_turn_ui")
-	_check(map.opportunity_warning_cells() == [Vector2i(2, 9)] and "기회 공격 1명" in hud.preview_label.text,
-		"점프 미리보기에서 기회 공격 유발 시 착지 칸에 경고 아이콘과 안내 표시: " + str(map.opportunity_warning_cells()))
+	_check(map.opportunity_warning_cells() == [Vector2i(4, 9)] and "기회 공격 1명" in hud.preview_label.text,
+		"점프 미리보기에서 기회 공격 유발 시 출발 칸에 경고 아이콘과 안내 표시: " + str(map.opportunity_warning_cells()))
 	enemy.reaction_left = 0
 	battle.call("_update_turn_ui")
 	_check(map.opportunity_warning_cells().is_empty() and "기회 공격 없음" in hud.preview_label.text,
@@ -901,12 +907,13 @@ func _test_ability_icons() -> void:
 
 func _check_ability_slots(expected_dice: Array[String], label: String) -> void:
 	var slots: Array = hud.get("_ability_slots")
-	_check(slots.size() == 6 and hud.ability_grid.columns == 3, "%s: 3열 2줄 능력치 칸 6개" % label)
+	_check(slots.size() == 6 and hud.ability_grid.columns == 2, "%s: 2열 3줄 능력치 칸 6개" % label)
 	for index: int in range(expected_dice.size()):
 		var slot: CombatTurnHud.AbilitySlot = slots[index] as CombatTurnHud.AbilitySlot
 		var ability: CombatUnit.Ability = index as CombatUnit.Ability
-		_check(slot.die_label.get_parsed_text() == expected_dice[index],
-			"%s [%s]: %s != %s" % [label, CombatUnit.ABILITY_IDS[index], slot.die_label.get_parsed_text(), expected_dice[index]])
+		var expected_text: String = "%s %s" % [CombatUnit.ability_name(ability), expected_dice[index]]
+		_check(slot.die_label.get_parsed_text() == expected_text,
+			"%s [%s]: %s != %s" % [label, CombatUnit.ABILITY_IDS[index], slot.die_label.get_parsed_text(), expected_text])
 		_check(slot.icon_rect.texture == CombatUnit.ability_icon(ability)
 			and slot.icon_rect.custom_minimum_size == Vector2(12, 12)
 			and slot.icon_rect.material == preload("res://scenes/combat/art/pixel_art.tres"),
@@ -922,10 +929,10 @@ func _test_ability_panel_tooltips() -> void:
 	hud.show_unit(units[0])
 	await process_frame
 	var str_slot: CombatTurnHud.AbilitySlot = slots[CombatUnit.Ability.STRENGTH] as CombatTurnHud.AbilitySlot
-	_check(str_slot.die_label.get_parsed_text() == "d20+2"
+	_check(str_slot.die_label.get_parsed_text() == "힘 d20+2"
 		and str_slot.die_label.text.contains("[color=#70c76d]+2[/color]")
 		and str_slot.tooltip_text == "힘 · d20+2",
-		"장비 가감이 있는 능력치 칸은 [아이콘] d20+2(초록)과 호버 '힘 · d20+2'를 표시한다: " + str_slot.tooltip_text)
+		"장비 가감이 있는 능력치 칸은 [아이콘] 힘 d20+2(초록)과 호버 '힘 · d20+2'를 표시한다: " + str_slot.tooltip_text)
 	var tooltip: HoverTooltip = hud.get("_tooltip") as HoverTooltip
 	str_slot.grab_focus()
 	tooltip.call("_update")
@@ -951,7 +958,7 @@ func _test_warrior() -> void:
 	var titles: Array = hud.get("_titles")
 	_check(hud.unit_label.text == "아군 전사" and "HP 11 / 11" in hud.vitals_label.text
 		and "AC 6" in hud.vitals_label.text and "팔랑크스 AC +1" in hud.status_text()
-		and "이동" not in hud.resource_label.get_parsed_text(),
+		and "이동 4/4" in hud.resource_label.get_parsed_text(),
 		"현재 유닛 정보: HP·AC(민첩 d8 표준값 5 + 인접 궁수 팔랑크스 1) 표시, 남은 이동 제거")
 	_check(hud.health_bar.value == 11, "현재 유닛 HP 바")
 	_check_ability_slots(["d20", "d8", "d6", "d4", "d8", "d12"], "현재 전사의 능력치 주사위 표시")
@@ -1027,40 +1034,35 @@ func _test_resources() -> void:
 	await process_frame
 
 
-## 반사신경 확인 창: 후보 칸마다 버튼 하나와 넘기기. 칸을 고르면 reflex_selected가 나온다. 다른 반응 창에는 칸 버튼이 남지 않는다.
+## 반사신경 비모달 안내 배너(#824): 맵 클릭을 막지 않고 배너와 넘기기 버튼만 표시한다. 다른 반응은 기존 확인 창을 쓴다.
 func _test_reflex_dialog() -> void:
 	var cells: Array[Vector2i] = [Vector2i(3, 9), Vector2i(5, 9)]
 	var picked: Array[Vector2i] = []
+	var skipped: Array[bool] = []
 	hud.reflex_selected.connect(func(cell: Vector2i) -> void: picked.append(cell))
+	hud.reaction_selected.connect(func(use_reaction: bool) -> void: skipped.append(use_reaction))
 	hud.show_reaction("reflex", "적의 공격이 명중했습니다.", cells)
 	var dialog: ConfirmationDialog = hud.reaction_dialog
-	var reflex_buttons: Array[Button] = hud.get("_reflex_buttons")
-	_check(dialog.visible and not dialog.get_ok_button().visible and dialog.get_cancel_button().text == "넘기기"
-		and reflex_buttons.size() == 2, "반사신경 창: 후보 칸 수만큼 버튼, 넘기기, 확인 버튼 숨김")
-	reflex_buttons[1].pressed.emit()
-	_check(picked == [cells[1]] and not dialog.visible, "칸 버튼을 누르면 그 칸을 보내고 창을 닫음: " + str(picked))
+	_check(hud.reflex_banner.visible and not dialog.visible and hud.is_reaction_open()
+		and hud.reflex_skip_button.text == "넘기기", "반사신경: 중앙 모달 대신 비모달 배너와 넘기기 버튼 표시")
+	hud.reflex_skip_button.pressed.emit()
+	_check(not hud.reflex_banner.visible and not hud.is_reaction_open() and skipped == [false] and picked.is_empty(),
+		"넘기기 버튼을 누르면 배너를 닫고 반응을 넘김")
 	hud.show_reaction("opportunity", "벗어납니다.")
-	_check(dialog.get_ok_button().visible and (hud.get("_reflex_buttons") as Array).is_empty()
-		and dialog.get_ok_button().text == "공격", "다른 반응 창에는 칸 버튼이 남지 않음")
-	hud.reaction_dialog.hide()
-	hud.show_reaction("reflex", "다시 묻습니다.", cells)
-	_check((hud.get("_reflex_buttons") as Array).size() == 2, "다시 열어도 칸 버튼은 후보 수만큼만")
-	dialog.get_cancel_button().pressed.emit()
-	_check(picked == [cells[1]] and not dialog.visible, "넘기기는 칸을 보내지 않음")
-	# battle 배선: 칸 버튼 글자는 맵 투영의 화면 방향이다(x+1은 오른쪽 아래, y+1은 왼쪽 아래).
+	_check(dialog.visible and not hud.reflex_banner.visible and dialog.get_ok_button().visible
+		and dialog.get_ok_button().text == "공격", "기회 공격은 기존 중앙 확인 창 유지")
+	hud.hide_reaction()
+	# battle 배선: 반사신경 대기 중에는 비모달 배너가 열리고, 넘기기로 대기를 해제한다.
 	var at: Vector2i = units[1].cell
 	actions.pending_reactor = units[1]
 	actions.pending_kind = "reflex"
-	actions.pending_cells = [at + Vector2i(-1, 0), at + Vector2i(1, 0), at + Vector2i(0, -1), at + Vector2i(0, 1)]
+	actions.pending_cells = [at + Vector2i(-1, 0), at + Vector2i(1, 0)]
 	actions.reaction_requested.emit("reflex", "배선 확인")
-	var arrows: Array[String] = []
-	for button: Button in hud.get("_reflex_buttons"):
-		arrows.append(button.text)
-	_check(arrows == ["↖", "↘", "↗", "↙"], "칸 버튼은 화면 방향 화살표: " + str(arrows))
-	dialog.get_cancel_button().pressed.emit()
+	_check(hud.reflex_banner.visible and not dialog.visible, "battle 배선에서도 반사신경은 비모달 배너 표시")
+	hud.reflex_skip_button.pressed.emit()
 	actions.pending_kind = ""
 	actions.pending_cells = []
-	_check(actions.pending_reactor == null and not dialog.visible, "넘기기로 대기 해제")
+	_check(actions.pending_reactor == null and not hud.reflex_banner.visible, "넘기기로 대기 해제")
 
 
 func _test_archer_and_enemy() -> void:
@@ -1352,9 +1354,13 @@ func _test_log_and_status() -> void:
 	# 배경이 불투명해야 아래 지형과 관계없이 명암비가 고정된다.
 	var log_panel: PanelContainer = hud.get_node("CombatLog") as PanelContainer
 	var log_background: Color = (log_panel.get_theme_stylebox("panel") as StyleBoxTexture).modulate_color
-	var log_contrast: float = _contrast_ratio(hud.message_label.get_theme_color("font_color"), log_background)
+	var log_contrast: float = _contrast_ratio(hud.message_label.get_theme_color("default_color"), log_background)
 	_check(log_background.a == 1.0 and log_contrast >= 4.5,
 		"전투 로그 불투명 배경과 WCAG AA 4.5:1 이상: alpha %.2f, %.2f" % [log_background.a, log_contrast])
+	hud.add_log("아군 전사 공격: 힘 d20 [11] +0 = 11")
+	_check(hud.message_label.text.contains("[img=12x12]") and hud.message_label.text.contains("strength.png")
+		and "힘 d20 [11]" in hud.message_label.get_parsed_text(),
+		"전투 로그의 능력치 표기에 12px 아이콘과 색을 인라인 적용한다")
 	units[2].is_stunned = true
 	units[2].hit_points = 5
 	battle.call("_update_turn_ui")
@@ -1566,7 +1572,7 @@ func _test_roll_popups() -> void:
 
 func _has_two_dice_log(mode: String) -> bool:
 	var marker: String = "): 솜씨 d20 ["
-	for line: String in hud.message_label.text.split("\n"):
+	for line: String in _plain_rich_text(hud.message_label).split("\n"):
 		if "공격(%s" % mode not in line or marker not in line:
 			continue
 		var values: PackedStringArray = line.get_slice(marker, 1).get_slice("]", 0).split(", ")
@@ -1976,7 +1982,7 @@ func _test_guidance() -> void:
 		and not cells.has(Vector2i(5, 1)) and not cells.has(units[0].cell),
 		"이동 가능 범위는 남은 이동·점유 칸·현재 칸을 반영")
 	_check(hud.preview_label.text.is_empty() and not hud.preview_label.visible
-		and "이동" not in hud.resource_label.get_parsed_text() and units[2].is_previewed,
+		and "이동 " in hud.resource_label.get_parsed_text() and units[2].is_previewed,
 		"이동 설명·남은 이동은 제거하고 도착 시 공격 대상 테두리 유지")
 	_check(units[0].cell == Vector2i(1, 1) and units[0].movement_left == 2 and units[0].action_left == 1
 		and not actions.can_target(units[0], units[2], "attack")
@@ -2414,11 +2420,24 @@ func _in_left_column(rect: Rect2, screen: Vector2) -> bool:
 		and not rect.intersects(_center_area(screen))
 
 
+func _plain_rich_text(rtl: RichTextLabel) -> String:
+	if not rtl.text.contains("[img"):
+		return rtl.get_parsed_text()
+	var stripped: RichTextLabel = RichTextLabel.new()
+	stripped.bbcode_enabled = true
+	var re: RegEx = RegEx.new()
+	re.compile("\\[img[^\\]]*\\][^\\[]*\\[/img\\]")
+	stripped.text = re.sub(rtl.text, "", true)
+	var plain: String = stripped.get_parsed_text()
+	stripped.free()
+	return plain
+
+
 func _has_tooltip(node: Node, text: String) -> bool:
 	if node is Label and node.text == text and node.is_visible_in_tree():
 		return true
-	# 호버 설명은 수치 색을 위해 RichTextLabel이며, 글자는 태그를 뺀 원문으로 비교한다.
-	if node is RichTextLabel and (node as RichTextLabel).get_parsed_text() == text and node.is_visible_in_tree():
+	# 호버 설명은 수치 색·인라인 능력치 아이콘을 위해 RichTextLabel이며, 태그와 [img]를 뺀 원문으로 비교한다.
+	if node is RichTextLabel and _plain_rich_text(node as RichTextLabel) == text and node.is_visible_in_tree():
 		return true
 	for child: Node in node.get_children(true):
 		if _has_tooltip(child, text):
@@ -2540,7 +2559,7 @@ func _test_mouse_controls_and_inspection() -> void:
 	_check(units[0].action_left == 0, "필드 적 두 번째 좌클릭은 공격 확정")
 	await _click((portraits[units[1]] as Button).get_global_rect().get_center())
 	_check(turns.current_unit == units[1] and units[0].action_left == 0
-		and (hud.get("_ability_slots")[0] as CombatTurnHud.AbilitySlot).die_label.get_parsed_text() == "d6"
+		and (hud.get("_ability_slots")[0] as CombatTurnHud.AbilitySlot).die_label.get_parsed_text() == "힘 d6"
 		and "사거리 6칸" in hud.resource_label.get_parsed_text(),
 		"조작 가능한 아군 초상은 정보와 조작 전환, 기존 자원 유지")
 	turns.select_unit(units[0])
@@ -4638,7 +4657,7 @@ func _test_reaction_flow() -> void:
 		if "기회 공격:" in message and "사용" in message:
 			use_count += 1
 	_check(use_count == 1 and units[0].reaction_left == 0, "아군 반응 사용 로그·비용은 정확히 한 번")
-	_check("힘 d20 [1]" in hud.message_label.text, "3줄 로그에 기회 공격 판정이 남음")
+	_check("힘 d20 [1]" in hud.message_label.get_parsed_text(), "3줄 로그에 기회 공격 판정이 남음")
 	_check(choices[0] == 2 and not hud.reaction_dialog.visible and not actions.busy, "두 선택의 연결과 입력 잠금 해제")
 	actions.logged.disconnect(on_log)
 	actions.reaction_requested.disconnect(on_reaction)

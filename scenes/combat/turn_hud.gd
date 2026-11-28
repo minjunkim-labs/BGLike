@@ -116,6 +116,10 @@ var _tooltip: HoverTooltip = HoverTooltip.new()
 var _cover_tooltip: PanelContainer
 var _cover_tooltip_label: Label
 var reaction_dialog: ConfirmationDialog = ConfirmationDialog.new()
+## 반사신경 비모달 안내 배너(#824). 맵 클릭을 막지 않고 후보 칸 선택과 넘기기를 안내한다.
+var reflex_banner: PanelContainer = PanelContainer.new()
+var _reflex_prompt_label: Label = Label.new()
+var reflex_skip_button: Button = Button.new()
 ## 칸을 화면 방향 글자(↖ ↗ ↙ ↘)로 바꾸는 함수. battle이 맵 투영으로 정한다. 없으면 좌표를 보인다.
 var reflex_label: Callable
 var _reflex_buttons: Array[Button] = []
@@ -130,7 +134,7 @@ var grid: CombatGrid
 @onready var order_bar: HBoxContainer = $OrderScroll/OrderBar
 @onready var unit_label: Label = $UnitDetails/UnitPanel/Info/CurrentUnit
 @onready var actor_label: Label = $UnitDetails/UnitPanel/Info/Actor
-@onready var vitals_label: Label = $UnitDetails/UnitPanel/Info/Vitals
+@onready var vitals_label: RichTextLabel = $UnitDetails/UnitPanel/Info/Vitals
 @onready var ability_grid: GridContainer = $UnitDetails/UnitPanel/Info/Abilities
 @onready var resource_label: RichTextLabel = $UnitDetails/UnitPanel/Info/Resources
 @onready var status_row: HFlowContainer = $UnitDetails/UnitPanel/Info/StatusRow
@@ -138,7 +142,7 @@ var grid: CombatGrid
 @onready var end_button: Button = $EndTurn
 @onready var preview_label: Label = $UnitDetails/AttackPreview
 @onready var action_bar: VBoxContainer = $Skills/Groups
-@onready var message_label: Label = $CombatLog/Message
+@onready var message_label: RichTextLabel = $CombatLog/Message
 @onready var result_label: Label = $Result/Panel/Contents/Outcome
 @onready var restart_button: Button = $Result/Panel/Contents/Restart
 
@@ -150,9 +154,13 @@ static func slot_width(available: float, count: int) -> int:
 	return clampi(floori((available - SLOT_GAP * (count - 1)) / count), SLOT_MIN, SLOT_FULL)
 
 
+func is_reaction_open() -> bool:
+	return reaction_dialog.visible or reflex_banner.visible
+
+
 func feedback_obstacles() -> Array[Rect2]:
 	var result: Array[Rect2] = []
-	for panel: Control in [$Round, $Progress, $OrderScroll, $UnitDetails, $Skills, $CombatLog, $EndTurn, stand_button]:
+	for panel: Control in [$Round, $Progress, $OrderScroll, $UnitDetails, $Skills, $CombatLog, $EndTurn, stand_button, reflex_banner]:
 		if panel.is_visible_in_tree():
 			result.append(panel.get_global_rect())
 	return result
@@ -177,7 +185,7 @@ func _ready() -> void:
 			var rect: Rect2 = target.get_global_rect()
 			return Vector2(rect.position.x, rect.end.y + TOOLTIP_GAP)
 		return Vector2(left, ($Skills as Control).get_global_rect().position.y - TOOLTIP_GAP - tooltip_size.y)
-	_tooltip.hidden_when = func() -> bool: return reaction_dialog.visible or $Result.visible
+	_tooltip.hidden_when = func() -> bool: return is_reaction_open() or $Result.visible
 	_tooltip.format = func(target: Control) -> String:
 		return target.get_meta(&"tooltip_bbcode") as String if target.has_meta(&"tooltip_bbcode") \
 			else HoverTooltip.headed(target.tooltip_text)
@@ -297,6 +305,38 @@ func _ready() -> void:
 	reaction_dialog.confirmed.connect(_finish_reaction.bind(true))
 	reaction_dialog.canceled.connect(_finish_reaction.bind(false))
 	reaction_dialog.custom_action.connect(_on_reflex_action)
+	_build_reflex_banner()
+
+
+## 반사신경 발동 시 맵 클릭을 막지 않는 비모달 안내 배너(#824).
+func _build_reflex_banner() -> void:
+	reflex_banner.name = "ReflexBanner"
+	reflex_banner.theme_type_variation = &"HudPanel"
+	reflex_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	reflex_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	reflex_banner.offset_top = 26.0
+	reflex_banner.visible = false
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	reflex_banner.add_child(row)
+	var text_box: VBoxContainer = VBoxContainer.new()
+	text_box.add_theme_constant_override("separation", 1)
+	row.add_child(text_box)
+	_reflex_prompt_label.name = "Prompt"
+	_reflex_prompt_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text_box.add_child(_reflex_prompt_label)
+	var hint: Label = Label.new()
+	hint.name = "Hint"
+	hint.text = tr("이동할 칸을 클릭하거나 Esc로 넘깁니다.")
+	hint.add_theme_color_override("font_color", Color("c5b29f"))
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text_box.add_child(hint)
+	reflex_skip_button.name = "SkipReflex"
+	reflex_skip_button.text = tr("넘기기")
+	reflex_skip_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	reflex_skip_button.pressed.connect(_finish_reaction.bind(false))
+	row.add_child(reflex_skip_button)
+	add_child(reflex_banner)
 
 
 ## 유닛 패널의 3열 2줄 능력치 칸 6개를 만든다(#795).
@@ -500,28 +540,24 @@ func action_tooltip(actions: CombatActions, actor: CombatUnit, action: String) -
 
 
 func add_log(message: String) -> void:
-	_log_lines.append(message.replace("\n", " "))
+	_log_lines.append(CombatUnit.decorate_abilities(message.replace("\n", " ")))
 	while _log_lines.size() > 3:
 		_log_lines.pop_front()
 	message_label.text = "\n".join(_log_lines)
 
 
-func show_reaction(kind: String, prompt: String, cells: Array[Vector2i] = []) -> void:
+func show_reaction(kind: String, prompt: String, _cells: Array[Vector2i] = []) -> void:
 	_clear_reflex_buttons()
+	if kind == "reflex":
+		hide_reaction()
+		_reflex_prompt_label.text = prompt
+		reflex_banner.visible = true
+		return
+	reflex_banner.visible = false
 	reaction_dialog.dialog_text = prompt
 	reaction_dialog.get_ok_button().text = tr("반격") if kind == "counter" else tr("공격")
-	reaction_dialog.get_ok_button().visible = kind != "reflex"
+	reaction_dialog.get_ok_button().visible = true
 	reaction_dialog.get_cancel_button().text = tr("넘기기")
-	if kind == "reflex":
-		for cell: Vector2i in cells:
-			var label: String = reflex_label.call(cell) if reflex_label.is_valid() else "%d, %d" % [cell.x, cell.y]
-			var action: StringName = StringName("reflex_%d_%d" % [cell.x, cell.y])
-			var button: Button = reaction_dialog.add_button(label, false, action)
-			button.mouse_entered.connect(reflex_previewed.emit.bind(cell))
-			button.focus_entered.connect(reflex_previewed.emit.bind(cell))
-			button.mouse_exited.connect(reflex_previewed.emit.bind(Vector2i(-1, -1)))
-			_reflex_buttons.append(button)
-			_reflex_cells[action] = cell
 	reaction_dialog.exclusive = true
 	reaction_dialog.popup_centered(Vector2i(360, 110))
 
@@ -538,18 +574,23 @@ func _clear_reflex_buttons() -> void:
 func _on_reflex_action(action: StringName) -> void:
 	if action in _reflex_cells:
 		var cell: Vector2i = _reflex_cells[action]
-		_hide_reaction()
+		hide_reaction()
 		reflex_selected.emit(cell)
 
 
-func _hide_reaction() -> void:
+func hide_reaction() -> void:
 	# Godot 4.7.2 접근성은 창 제거 중에도 exclusive child에 포커스를 전달한다.
 	reaction_dialog.exclusive = false
 	reaction_dialog.hide()
+	reflex_banner.visible = false
+
+
+func _hide_reaction() -> void:
+	hide_reaction()
 
 
 func _finish_reaction(use_reaction: bool) -> void:
-	_hide_reaction()
+	hide_reaction()
 	reaction_selected.emit(use_reaction)
 
 
@@ -561,14 +602,14 @@ func begin_stage(act: int, stage: int) -> void:
 	_shown_order.clear()
 	progress_label.text = tr("%d막 · %d스테이지") % [act, stage]
 	$Result.hide()
-	_hide_reaction()
+	hide_reaction()
 	_log_lines.clear()
 	message_label.text = ""
 	restart_button.show()
 
 
 func show_result(victory: bool, graduated: bool = false, locked: bool = false) -> void:
-	_hide_reaction()
+	hide_reaction()
 	var complete: bool = victory and graduated
 	result_label.text = tr("3막 졸업") if complete else tr("승리") if victory else tr("패배")
 	restart_button.text = tr("타이틀로") if complete else tr("보상 확인") if victory else tr("이 막 다시 시작")
@@ -877,18 +918,32 @@ func show_unit(unit: CombatUnit) -> void:
 	health_bar.max_value = unit.get_max_hit_points()
 	health_bar.value = unit.hit_points
 	var phalanx: int = grid.phalanx_bonus(unit) if grid != null else 0
-	vitals_label.text = tr("HP %d / %d   AC %d") % [
-		unit.hit_points, unit.get_max_hit_points(), unit.get_armor_class() + phalanx]
+	vitals_label.text = "[img=12x12]%s[/img] %s   [img=12x12]%s[/img] %s" % [
+		CombatUnit.stat_icon_path("hp"),
+		tr("HP %d / %d") % [unit.hit_points, unit.get_max_hit_points()],
+		CombatUnit.stat_icon_path("ac"),
+		tr("AC %d") % (unit.get_armor_class() + phalanx),
+	]
 	ability_grid.visible = true
 	for index: int in range(_ability_slots.size()):
 		var ability: CombatUnit.Ability = index as CombatUnit.Ability
 		var slot: AbilitySlot = _ability_slots[index]
 		var die: String = CombatUnit.ability_die_text(unit, ability)
-		slot.die_label.text = CombatActionRules.colorize(die)
+		slot.die_label.text = "[color=#%s]%s[/color] %s" % [
+			CombatUnit.ability_text_color(ability).to_html(false),
+			CombatUnit.ability_name(ability),
+			CombatActionRules.colorize(die),
+		]
 		slot.tooltip_text = "%s · %s" % [CombatUnit.ability_name(ability), die]
 		slot.accessibility_name = CombatUnit.ability_text(unit, ability)
-	resource_label.text = CombatActionRules.colorize(tr("공격 %+d · 사거리 %d칸") % [
-		unit.get_attack_bonus(), unit.get_attack_range()])
+	resource_label.text = "[img=12x12]%s[/img] %s · [img=12x12]%s[/img] %s · [img=12x12]%s[/img] %s" % [
+		CombatUnit.stat_icon_path("attack"),
+		CombatActionRules.colorize(tr("공격 %+d") % unit.get_attack_bonus()),
+		CombatUnit.stat_icon_path("range"),
+		tr("사거리 %d칸") % unit.get_attack_range(),
+		CombatUnit.stat_icon_path("movement"),
+		tr("이동 %d/%d") % [unit.movement_left, unit.get_movement()],
+	]
 	_rebuild_status_row(_status_entries(unit, phalanx))
 
 

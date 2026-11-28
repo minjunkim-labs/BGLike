@@ -817,12 +817,16 @@ func _test_armor_unequip_scene() -> void:
 		_check(party[1].armor == archer_armor and party[1].hit_points == archer_hit_points + 4
 			and loot.bag.size() == 12, "가득 찬 가방에서 해제 입력은 방어구·HP·가방 보존")
 		await _check_preparation_focus_tooltips(preparation)
+		party[0].potions = ["healing_potion", "oil_bottle"]
+		party[1].potions = ["healing_potion"]
 		await _click(preparation.continue_button)
 		_check(not preparation.visible and battle.progress.act_number() == 2
 			and battle.progress.stage_in_act() == 1 and party[0].armor.is_empty()
 			and party[0].hit_points == 17 and party[1].armor == archer_armor
+			and party[0].potions == ["healing_potion", "oil_bottle"]
+			and party[1].potions == ["healing_potion"]
 			and loot.bag.size() == 12 and loot.bag.back() == warrior_armor,
-			"막 전환은 해제한 장비·가방 상태 유지")
+			"막 전환은 해제한 장비·가방·캐릭터 물약 상태 유지")
 		for unit: CombatUnit in party:
 			battle.actions.incapacitate(unit)
 		battle.actions.changed.emit()
